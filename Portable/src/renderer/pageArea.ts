@@ -20,6 +20,7 @@ import {
   patchPaper,
   paper as findPaper,
   setFocusedReaderState,
+  isSlipBoxShelf,
   store,
   type Paper,
 } from './state.js'
@@ -35,6 +36,7 @@ import { couldNot } from './notices.js'
 import { closePane } from './actions/openPapers.js'
 import { saveSettings } from './settingsController.js'
 import { icon } from './icons.js'
+import { pageCorner } from './ui/paneChrome.js'
 import { L } from '../shared/lang.js'
 import type { PaperBytesDTO } from '../shared/api.js'
 import type { SplitArrangement } from '../shared/split.js'
@@ -65,7 +67,7 @@ const emptyReader = el('div', { class: 'panel reader-panel' }, [
     ]),
   ]),
 ])
-pageArea.append(emptyReader, dockZone)
+pageArea.append(emptyReader, dockZone, pageCorner)
 
 /**
  * The readers, by pane key (`paperOfPane` for the paper): the one reader's
@@ -235,8 +237,12 @@ let placesBeforeNotes: Map<string, ReaderPlace> | null = null
  * rack. Everything that changes what is in the page area ends here.
  */
 export function reconcileReaders() {
-  if (!solo && store.shelf.kind === 'notes' && store.slipBox.paperID === null) {
+  if (!solo && isSlipBoxShelf(store.shelf) && store.slipBox.paperID === null) {
     showSlipBoxDetail()
+    return
+  }
+  if (!solo && store.shelf.kind === 'projects' && store.slipBox.paperID === null) {
+    showProjectPage()
     return
   }
   const wanted = paneKeys()
@@ -297,7 +303,7 @@ export function reconcileReaders() {
     } else {
       pageArea.append(emptyReader)
     }
-    pageArea.append(dockZone)
+    pageArea.append(dockZone, pageCorner)
     focusChanged()
     relayoutReaders()
   })
@@ -319,12 +325,30 @@ function showSlipBoxDetail() {
     slipBox.update()
     return
   }
-  placesBeforeNotes = new Map([...readers].map(([id, reader]) => [id, reader.place()]))
+  // Measured only off a page area that still shows the papers: from the
+  // projects' page, the readers are out of the document and would say «top».
+  if (!placesBeforeNotes) placesBeforeNotes = new Map([...readers].map(([id, reader]) => [id, reader.place()]))
   showing = shape
   clear(pageArea)
-  pageArea.append(slipBox.detail, dockZone)
+  pageArea.append(slipBox.detail, dockZone, pageCorner)
   if (findBar.isOpen) findBar.close()
   slipBox.update()
+}
+
+/** The page area while the projects are in front: a project's page (1.1). */
+function showProjectPage() {
+  const shape = 'projects'
+  const projects = shell.projects
+  if (showing === shape && pageArea.contains(projects.pageNode)) {
+    projects.update()
+    return
+  }
+  if (!placesBeforeNotes) placesBeforeNotes = new Map([...readers].map(([id, reader]) => [id, reader.place()]))
+  showing = shape
+  clear(pageArea)
+  pageArea.append(projects.pageNode, dockZone, pageCorner)
+  if (findBar.isOpen) findBar.close()
+  projects.update()
 }
 
 /**
@@ -338,12 +362,30 @@ function showSlipBoxDetail() {
  * that a column which has just changed width is measured at its new size.
  */
 export function keepingPlaces(rebuild: () => void) {
-  const places = new Map([...readers].map(([id, reader]) => [id, reader.place()]))
+  // Only the readers in the window: one waiting behind the board has no
+  // place to measure, and «the top» would be put back over where it was.
+  const places = new Map([...readers].filter(([, reader]) => reader.node.isConnected).map(([id, reader]) => [id, reader.place()]))
   rebuild()
   for (const [id, reader] of readers) {
     const place = places.get(id)
     if (place) reader.returnTo(place)
   }
+}
+
+/** Where each paper was when the board came, to put it back when the board goes. */
+let placesBeforeBoard: Map<string, ReaderPlace> | null = null
+
+export function holdReaderPlaces() {
+  if (placesBeforeBoard) return
+  placesBeforeBoard = new Map([...readers].filter(([, reader]) => reader.node.isConnected).map(([id, reader]) => [id, reader.place()]))
+}
+
+export function returnReaderPlaces() {
+  if (!placesBeforeBoard) return
+  const places = placesBeforeBoard
+  placesBeforeBoard = null
+  relayoutReaders()
+  for (const [id, place] of places) readers.get(id)?.returnTo(place)
 }
 
 export function relayoutReaders() {

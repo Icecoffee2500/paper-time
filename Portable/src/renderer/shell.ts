@@ -15,6 +15,8 @@ import type { buildInspector } from './ui/inspector.js'
 import type { buildSlipBox } from './ui/slipBox.js'
 import type { buildSketchRack } from './ui/sketchToolbar.js'
 import type { buildSetup } from './ui/setup.js'
+import type { buildPlanBoard } from './ui/planBoard.js'
+import type { buildProjects } from './ui/projects.js'
 
 export interface Shell {
   toolbar: ReturnType<typeof buildToolbar>
@@ -25,7 +27,11 @@ export interface Shell {
   rack: ReturnType<typeof buildSketchRack>
   /** The first-run screen, and the one for a library that is not there. */
   setup: ReturnType<typeof buildSetup>
-  /** The list column: the papers, or on the Notes shelf the slip-box. */
+  /** A shelf's table, a plan's calendar, «This Week» — where the list and the page were. */
+  board: ReturnType<typeof buildPlanBoard>
+  /** The projects: their list in the list's column, a project's page in the page area (1.1). */
+  projects: ReturnType<typeof buildProjects>
+  /** The list's pane: the papers, or on a slip-box shelf the slip-box (1.1: one of the row's panes). */
   listSlot: HTMLElement
   /** The row the panes stand in. */
   panes: HTMLElement

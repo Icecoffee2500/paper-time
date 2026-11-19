@@ -12,7 +12,7 @@ declare global {
       korean: boolean
       /** Set when this window shows one paper on its own. */
       paper: string | null
-      flags: { split: boolean; probe: boolean }
+      flags: { split: boolean; probe: boolean; projectSample?: boolean }
       /** Where a dropped file is on disk, or '' when it has no path. */
       pathForFile: (file: File) => string
     }
@@ -49,7 +49,12 @@ export const soloPaperID: string | null = host.paper ?? null
 // reader follow `lang`, and it was «ko» whatever the window said.
 if (typeof document !== 'undefined') document.documentElement.lang = host.korean ? 'ko' : 'en'
 
-export const flags = { split: Boolean(host.flags?.split), probe: Boolean(host.flags?.probe) }
+export const flags = {
+  split: Boolean(host.flags?.split),
+  probe: Boolean(host.flags?.probe),
+  /** `--papertime-project-sample=1`, passed only to a probe that opened a library of its own. */
+  projectSample: Boolean(host.flags?.probe && host.flags?.projectSample),
+}
 
 // Before anything draws: the main process already decided, and every string
 // below this line reads the answer — and so does the document, which said

@@ -1,0 +1,94 @@
+{
+ "library": [
+  {
+   "title": "Efficient Test-Time Adaptation of Vision-Language Models",
+   "fileName": "Karmanov_Efficient_Test-Time_Adaptation_of_Vision-Language_Models_CVPR_2024_paper.pdf"
+  },
+  {
+   "title": "What Neural Networks Memorize and Why: Discovering the Long Tail via Influence Estimation",
+   "fileName": "NeurIPS-2020-what-neural-networks-memorize-and-why-discovering-the-long-tail-via-influence-estimation-Paper.pdf"
+  },
+  {
+   "title": "Energy-Based Learning for Scene Graph Generation, a Second Look",
+   "fileName": "Suhail_Energy-Based_Learning_for_Scene_Graph_Generation_ICCV_2021_paper.pdf"
+  },
+  {
+   "title": "Attention Is All You Need",
+   "fileName": "1706.03762v7.pdf"
+  },
+  {
+   "title": "Attention Is All You Need for Graphs",
+   "fileName": "graphs.pdf"
+  },
+  {
+   "title": "SalUn: Empowering Machine Unlearning via Gradient-based Weight Saliency",
+   "fileName": "SalUn.pdf"
+  },
+  {
+   "title": "Energy-Based Learning for Scene Graph Generation",
+   "fileName": "Suhail_Energy-Based_Learning_for_Scene_Graph_Generation_CVPR_2021_paper 14.54.16.pdf"
+  }
+ ],
+ "cases": [
+  {
+   "name": "file twin, CVF",
+   "fileName": "Karmanov_Efficient_Test-Time_Adaptation_of_Vision-Language_Models_CVPR_2024_supplemental.pdf",
+   "title": "Supplementary Material",
+   "parent": 0
+  },
+  {
+   "name": "file twin, NeurIPS",
+   "fileName": "NeurIPS-2020-what-neural-networks-memorize-and-why-discovering-the-long-tail-via-influence-estimation-Supplemental.pdf",
+   "title": null,
+   "parent": 1
+  },
+  {
+   "name": "title inside the supplement's title",
+   "fileName": "supp.pdf",
+   "title": "SalUn: Empowering Machine Unlearning via Gradient-based Weight Saliency — Supplementary Material",
+   "parent": 5
+  },
+  {
+   "name": "two titles inside: no answer",
+   "fileName": "appendix.pdf",
+   "title": "Attention Is All You Need for Graphs: Appendix",
+   "parent": null
+  },
+  {
+   "name": "not a supplement",
+   "fileName": "Karmanov_Efficient_Test-Time_Adaptation_of_Vision-Language_Models_CVPR_2024_paper_copy.pdf",
+   "title": "Efficient Test-Time Adaptation of Vision-Language Models",
+   "parent": null
+  },
+  {
+   "name": "close title, near-equal",
+   "fileName": "salun_appendix.pdf",
+   "title": "SalUn Empowering Machine Unlearning via Gradient based Weight Saliency Appendix",
+   "parent": 5
+  },
+  {
+   "name": "a supplement of nothing here",
+   "fileName": "supplementary.pdf",
+   "title": "Supplementary Material for Something Else Entirely",
+   "parent": null
+  },
+  {
+   "name": "short stem is no twin",
+   "fileName": "paper_supp.pdf",
+   "title": null,
+   "parent": null
+  },
+  {
+   "name": "CVF shortens the supplement's name",
+   "fileName": "Karmanov_Efficient_Test-Time_Adaptation_CVPR_2024_supplemental.pdf",
+   "title": null,
+   "parent": 0
+  },
+  {
+   "name": "a second download's time stamp",
+   "fileName": "Suhail_Energy-Based_Learning_for_CVPR_2021_supplemental 14.54.16.pdf",
+   "title": null,
+   "parent": 6
+  }
+ ]
+}

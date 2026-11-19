@@ -53,19 +53,42 @@ public final class AppModel {
     /// for, but a panel summoned over the window, the way Spotlight comes.
     public var showsScopePanel = false
     #if os(macOS)
-    public var showsInspector = true
+    public var showsInspector = AppModel.initialArrangement.inspectorShown {
+        didSet { if showsInspector != oldValue { storePanes() } }
+    }
     #else
     public var showsInspector = false
     #endif
-    /// Whether the paper list — the column between the source list and the
-    /// reader — is showing.
-    public var showsPaperList = true
-    /// Whether the paper itself is showing.
+    /// The window's content panes, in order — one to four (`Workspace.swift`).
+    var panes: [ContentPane] = AppModel.initialArrangement.panes
+    /// The panes closed by their ×, the last one last — eight at most.
+    var closedPanes: [ClosedPane] = []
+    /// The capsule at the foot of the window: a pane closed, or refused.
+    var paneNotice: PaneNotice?
+    /// Where a shelf or a pane being dragged would land, while it is.
+    var paneDropTarget: PaneDropTarget?
+    /// What the page shows because a pinned pane asked for it.
+    var pageShows: PageShows?
+    /// The pane the last press landed in — a paper chosen with no page open
+    /// opens one to its right.
+    @ObservationIgnored var lastPressedPane: UUID?
+    /// Whether the inspector floats over the window rather than standing
+    /// docked at its right.
+    var inspectorFloats = AppModel.initialArrangement.inspectorFloats
+    /// The floating inspector's place and size, from the top left of the
+    /// panes' area.
+    var floatingInspectorFrame: CGRect? = AppModel.initialArrangement.floatingFrame
+    /// Read once, at launch.
+    nonisolated private static let initialArrangement = AppModel.storedWindowArrangement()
+
+    /// Whether the list pane is open.
+    public var showsPaperList: Bool { panes.contains { $0.content == .list } }
+    /// Whether the page pane is open.
     ///
     /// Closing it leaves the library: the source list and the titles, with the
     /// width the page was using. Worth having when you are sorting a shelf
     /// rather than reading from it.
-    public var showsReader = true
+    public var showsReader: Bool { panes.contains { $0.content == .page } }
 
     /// Papers shown side by side, when they are: up to four, in the two
     /// halves and the four quarters of the page area — the way a Mac tiles
@@ -95,6 +118,51 @@ public final class AppModel {
     func focusedPane(in arrangement: SplitArrangement, model: LibraryModel) -> SplitArrangement.Pane? {
         if let focusedPaneID, let pane = arrangement.pane(focusedPaneID) { return pane }
         return arrangement.panes.first { $0.paper == model.selectedPaperID }
+    }
+
+    /// Where each side-by-side pane stands in the page's space, for a drop
+    /// to find the pane under it (`DockDropDelegate`). Not observed: it is
+    /// read when a drag moves, never drawn from.
+    @ObservationIgnored var splitPaneFrames: [UUID: CGRect] = [:]
+
+    /// A paper chosen while papers stand side by side — in a list, in Search
+    /// Everything, by a link. It goes to the pane in focus (2026-11-18, «논문이
+    /// 하나를 없애지 않고는 안바껴 … 선택된 논문 창이 다른 논문 선택하면 그걸로
+    /// 되도록»); a paper showing in another pane already takes the focus
+    /// there instead of standing twice.
+    func followSelection(_ id: UUID?, model: LibraryModel) {
+        guard let id, var arrangement = split else { return }
+        if let focusedPaneID, arrangement.pane(focusedPaneID)?.paper == id { return }
+        if let showing = arrangement.panes.first(where: { $0.paper == id }) {
+            focusedPaneID = showing.id
+            return
+        }
+        guard let target = focusedPaneID.flatMap({ arrangement.pane($0) }) ?? arrangement.panes.first else { return }
+        arrangement.replace(target.id, with: id)
+        focusedPaneID = target.id
+        movingPanes { split = arrangement }
+        model.keepOpen(id, byHand: true)
+    }
+
+    /// A paper dropped on one side-by-side pane: shown there in place of its
+    /// paper. Dragged by another pane's title, the two trade places.
+    func open(_ id: UUID, inPane target: UUID?, moving: UUID?, model: LibraryModel) {
+        guard var arrangement = split, let target, let there = arrangement.pane(target) else {
+            openOnPage(id, model: model)
+            return
+        }
+        if let moving, moving != target, let from = arrangement.pane(moving) {
+            arrangement.replace(moving, with: there.paper)
+            arrangement.replace(target, with: from.paper)
+        } else if moving == target {
+            return
+        } else {
+            arrangement.replace(target, with: id)
+        }
+        focusedPaneID = target
+        movingPanes { split = arrangement }
+        model.selectedPaperID = arrangement.pane(target)?.paper
+        model.keepOpen(id, byHand: true)
     }
 
     /// A pane pressed: it is the one in focus, and its paper the one showing.
@@ -127,9 +195,9 @@ public final class AppModel {
         // Put beside another by hand: that is a pin, and it stays until it
         // is closed.
         for paper in arrangement.papers { model.keepOpen(paper, byHand: true) }
-        withAnimation(AppModel.paneMotion) {
+        movingPanes {
             split = arrangement.panes.count > 1 ? arrangement : nil
-            showsReader = true
+            if !showsReader { ensurePagePane(after: nil) }
             if current == nil { model.selectedPaperID = id }
             settleFocus(model: model)
         }
@@ -161,7 +229,7 @@ public final class AppModel {
     }
 
     private func settle(after arrangement: SplitArrangement, removed: UUID, model: LibraryModel) {
-        withAnimation(AppModel.paneMotion) {
+        movingPanes {
             if arrangement.panes.count <= 1 {
                 split = nil
                 focusedPaneID = nil
@@ -203,6 +271,12 @@ public final class AppModel {
     }
     public var paperListWidth: Double = AppModel.storedWidth("paperListWidth", default: 320) {
         didSet { UserDefaults.standard.set(paperListWidth, forKey: "paperListWidth") }
+    }
+    /// The list column's width while it holds the table, which wants more
+    /// room than a list of titles did — kept apart so the notes column keeps
+    /// its own.
+    public var tableWidth: Double = AppModel.storedWidth("tableColumnWidth", default: 620) {
+        didSet { UserDefaults.standard.set(tableWidth, forKey: "tableColumnWidth") }
     }
     /// The inspector's, for the same reason the other two are here: it is a
     /// column of ours now rather than SwiftUI's. `.inspector` brought its own
@@ -276,6 +350,9 @@ public final class AppModel {
     /// invalidates only whoever reads the object's own property — the same
     /// reason `PullProgress` is an object.
     public let attaching = AttachRequest()
+    /// What a menu or a button has asked of the reading plans — a sheet, a
+    /// name, a delete — held here for the same reason `attaching` is.
+    public let planning = PlanRequest()
 
     // MARK: - What's new
 
@@ -350,7 +427,6 @@ public final class AppModel {
 
     private var restoredColumnVisibility = NavigationSplitViewVisibility.doubleColumn
     private var restoredInspector = false
-    private var restoredPaperList = true
 
     public func toggleFocusMode() {
         setFocusMode(!isFocusMode)
@@ -362,7 +438,7 @@ public final class AppModel {
     /// back the window the reader had rather than some default.
     public func setFocusMode(_ isOn: Bool) {
         guard isOn != isFocusMode else { return }
-        withAnimation(AppModel.paneMotion) {
+        movingPanes {
             #if os(iOS)
             // The split view owns the columns here; focus is its detail-only
             // state, and leaving focus gives back the columns it had.
@@ -380,21 +456,19 @@ public final class AppModel {
             }
             return
             #endif
+            // The panes are left as they are: focus shows only the page
+            // (`displayedPanes`), and leaving it shows them all again.
             if isOn {
                 restoredColumnVisibility = columnVisibility
                 restoredInspector = showsInspector
-                restoredPaperList = showsPaperList
                 // Set directly rather than through `toggleSidebar`, which
                 // would open a second transaction inside this one.
                 if isSidebarVisible { sidebarHidden = true }
-                showsPaperList = false
                 showsInspector = false
-                showsReader = true
                 isFocusMode = true
             } else {
                 if !isSidebarVisible { sidebarHidden = false }
                 showsInspector = restoredInspector
-                showsPaperList = restoredPaperList
                 showsFloatingList = false
                 isFocusMode = false
             }
@@ -407,13 +481,13 @@ public final class AppModel {
     public func reassertFocusMode() {
         #if os(iOS)
         guard isFocusMode else { return }
-        withAnimation(AppModel.paneMotion) { columnVisibility = .detailOnly }
+        movingPanes { columnVisibility = .detailOnly }
         #endif
     }
 
     /// Summons the paper's table of contents over the page, or puts it away.
     public func toggleFloatingList() {
-        withAnimation(AppModel.paneMotion) {
+        movingPanes {
             showsFloatingList.toggle()
             if showsFloatingList { showsOpenPapers = false }
         }
@@ -424,7 +498,7 @@ public final class AppModel {
     public var showsOpenPapers = false
 
     public func toggleOpenPapers() {
-        withAnimation(AppModel.paneMotion) {
+        movingPanes {
             showsOpenPapers.toggle()
             if showsOpenPapers { showsFloatingList = false }
         }
@@ -437,12 +511,16 @@ public final class AppModel {
     /// the same widths, so a toggle was interpolated two ways at once and the
     /// motion came out stepped. A pane is a surface, so it moves at a
     /// surface's speed (`Motion`).
-    public static var paneMotion: Animation { Motion.surface }
+    public static var paneMotion: Animation {
+        // `--papertime-perf-still=1`: panes change with no motion, to weigh
+        // what the motion costs (`PerfProbe`).
+        Boot.isSet("PAPERTIME_PERF_STILL") ? .linear(duration: 0) : Motion.surface
+    }
 
     /// Hides the scope sidebar only. The paper list stays put: collapsing both
     /// columns at once is a different, rarer intent than "give me more room".
     public func toggleSidebar() {
-        withAnimation(AppModel.paneMotion) {
+        movingPanes {
             #if os(iOS)
             showsScopePanel.toggle()
             #else
@@ -451,41 +529,85 @@ public final class AppModel {
         }
     }
 
-    /// Hides the paper list, leaving the source list and the reader.
+    /// Shows or hides the list pane (`Workspace.swift`). The last pane left
+    /// stays: a window with nothing in it is no window.
     public func togglePaperList() {
-        withAnimation(AppModel.paneMotion) {
-            #if os(iOS)
+        #if os(iOS)
+        movingPanes {
             columnVisibility = columnVisibility == .detailOnly ? .doubleColumn : .detailOnly
             if columnVisibility != .detailOnly { isFocusMode = false }
-            return
-            #endif
-            showsPaperList.toggle()
-            // Something has to be left to look at.
-            if !showsPaperList, !showsReader, !isSidebarVisible { showsReader = true }
         }
+        #else
+        toggleListPane()
+        #endif
     }
 
-    /// Hides the paper, leaving the library around it.
+    /// Shows or hides the page pane.
     ///
     /// Focus mode is the paper and nothing else, so the two cannot both be on:
     /// asking for one leaves the other.
     public func toggleReader() {
-        withAnimation(AppModel.paneMotion) {
-            if isFocusMode {
-                setFocusMode(false)
-                return
-            }
-            showsReader.toggle()
-            // A window with every column closed is a window with nothing in
-            // it, so the last one to be closed opens the list instead.
-            if !showsReader, !showsPaperList, !isSidebarVisible { showsPaperList = true }
-        }
+        togglePagePane()
     }
 
+    /// The inspector in turn: floating, docked at the right, gone — and
+    /// floating again (2026-11-19, «⌘]을 했을 때 floating으로 뜨는 것은 좋은데,
+    /// 한번 더 누르면 오른쪽 사이드바로 나오게 해주고, 한번 더 누르면 없어지도록
+    /// … 이렇게 사이클로»). The key and the toolbar's button both.
     public func toggleInspector() {
-        withAnimation(AppModel.paneMotion) {
-            showsInspector.toggle()
+        movingPanes {
+            if !showsInspector {
+                inspectorFloats = true
+                showsInspector = true
+            } else if inspectorFloats {
+                inspectorFloats = false
+            } else {
+                showsInspector = false
+            }
         }
+        storePanes()
+    }
+
+    /// The inspector put away, whichever way it stood — its ×, docked or
+    /// floating. (The × called the cycle once, which docked a floating
+    /// inspector instead of closing it.)
+    public func hideInspector() {
+        guard showsInspector else { return }
+        movingPanes { showsInspector = false }
+        storePanes()
+    }
+
+    /// The filler's width as it stood when the panes began to move, held by
+    /// it while they move (`RootView.paneSlot`).
+    ///
+    /// A pane opening or closing animates every column's width, and the
+    /// filler — the paper, nearly always — was re-laid out on every frame:
+    /// the PDF view resized and re-scaled itself sixty times a second, which
+    /// was most of why the motion stuttered. Held, it is revealed or cut by
+    /// its column for the length of the motion and takes its new width once
+    /// at the end; the other columns were already held this way. (On
+    /// 2026-11-19 the widths were changed in one step instead, which was
+    /// fast and took the motion with it — «왜 이제 cmd+p, cmd+[를 했을 때
+    /// 거의 animation이 없지?».)
+    var heldFillerWidth: CGFloat?
+    /// The filler's width now, as last measured while nothing was moving.
+    @ObservationIgnored var fillerWidth: CGFloat = 0
+    @ObservationIgnored private var holdTurn = 0
+
+    /// A change to the panes, animated, with the filler held for its length.
+    func movingPanes<Result>(_ change: () throws -> Result) rethrows -> Result {
+        #if os(macOS)
+        if fillerWidth > 0, heldFillerWidth == nil { heldFillerWidth = fillerWidth }
+        holdTurn += 1
+        let turn = holdTurn
+        Task { @MainActor [weak self] in
+            // The surface's motion, and a frame to spare.
+            try? await Task.sleep(for: .milliseconds(380))
+            guard let self, self.holdTurn == turn else { return }
+            self.heldFillerWidth = nil
+        }
+        #endif
+        return try withAnimation(AppModel.paneMotion, change)
     }
 
     /// Whether the source list is showing. On the Mac the split view owns the
@@ -527,6 +649,13 @@ public final class AppModel {
             // identifier, so a probe and the copy somebody actually reads with
             // share one preferences domain — and a probe that stored its test
             // folder replaced a real library with it. Twice.
+            #if os(macOS)
+            // `--papertime-library-seed=<folder in the container>`: the probe's
+            // library made by copying another, inside the app's own
+            // container — and `--papertime-discard-probe-library=1` takes it
+            // away again (`PaneProbe`).
+            if PaneProbe.prepareLibrary(at: url) == false { return }
+            #endif
             await open(LibraryLocation.adopting(url))
             return
         }
@@ -959,6 +1088,8 @@ public final class AppModel {
                 SemanticIndex.shared.schedule(model.semanticSources)
             }
             #endif
+            // Preprints that have since been published, a few seconds later.
+            model.checkPublishedVersions()
             // `--papertime-import=<경로>`가 드롭·«PDF 더하기» 패널이 지나는 그
             // 길로 파일을 하나 들여온다. 라이브러리 폴더 안에 이미 있는 파일을
             // 이 길로 들이면 «남은 PDF» 목록이 낡은 채로 남고, 그 다음 줄을
@@ -1027,7 +1158,7 @@ public final class AppModel {
                 // leaves an edit to a note waiting for the pause in typing —
                 // the two things a move must not lose track of.
                 if let id = Boot.setting("PAPERTIME_OPEN_NOTE") {
-                    model.scope = .notes
+                    model.scope = model.slipBoxScope(for: id)
                     model.notes.openNoteID = id
                     try? await Task.sleep(for: .seconds(1))
                 }
@@ -1218,19 +1349,22 @@ public final class AppModel {
             // for the chosen paper and says what the shelves now hold — the
             // one way to see a kind change without a hand on the machine.
             if let raw = Boot.setting("PAPERTIME_KIND"),
-               let kind = DocumentKind(rawValue: raw),
+               let kind = ShelfKind(rawValue: raw),
                let paper = model.selectedPaper ?? model.visiblePapers.first {
                 await model.setKind(kind, for: paper.id)
                 let now = model.paper(paper.id)?.meta
                 let counts = model.counts
                 FileHandle.standardError.write(Data("""
-                kind: \(now?.effectiveKind.rawValue ?? "?")                 csl=\(now?.csl.type.rawValue ?? "?")                 venue=\(now?.csl.containerTitle ?? "—")                 volume=\(now?.csl.volume ?? "—")                 shelves: papers=\(counts.papers) documents=\(counts.documents)                 review=\(counts.needsReview)
+                kind: \(now?.shelfKind.rawValue ?? "?")                 csl=\(now?.csl.type.rawValue ?? "?")                 venue=\(now?.csl.containerTitle ?? "—")                 volume=\(now?.csl.volume ?? "—")                 shelves: papers=\(counts.papers) books=\(counts.books) documents=\(counts.documents)                 review=\(counts.needsReview)
 
                 """.utf8))
             }
             switch Boot.setting("PAPERTIME_SCOPE") {
             case "notes": model.scope = .notes
+            case "knowledge": model.scope = .knowledge(nil)
+            case "projects": model.scope = .projects(model.projects.first?.id)
             case "papers": model.scope = .papers
+            case "books": model.scope = .books
             case "documents": model.scope = .documents
             default: break
             }
@@ -1239,9 +1373,30 @@ public final class AppModel {
             // exists once you are inside one, and a synthetic click cannot
             // get you there — SwiftUI's rows are not reachable that way, and
             // keys sent at the window land in whatever is in front.
+            // `--papertime-scope=knowledge:<area>`: one area of 지식 (`:` alone
+            // for the notes filed in none).
+            if let area = Boot.setting("PAPERTIME_SCOPE")?.stripPrefix("knowledge:") {
+                model.scope = .knowledge(area)
+            }
+            if Boot.isSet("PAPERTIME_PROJECT_SAMPLE") { await model.sampleProject() }
+            // `--papertime-project-render=<folder>`: the project page drawn by
+            // `ImageRenderer` into PNGs — the board and the timeline, light
+            // and dark — with no window shown.
+            if let folder = Boot.setting("PAPERTIME_PROJECT_RENDER") { renderProject(to: folder, model: model) }
             if let inside = Boot.setting("PAPERTIME_SCOPE")?.stripPrefix("folder:") {
                 model.scope = .folder(model.location.url.appending(path: inside, directoryHint: .isDirectory))
             }
+            #if os(macOS)
+            // `--papertime-panes=…`, `--papertime-pane-drop=…` and the rest:
+            // the window's panes set, dropped on and closed by hand's
+            // stand-in (`PaneProbe`).
+            await PaneProbe.run(app: self, model: model)
+            await PlanProbe.run(model: model)
+            await DropProbe.run(model: model)
+            await DropProbe.routeMap()
+            await PerfProbe.run(app: self, model: model)
+            await RevealProbe.run(model: model)
+            #endif
             // The results of a search, without anybody having to type one.
             if let query = Boot.setting("PAPERTIME_SEARCH_RESULTS") {
                 model.showSearchResults(for: query)
@@ -1302,7 +1457,7 @@ public final class AppModel {
                 // passage found by meaning does: in the slip-box, scrolled
                 // to those words. The editor says on stderr where it went.
                 if let words = Boot.setting("PAPERTIME_NOTE_REVEAL") {
-                    model.scope = .notes
+                    model.scope = model.slipBoxScope(for: noteID)
                     model.notes.reveal = words
                 }
                 model.notes.openNoteID = noteID
@@ -1450,6 +1605,16 @@ public struct SplitArrangement: Equatable, Sendable {
 
     /// The panes showing a paper, in the arrangement's order.
     public func panes(of paper: UUID) -> [Pane] { panes.filter { $0.paper == paper } }
+
+    /// Puts another paper in one pane, which keeps its place and its id.
+    public mutating func replace(_ id: UUID, with paper: UUID) {
+        func swapped(_ column: Column) -> Column {
+            func one(_ pane: Pane) -> Pane { pane.id == id ? Pane(id: pane.id, paper: paper) : pane }
+            return Column(top: one(column.top), bottom: column.bottom.map(one))
+        }
+        left = swapped(left)
+        right = right.map(swapped)
+    }
 
     /// Takes one pane out, closing up the space it leaves.
     public mutating func remove(pane id: UUID) {

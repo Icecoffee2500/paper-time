@@ -11,7 +11,7 @@ settings:
   base:
     SWIFT_VERSION: "6.0"
     SWIFT_STRICT_CONCURRENCY: complete
-    MARKETING_VERSION: "1.0.0"
+    MARKETING_VERSION: "1.1.0"
     # The same as the version people see. Sparkle compares CFBundleVersion,
     # and a build number that was "1" in every release would never be newer.
     CURRENT_PROJECT_VERSION: $(MARKETING_VERSION)
@@ -37,12 +37,13 @@ packages:
     url: https://github.com/sparkle-project/Sparkle
     from: 2.10.0
   # The formula lasso's OCR (App/Model/FormulaOCR.swift): ONNX Runtime, as a
-  # static library from Microsoft's own Swift package — about 20 MB per
-  # architecture in the binary, nothing embedded, no entitlement. The models
-  # ride in App/Resources/MathOCR.
-  onnxruntime-swift-package-manager:
-    url: https://github.com/microsoft/onnxruntime-swift-package-manager
-    from: 1.24.2
+  # static library — about 20 MB per architecture in the binary, nothing
+  # embedded, no entitlement. The models ride in App/Resources/MathOCR.
+  # Microsoft's Swift package for it left GitHub (2026-11-18), so its
+  # bindings are kept in Packages/ONNXRuntime; the runtime is still fetched,
+  # by checksum, from download.onnxruntime.ai (see that Package.swift).
+  ONNXRuntime:
+    path: Packages/ONNXRuntime
   # Handwriting (App/Model/Handwriting*.swift) is legacy in 1.0
   # (`Legacy.handwriting`, Docs/Decisions-1.0.md). Its reader is behind
   # `canImport(MLXVLM)`, so with the packages gone it is simply not compiled.
@@ -63,6 +64,13 @@ targets:
     supportedDestinations: [macOS]
     sources:
       - path: App
+      # The reading-plans demonstration About shows (`PlansDemoView`),
+      # straight from the page: one file for the page, the Mac and the
+      # Portable build, so none of them can show it differently.
+      - path: Website/plans-demo.js
+        buildPhase: resources
+      - path: Website/plans-demo.css
+        buildPhase: resources
     dependencies:
       - package: PaperTimeKit
         product: PaperCore
@@ -85,7 +93,7 @@ targets:
       - package: Sparkle
         product: Sparkle
         destinationFilters: [macOS]
-      - package: onnxruntime-swift-package-manager
+      - package: ONNXRuntime
         product: onnxruntime
         destinationFilters: [macOS]
     info:
@@ -119,6 +127,23 @@ targets:
         UTExportedTypeDeclarations:
           - UTTypeIdentifier: com.imtaeheon.PaperTime.paper
             UTTypeDescription: Paper Time Paper
+            UTTypeConformsTo: [public.data]
+            UTTypeTagSpecification: {}
+          - UTTypeIdentifier: com.imtaeheon.PaperTime.note
+            UTTypeDescription: Paper Time Note
+            UTTypeConformsTo: [public.data]
+            UTTypeTagSpecification: {}
+          - UTTypeIdentifier: com.imtaeheon.PaperTime.todo
+            UTTypeDescription: Paper Time Project Step
+            UTTypeConformsTo: [public.data]
+            UTTypeTagSpecification: {}
+          # A sidebar item and a pane, dragged onto the window's panes.
+          - UTTypeIdentifier: com.imtaeheon.PaperTime.shelf
+            UTTypeDescription: Paper Time Shelf
+            UTTypeConformsTo: [public.data]
+            UTTypeTagSpecification: {}
+          - UTTypeIdentifier: com.imtaeheon.PaperTime.pane
+            UTTypeDescription: Paper Time Pane
             UTTypeConformsTo: [public.data]
             UTTypeTagSpecification: {}
         CFBundleDocumentTypes:

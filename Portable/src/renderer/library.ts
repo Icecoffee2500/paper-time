@@ -23,7 +23,7 @@ import {
   keepOpen,
   paper as findPaper,
   pruneToLibrary,
-  setShelf,
+  homeShelf, setShelf,
   shelfPapers,
   store,
   WINDOW_SETTINGS,
@@ -32,7 +32,8 @@ import { adoptNotes } from './notesModel.js'
 import { readers, reconcileReaders } from './pageArea.js'
 import { dockPaper, showPaper } from './actions/openPapers.js'
 import { applyTheme, saveSettings } from './settingsController.js'
-import { layoutPanes } from './layout.js'
+import { layoutPanes, restorePanes } from './layout.js'
+import { sampleProject } from './projects.js'
 import { shell, solo } from './shell.js'
 import { askForName } from './ui/ask.js'
 import { askForAddress, type AddressOutcome } from './ui/addByAddress.js'
@@ -72,7 +73,7 @@ export function applySnapshot(snapshot: LibrarySnapshot, at: number = ticket()):
   // Inside a folder that is gone too: a subfolder of a library that is gone
   // is a shelf of nothing.
   if (store.shelf.kind === 'folder' && !store.roots.some((root) => isUnder((store.shelf as { root: string }).root, root))) {
-    setShelf({ kind: 'all' })
+    setShelf(homeShelf())
   }
   pruneToLibrary()
   reconcileReaders()
@@ -306,6 +307,8 @@ export async function start() {
   store.sketch.presets = inkPresetsFrom(saved.inkPresets)
   setShortcutOverrides(parseShortcutOverrides(saved.shortcuts))
   applyTheme()
+  // The row of panes as it was left (1.1).
+  restorePanes()
   layoutPanes()
   shell.toolbar.update()
   store.windowState = await call('window:state')
@@ -355,13 +358,17 @@ export async function start() {
   const first = saved.selectedPaperID && findPaper(saved.selectedPaperID)
     ? saved.selectedPaperID
     : shelfPapers()[0]?.id
-  if (first) await showPaper(first)
+  // The paper the window was left on, shown where it was: a row left with no
+  // page is not given one for it.
+  if (first) await showPaper(first, false, { arrange: false })
   // `--papertime-split=1`: the first two papers side by side, for a probe
   // that wants to look at the panes without a drag.
   if (flags.split) {
     const second = shelfPapers().find((entry) => entry.id !== store.selectedID)
     if (second) dockPaper(second.id, 'right')
   }
+  // `--papertime-project-sample=1`: a sample project, in a probe's library only.
+  if (flags.projectSample) await sampleProject()
   void offerWhatsNew()
 }
 

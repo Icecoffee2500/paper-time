@@ -5,6 +5,7 @@
  * reading can be tested without Electron.
  */
 import { DEFAULT_TINT_COLOR, pageTintFrom, tintColorFrom, type PageTint } from './pageTint.js'
+import { migrateLegacyPanes } from './paneModel.js'
 
 export interface Settings {
   libraryRoot: string | null
@@ -13,7 +14,10 @@ export interface Settings {
   recentLibraries: string[]
   window: { width: number; height: number; x?: number; y?: number; maximized?: boolean }
   panes: { sidebar: boolean; paperList: boolean; reader: boolean; inspector: boolean }
-  columns: { sidebar: number; paperList: number; inspector: number }
+  /** `table`: the list column's width while it holds the table, which wants
+   *  more room than a list of titles — kept apart so the notes keep theirs
+   *  (the Mac's `tableColumnWidth`). */
+  columns: { sidebar: number; paperList: number; inspector: number; table: number }
   inspectorTab: 'details' | 'marks' | 'note' | 'tools'
   sort: { field: 'title' | 'author' | 'year' | 'added' | 'opened'; ascending: boolean }
   /** 'system' follows the desktop; the other two are the reader's choice. */
@@ -62,6 +66,22 @@ export interface Settings {
   checkForUpdates: boolean
   /** «Skip This Version»: not announced again until a newer one. */
   skippedUpdateVersion: string | null
+  /** The reading plan's board, as JSON: each shelf's view (list, table,
+   *  calendar), the table's columns and sort, the plan's grouping, and the
+   *  last «Spread Evenly» (`renderer/plans.ts`). */
+  planBoard: string | null
+  /** How the slip-box's lists are ordered: `edited`, `created` or `title`
+   *  (`shared/noteAreas.ts`, the Mac's `slipBoxNoteOrder`). */
+  slipBoxNoteOrder: string
+  /** Which sources' notes 문헌 노트 shows — `paper`, `book`, `document`, or
+   *  '' for all of them (the Mac's `literatureNoteKind`). */
+  literatureNoteKind: string
+  /** The window's row of panes — which, in which order, their widths — and
+   *  where the inspector is, docked or floating, as JSON
+   *  (`shared/paneModel.ts`, 1.1). A probe neither reads nor writes it. */
+  paneRow: string | null
+  /** A project page's steps: `board` or `timeline` (the Mac's `projectView`). */
+  projectView: string
 }
 
 export const DEFAULTS: Settings = {
@@ -70,7 +90,7 @@ export const DEFAULTS: Settings = {
   recentLibraries: [],
   window: { width: 1440, height: 900 },
   panes: { sidebar: true, paperList: true, reader: true, inspector: true },
-  columns: { sidebar: 232, paperList: 320, inspector: 360 },
+  columns: { sidebar: 232, paperList: 320, inspector: 360, table: 620 },
   inspectorTab: 'details',
   sort: { field: 'added', ascending: false },
   appearance: 'system',
@@ -95,20 +115,32 @@ export const DEFAULTS: Settings = {
   seenReleaseNotesVersion: null,
   checkForUpdates: true,
   skippedUpdateVersion: null,
+  planBoard: null,
+  slipBoxNoteOrder: 'edited',
+  literatureNoteKind: '',
+  paneRow: null,
+  projectView: 'board',
 }
 
 /** What the file says, over the defaults, each group merged key by key. */
 export function fromFile(raw: Partial<Settings>): Settings {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('settings.json is not an object')
+  // The arrangement before there was a row — each place's panes and the
+  // companion beside them (1.1's first days) — carried into the row once, and
+  // the old keys left behind: the next write leaves them out of the file.
+  const { workspaceArrangements, ...kept } = raw as Partial<Settings> & { workspaceArrangements?: unknown }
+  const { companion: _companion, ...columns } = (raw.columns ?? {}) as Record<string, unknown>
+  const paneRow = typeof raw.paneRow === 'string' ? raw.paneRow : migrateLegacyPanes({ workspaceArrangements, columns: raw.columns, panes: raw.panes })
   return {
     ...DEFAULTS,
-    ...raw,
+    ...kept,
+    paneRow,
     extraRoots: Array.isArray(raw.extraRoots) ? raw.extraRoots.filter((one) => typeof one === 'string') : [],
     recentLibraries: Array.isArray(raw.recentLibraries) ? raw.recentLibraries.filter((one) => typeof one === 'string') : [],
     libraryRoot: typeof raw.libraryRoot === 'string' ? raw.libraryRoot : null,
     window: { ...DEFAULTS.window, ...raw.window },
     panes: { ...DEFAULTS.panes, ...raw.panes },
-    columns: { ...DEFAULTS.columns, ...raw.columns },
+    columns: { ...DEFAULTS.columns, ...(columns as Partial<Settings['columns']>) },
     sort: { ...DEFAULTS.sort, ...raw.sort },
     // The old four washes under their new names: «grey» was a paler white
     // and is Paper White now, «night» a blue-grey multiplied over black

@@ -81,6 +81,7 @@ const ACTIONS = (): { name: ActionName; title: string; icon: IconName }[] => [
   { name: 'addByAddress', title: L('주소로 논문 더하기…', 'Add Paper by Address…'), icon: 'link' },
   { name: 'exportBibTeX', title: L('BibTeX 내보내기…', 'Export BibTeX…'), icon: 'square.and.arrow.up' },
   { name: 'resolveMetadata', title: L('빠진 서지 채우기', 'Resolve Missing Metadata'), icon: 'arrow.triangle.2.circlepath' },
+  { name: 'refreshMetadata', title: L('서지 모두 다시 가져오기', 'Refresh All Metadata'), icon: 'arrow.triangle.2.circlepath' },
   { name: 'refresh', title: L('라이브러리 다시 읽기', 'Refresh Library'), icon: 'arrow.clockwise' },
   { name: 'settings', title: L('설정…', 'Settings…'), icon: 'gear' },
 ]

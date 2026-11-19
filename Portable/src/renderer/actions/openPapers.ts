@@ -28,19 +28,25 @@ import {
   type PickMode,
 } from '../state.js'
 import { solo } from '../shell.js'
+import { ensurePagePane } from '../layout.js'
 import { focused, pageArea, readerOf, reconcileReaders } from '../pageArea.js'
 import { saveSettings } from '../settingsController.js'
 import { toggleOpenPapers } from '../ui/openPapers.js'
 import { togglePages } from '../ui/pages.js'
 import { thumbnails } from '../ui/pageThumbnails.js'
-import { freshPaneKey, paperOfPane, splitContainsPaper, splitPanesOf, type DockZone, type SplitArrangement } from '../../shared/split.js'
+import { freshPaneKey, paperOfPane, splitContains, splitContainsPaper, splitPanesOf, splitReplace, splitSwap, type DockZone } from '../../shared/split.js'
 
 /**
  * Shows a paper. With papers side by side, the paper takes the place of the
- * pane in focus, so the arrangement keeps its shape.
+ * pane in focus, so the arrangement keeps its shape — and a paper showing in
+ * another pane already takes the focus there instead of standing twice (the
+ * Mac's `followSelection`, 2026-11-18: «논문이 하나를 없애지 않고는 안바껴 …
+ * 선택된 논문 창이 다른 논문 선택하면 그걸로 되도록»).
  */
-export async function showPaper(id: string, keepSelection = false) {
+export async function showPaper(id: string, keepSelection = false, options: { arrange?: boolean } = {}) {
   if (!findPaper(id)) return
+  // Chosen with no page in the row: one comes, beside the pane it was chosen in (1.1).
+  if (options.arrange !== false) ensurePagePane()
   // Shown by any other way than the list's own rows — the palette, Back, a
   // supplement — a paper is the one row chosen (the Mac's `selectedPaperID`).
   if (!keepSelection && (store.selection.length !== 1 || store.selection[0] !== id)) {
@@ -55,8 +61,10 @@ export async function showPaper(id: string, keepSelection = false) {
     // The paper takes the place of the pane in focus.
     const target = focusedPaneKey() ?? splitPanesOf(store.split, previous ?? '')[0]
     const key = freshPaneKey(store.split, id)
-    if (target) store.split = replaceInSplit(store.split, target, key)
+    if (target) store.split = splitReplace(store.split, target, key)
     focusPane(key)
+    // Put beside the others, it is in use as they are: pinned (the Mac's `followSelection`).
+    keepOpen(id, true)
   } else if (store.split) {
     // Shown already: the pane in focus is one of its own.
     const current = focusedPaneKey()
@@ -136,14 +144,6 @@ export function stepPaperTo(index: number) {
   void showPaper(next.id)
 }
 
-function replaceInSplit(split: SplitArrangement, from: string, to: string): SplitArrangement {
-  const swap = (column: { top: string; bottom?: string } | undefined) => column && {
-    top: column.top === from ? to : column.top,
-    ...(column.bottom ? { bottom: column.bottom === from ? to : column.bottom } : {}),
-  }
-  return { left: swap(split.left)!, right: swap(split.right) }
-}
-
 /** Keeps a paper on the open shelf without changing what is showing. */
 export function keepPaper(id: string, byHand = false) {
   keepOpen(id, byHand)
@@ -191,6 +191,47 @@ export function dockPaper(id: string, zone: DockZone, pane?: string) {
   dock(id, zone, pane)
   reconcileReaders()
   changed('papers', 'selection')
+}
+
+/**
+ * A paper let go of on the page, over a pane (the Mac's
+ * `open(_:inPane:moving:)`): shown there in place of the pane's paper — the
+ * same paper as another pane's too, if that is what was dropped. Dragged by
+ * another side-by-side pane's title (`moving`), the two trade places. With
+ * nothing side by side (`pane` null), it is shown in place of the paper
+ * showing.
+ */
+export function openInPane(id: string, pane: string | null, moving?: string) {
+  if (!findPaper(id)) return
+  const split = store.split
+  if (!split || !pane || !splitContains(split, pane)) {
+    void showPaper(id)
+    keepPaper(id)
+    return
+  }
+  if (moving && moving === pane) return
+  let focus: string
+  if (moving && splitContains(split, moving)) {
+    store.split = splitSwap(split, moving, pane)
+    focus = moving
+  } else if (paperOfPane(pane) === id) {
+    focus = pane
+  } else {
+    focus = freshPaneKey(split, id)
+    store.split = splitReplace(split, pane, focus)
+  }
+  focusPane(focus)
+  keepOpen(id, true)
+  // The list's row follows the paper now showing, as `showPaper` has it.
+  if (store.selectedID) {
+    store.selection = [store.selectedID]
+    store.selectionAnchor = store.selectedID
+    store.selectionLead = store.selectedID
+  }
+  if (!store.travelling) remember(store.selectedID)
+  saveSettings({ selectedPaperID: store.selectedID })
+  reconcileReaders()
+  changed('papers', 'selection', 'reader')
 }
 
 /** A window of its own for one paper — asked for by hand, so pinned, as the

@@ -8,7 +8,7 @@
  * on the list a batch at a frame — the Mac appended them one at a time, and
  * the list redrew itself once per paper.
  */
-import { changed, setShelf, shelfPapers, store, textSources } from './state.js'
+import { changed, homeShelf, setShelf, shelfPapers, store, textSources } from './state.js'
 import { searchText } from './textSearch.js'
 import { asTextHit, meaningStatus, onMeaningStatus, searchMeaning } from './meaningSearch.js'
 import { graphemes } from '../shared/textFold.js'
@@ -27,7 +27,7 @@ export function showSearchResults(query: string) {
 
 export function clearSearchResults() {
   store.searchQuery = ''
-  if (store.shelf.kind === 'search') setShelf({ kind: 'all' })
+  if (store.shelf.kind === 'search') setShelf(homeShelf())
   changed('shelf', 'papers')
 }
 

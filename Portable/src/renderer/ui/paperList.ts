@@ -8,13 +8,15 @@
  * tab does. Every row can be dragged — to the page's edge, to put the paper
  * beside the one showing.
  */
+import { centreRow, pendingReveal } from './revealRow.js'
 import { iconNode } from '../icons.js'
 import { clear, el, on } from '../dom.js'
 import { isCommand } from '../bridge.js'
 import {
-  attachmentsOf, draggedFrom, isOpenPaper, isPinned, isSelected, papersByFolder, shelfPapers, store, tagByID,
+  attachmentsOf, draggedFrom, isOpenPaper, isPinned, isSelected, papersByFolder, planByID, projectByID, shelfPapers, store, tagByID,
   type Paper, type PickMode,
 } from '../state.js'
+import { setView, shelfKey } from '../plans.js'
 import { parseSubtitle, subtitleLine, type SubtitleField } from '../../shared/subtitle.js'
 import type { TagColor } from '../../shared/model.js'
 import { needsReview } from '../../shared/documentKind.js'
@@ -25,6 +27,9 @@ import { carriesPapers, draggedPapers, writeDraggedPapers } from '../../shared/s
 import { passageKey, passageSubtitle, type TextHit } from '../textSearch.js'
 import { noteSubtitle } from '../meaningSearch.js'
 import { placeKey } from '../../shared/semantic/results.js'
+import { LEGACY } from '../../shared/legacy.js'
+import { areaTitle } from '../../shared/noteAreas.js'
+import { shelfHeader, shelfSymbol, shelfTone } from './shelfHeader.js'
 
 export interface PaperListActions {
   chooseLibrary: () => void
@@ -80,7 +85,7 @@ function statusName(status: keyof typeof STATUS_ICON): string {
 
 export function buildPaperList(actions: PaperListActions): { node: HTMLElement; update: () => void } {
   const node = el('div', { class: 'panel paper-list' })
-  const header = el('div', { class: 'panel-header' })
+  const header = el('div', { class: 'shelf-head-wrap' })
   // Focusable, so the arrows have somewhere to go once a row is pressed —
   // the Mac's list takes the keyboard the same way. A listbox, with the
   // rows its options.
@@ -101,6 +106,16 @@ export function buildPaperList(actions: PaperListActions): { node: HTMLElement; 
   const rowsPerPage = () => {
     const row = body.querySelector<HTMLElement>('.paper-row')
     return Math.max(1, Math.floor(body.clientHeight / Math.max(row?.offsetHeight ?? 56, 1)) - 1)
+  }
+  /** The ask taken last (`revealPaper`). */
+  let revealed = 0
+  /** Goes to the row Search Everything chose, once per ask. */
+  const goToAsked = () => {
+    const ask = pendingReveal(revealed)
+    if (!ask) return
+    const row = body.querySelector<HTMLElement>(`.paper-row[data-id="${CSS.escape(ask.paper)}"]`)
+    if (!row) return
+    if (centreRow(body, row)) revealed = ask.serial
   }
   const reveal = () => requestAnimationFrame(() => {
     const lead = (store.selectionLead && body.querySelector(`.paper-row[data-id="${store.selectionLead}"]`))
@@ -195,14 +210,31 @@ export function buildPaperList(actions: PaperListActions): { node: HTMLElement; 
       ? store.searchMeanings.filter((hit) => !passages.some((seen) => placeKey(seen.passage) === placeKey(hit.passage)))
       : []
 
-    // The header is the shelf's name and nothing else: what the folder has
-    // to say — records late, PDFs left, files refused — stands as rows at
-    // the top of the list, where it never fights the name for room.
+    // The head every left column wears (`shelfHeader`): the shelf's tile,
+    // its name and how many. What the folder has to say — records late, PDFs
+    // left, files refused — stands as rows at the top of the list, where it
+    // never fights the name for room.
     const title = shelfTitle()
-    if (title !== shownHeader) {
-      shownHeader = title
+    const subtitle = papersText(papers.length)
+    const headerKey = `${title}|${subtitle}|${JSON.stringify(store.shelf)}`
+    if (headerKey !== shownHeader) {
+      shownHeader = headerKey
       clear(header)
-      header.append(el('span', { class: 'panel-title', text: title }))
+      const trailing: Node[] = []
+      // The way to the shelf's table — and, from a plan's list, back to its
+      // table or calendar. Only with the old list back: the table is the list now.
+      if (LEGACY.paperList && shelfKey(store.shelf) !== null) {
+        const views: ['list' | 'table' | 'calendar', string][] = [['list', L('목록', 'List')], ['table', L('표', 'Table')]]
+        if (store.shelf.kind === 'plan') views.push(['calendar', L('달력', 'Calendar')])
+        const seg = el('span', { class: 'pb-seg list-views', role: 'group', 'aria-label': L('보기', 'View') })
+        for (const [view, label] of views) {
+          const button = el('button', { 'aria-pressed': String(view === 'list'), text: label })
+          on(button, 'click', () => { if (view !== 'list') setView(view) })
+          seg.append(button)
+        }
+        trailing.push(seg)
+      }
+      header.append(shelfHeader({ icon: shelfSymbol(store.shelf), tone: shelfTone(store.shelf), title, subtitle, trailing, closes: true }))
     }
     // Parsed once for the list, not once per row: the setting is a string
     // taken apart, and sixty rows took it apart sixty times.
@@ -290,9 +322,11 @@ export function buildPaperList(actions: PaperListActions): { node: HTMLElement; 
         body.append(row.node)
         return { id, shape, row }
       })
+      goToAsked()
       return
     }
     for (const [at, { entry }] of wanted.entries()) if (entry) shown[at].row?.apply(entry, fields)
+    goToAsked()
   }
 
   update()
@@ -550,6 +584,20 @@ function paperRow(entry: Paper, actions: PaperListActions): BuiltRow {
   return { node: row, apply }
 }
 
+/** «논문 n편» / "n papers" — the line under a shelf's name. */
+export function papersText(count: number): string {
+  return L(`논문 ${count}편`, `${count} paper${count === 1 ? '' : 's'}`)
+}
+
+/**
+ * What the old list said about the folder, as rows for the table's strip
+ * (the Mac's `PlanBoard.notices`): records that have not arrived, PDFs still
+ * to add, and the ones that would not. Empty when the folder has nothing to say.
+ */
+export function folderNoticeRows(actions: Pick<PaperListActions, 'refresh' | 'adoptLoose'>): HTMLElement[] {
+  return folderNotes().map((note) => noteRow(note, actions))
+}
+
 /** A row that speaks for the folder, not for a paper (`Entry.note`). */
 interface FolderNote {
   kind: 'failures' | 'adopting' | 'loose' | 'refused' | 'scanning'
@@ -590,7 +638,7 @@ function refusedDescription(): string {
     + (rest > 0 ? L(`\n…그리고 ${rest}개 더`, `\n…and ${rest} more`) : '')
 }
 
-function noteRow(note: FolderNote, actions: PaperListActions): HTMLElement {
+function noteRow(note: FolderNote, actions: Pick<PaperListActions, 'refresh' | 'adoptLoose'>): HTMLElement {
   const glyph = (name: Parameters<typeof iconNode>[0]) => {
     const drawn = iconNode(name)
     return drawn ? [drawn] : []
@@ -660,7 +708,7 @@ function passageRow(hit: TextHit, actions: PaperListActions, byMeaning = false):
   return row
 }
 
-function shelfTitle(): string {
+export function shelfTitle(): string {
   switch (store.shelf.kind) {
     case 'search': return L('찾은 것', 'Search Results')
     case 'all': return L('모두', 'All')
@@ -668,21 +716,24 @@ function shelfTitle(): string {
       return ({
         paper: L('논문', 'Papers'),
         book: L('책', 'Books'),
-        lecture: L('강의자료', 'Course Material'),
         document: L('문서', 'Documents'),
-      } as Record<string, string>)[(store.shelf as { of: string }).of] ?? L('모두', 'All')
+      } as Record<string, string>)[(store.shelf as { of: string }).of] ?? L('논문', 'Papers')
     case 'folder':
       return basename((store.shelf as { root: string }).root)
     case 'open': return L('열린 문서', 'Open Documents')
     case 'status': return statusName(store.shelf.status)
     case 'favorites': return L('즐겨찾기', 'Favorites')
     case 'review': return L('살펴볼 것', 'Needs Review')
-    case 'notes': return L('노트', 'Notes')
+    case 'notes': return L('문헌 노트', 'Literature Notes')
+    case 'knowledge': return areaTitle((store.shelf as { area: string | null }).area)
     case 'collection':
       return store.collections.find((c) => c.id === (store.shelf as { id: string }).id)?.name ?? L('컬렉션', 'Collection')
     case 'tag':
       return store.tags.find((t) => t.id === (store.shelf as { id: string }).id)?.name ?? L('태그', 'Tag')
     case 'author': return (store.shelf as { name: string }).name
+    case 'plan': return planByID((store.shelf as { id: string }).id)?.plan.name ?? L('계획', 'Plan')
+    case 'week': return L('이번 주', 'This Week')
+    case 'projects': return projectByID((store.shelf as { id: string | null }).id)?.project.name ?? L('프로젝트', 'Projects')
   }
 }
 
@@ -697,7 +748,7 @@ function emptyKey(): string {
 /** What an empty shelf says. Each is empty for its own reason, and the
  *  reason tells you whether anything is wrong — nothing is, in every case
  *  here (the Mac's `emptyShelf`). */
-function emptyShelf(): { title: string; icon: Parameters<typeof iconNode>[0]; note: string } {
+export function emptyShelf(): { title: string; icon: Parameters<typeof iconNode>[0]; note: string } {
   const shelf = store.shelf
   switch (shelf.kind) {
     case 'status':
@@ -716,6 +767,14 @@ function emptyShelf(): { title: string; icon: Parameters<typeof iconNode>[0]; no
       return { title: L('이 컬렉션은 비어 있어요', 'This Collection Is Empty'), icon: 'folder', note: L('옆 목록의 컬렉션 위로 논문을 끌어다 놓아보세요.', 'Drag papers onto it in the sidebar.') }
     case 'tag':
       return { title: L('이 태그를 단 논문이 없어요', 'Nothing With This Tag'), icon: 'tag', note: L('논문에 이 태그를 달면 여기 나와요.', 'Tag a paper and it appears here.') }
+    case 'folder':
+      // A folder shows what sits in it; what sits in its folders is theirs
+      // (`isDirectlyInFolder`, the Mac's `isDirectlyIn`).
+      return {
+        title: L('이 폴더에 바로 든 PDF가 없어요', 'No PDFs Directly in This Folder'),
+        icon: 'folder',
+        note: L('안쪽 폴더의 PDF는 옆 목록에서 그 폴더를 고르면 보여요.', 'Choose a folder inside it in the sidebar to see its PDFs.'),
+      }
     case 'author':
       return { title: L('이 저자의 논문이 없어요', 'Nothing by This Author'), icon: 'person', note: L('이 이름이 실린 논문이 라이브러리에 없어요.', 'No paper here carries this name.') }
     case 'open':

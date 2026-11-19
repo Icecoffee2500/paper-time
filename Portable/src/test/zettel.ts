@@ -49,6 +49,7 @@ function note(fields: Fields): Zettel {
     paperID: fields.paperID ?? null,
     created: new Date(fields.created * 1000),
     modified: new Date(fields.created * 1000),
+    area: '',
   }
 }
 

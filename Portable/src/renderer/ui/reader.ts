@@ -17,7 +17,7 @@
  */
 import { clear, el, on } from '../dom.js'
 import { freshReaderState, store, type ReaderState } from '../state.js'
-import { PANE_DRAG_TYPE, PAPER_DRAG_TYPE } from '../../shared/split.js'
+import { CONTENT_PANE_DRAG_TYPE, READER_PANE_DRAG_TYPE, PAPER_DRAG_TYPE } from '../../shared/split.js'
 import type { QuoteLink } from '../../shared/quotedPassages.js'
 import { openDocument, releaseTextCaches, type Opening, type PDFDocumentProxy, type PDFPageProxy } from '../pdf.js'
 import { headBytes, headLine, rightsHandler, type ByteTrouble, type PDFLock } from '../../shared/pdfLock.js'
@@ -272,9 +272,22 @@ export class Reader implements PageOwner {
     // moves. Bound once — `update` redraws the strip on every change.
     on(this.header, 'dragstart', (event: DragEvent) => {
       const paper = this.paperID ? store.papers.find((entry) => entry.id === this.paperID) : null
-      if (!this.pane || !paper || !event.dataTransfer) return
+      if (!paper || !event.dataTransfer) return
+      // One reader alone: its title is the head of the page's pane, and the
+      // pane moves (1.1).
+      if (!this.pane) {
+        const pane = this.node.closest<HTMLElement>('[data-pane-id]')?.dataset.paneId
+        if (!pane) {
+          event.preventDefault()
+          return
+        }
+        event.dataTransfer.setData(CONTENT_PANE_DRAG_TYPE, pane)
+        event.dataTransfer.setData('text/plain', paper.meta.displayTitle)
+        event.dataTransfer.effectAllowed = 'move'
+        return
+      }
       event.dataTransfer.setData(PAPER_DRAG_TYPE, paper.id)
-      if (this.paneKey) event.dataTransfer.setData(PANE_DRAG_TYPE, this.paneKey)
+      if (this.paneKey) event.dataTransfer.setData(READER_PANE_DRAG_TYPE, this.paneKey)
       event.dataTransfer.setData('text/plain', paper.meta.displayTitle)
       event.dataTransfer.effectAllowed = 'move'
     })
@@ -695,7 +708,13 @@ export class Reader implements PageOwner {
         for (const entry of entries) {
           if (entry.isIntersecting) continue
           const page = this.pages[Number((entry.target as HTMLElement).dataset.page)]
-          if (page && (page.rendered || page.canvas.width > 0)) page.release()
+          // Never a page the draw observer holds near: its margin is the
+          // smaller, so a page near is never really far. One batch can carry
+          // a page's leaving and its coming back (the list column changing
+          // width under it — the table's column and the list's are not one
+          // width); the draw observer runs first and drew it again, and the
+          // stale «far» here used to empty it straight after — a black page.
+          if (page && !this.near.has(page) && (page.rendered || page.canvas.width > 0)) page.release()
         }
       },
       // Farther than it is drawn from, so a page scrolled back and forth

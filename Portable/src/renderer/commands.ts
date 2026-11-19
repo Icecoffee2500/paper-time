@@ -22,12 +22,12 @@ import {
   showPagesPopup,
   stepPaper,
 } from './actions/openPapers.js'
-import { copyKey, resolveMissingMetadata } from './actions/paper.js'
+import { copyKey, refreshAllMetadata, resolveMissingMetadata } from './actions/paper.js'
 import { linkSelectionToNote, ultracopySelection, newNote } from './actions/notes.js'
 import { openFind, openSearch } from './actions/search.js'
 import { addByAddress, addLibraryFolder, addPapers, libraryOpened, reload } from './library.js'
 import { adoptSettings, applyAccent, applyTheme, openSettings, setLayout } from './settingsController.js'
-import { toggleFocus, togglePane } from './layout.js'
+import { inspectorShowing, reopenClosedPane, showInspector, toggleFocus, togglePane } from './layout.js'
 import { couldNot } from './notices.js'
 import { handleTextEvent } from './textSearch.js'
 import { handleMeaningEvent } from './meaningSearch.js'
@@ -36,6 +36,8 @@ import { showExportSheet } from './ui/exportSheet.js'
 import { shell } from './shell.js'
 import { toast } from './ui/toolbar.js'
 import { L } from '../shared/lang.js'
+import { reloadPlans } from './plans.js'
+import { reloadProjects } from './projects.js'
 
 const selectFirst = () => toast(L('먼저 글을 골라주세요.', 'Select some text first.'))
 
@@ -45,6 +47,7 @@ export const COMMANDS = {
   addPapers: () => void addPapers(),
   addByAddress: () => void addByAddress(),
   resolveMetadata: () => void resolveMissingMetadata(),
+  refreshMetadata: () => void refreshAllMetadata(),
   refreshFolder: () => void reload(),
   addFolder: () => void addLibraryFolder(),
   searchEverything: () => openSearch(),
@@ -53,7 +56,12 @@ export const COMMANDS = {
   paperList: () => togglePane('paperList'),
   reader: () => togglePane('reader'),
   inspector: () => togglePane('inspector'),
+  floatInspector: () => {
+    const now = inspectorShowing()
+    showInspector(!(now.shown && now.floating))
+  },
   focus: () => toggleFocus(),
+  reopenPane: () => reopenClosedPane(),
   back: () => goBack(),
   forward: () => goForward(),
   // A quarter at a time, as the Mac's commands zoom.
@@ -142,6 +150,12 @@ export function installMainEvents() {
       case 'library:changed':
         void reload()
         break
+      case 'plans:changed':
+        void reloadPlans()
+        break
+      case 'projects:changed':
+        void reloadProjects()
+        break
       case 'library:adopting':
         // The count falls as the files go in: two hundred files under the
         // same number the whole way through read as stuck.
@@ -161,7 +175,8 @@ export function installMainEvents() {
         // Another window wrote this paper's record: read it with the rest.
         // Its sidecars — marks, ink, drawings — are the reader's (WR10).
         const { id, layers } = payload as { id: string; layers: string[] }
-        if (layers.includes('record')) void reload()
+        // A day or a material from another window or machine comes with the record's reading.
+        if (layers.includes('record') || layers.includes('plan') || layers.includes('links')) void reload()
         // Another device's marks arrived — its journal, or the PDF it wrote —
         // and the open paper takes them without being opened again.
         if (layers.includes('marks') || layers.includes('pdf')) for (const reader of readersOf(id)) void reader.reloadMarks()

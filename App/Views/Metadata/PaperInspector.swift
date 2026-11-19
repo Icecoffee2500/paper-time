@@ -14,11 +14,13 @@ struct PaperInspector: View {
 
     var body: some View {
         if let paper = model.selectedPaper {
-            // `.id` forces a fresh `PaperInspectorForm` (and fresh local
-            // `@State`) whenever the selection changes, instead of trying to
-            // reset in-place drafts by hand.
+            // One form for every paper, its drafts reset when the paper
+            // changes (`onChange(of: paperID)`). It was `.id(paper.id)` — a
+            // fresh form each time, which built its twenty-odd text fields
+            // anew and measured the whole grouped form from nothing: 250 ms
+            // of the main thread for every paper chosen, more than the rest
+            // of opening the paper together (`--papertime-perf`, 2026-11-19).
             PaperInspectorForm(model: model, paperID: paper.id)
-                .id(paper.id)
         } else {
             ContentUnavailableView(
                 L("고른 논문이 없어요", "No Paper Selected"),
@@ -75,7 +77,11 @@ private struct PaperInspectorForm: View {
                 // in the row's own menu.
                 if paper.meta.kindIsUnanswered { kindQuestion(for: paper) }
 
-                let kind = paper.meta.effectiveKind
+                // Where it stands in the plans, and what is kept beside it:
+                // the two things a reader planning a week asks of a paper.
+                PlanInspectorSections(model: model, paper: paper)
+
+                let kind = paper.meta.shelfKind
                 if kind == .paper, paper.meta.confidence == .needsReview, !paper.meta.candidates.isEmpty {
                     candidatesSection(for: paper)
                 }
@@ -85,13 +91,16 @@ private struct PaperInspectorForm: View {
                 case .paper:
                     detailsSection
                     AuthorListEditor(authors: $draft.author)
+                case .book:
+                    bookSection
+                    AuthorListEditor(authors: $draft.author, title: L("지은이", "Written by"))
                 case .document:
                     documentSection
                     AuthorListEditor(authors: $draft.author, title: L("쓴 사람", "Written by"))
                 }
                 saveRevertSection
                 readingStateSection
-                if kind == .paper {
+                if kind != .document {
                     identifiersSection(for: paper)
                 }
                 // For both kinds: every paper here is a file with a name, and
@@ -111,6 +120,19 @@ private struct PaperInspectorForm: View {
         // to update after it appeared.
         .hiddenScrollers()
         .onDisappear { saveNoteIfNeeded() }
+        .onChange(of: paperID) { old, _ in
+            // The paper left behind keeps its memo, as it did when its form
+            // went away; an edit of its record not saved is let go, as then.
+            if let before = model.papers.first(where: { $0.id == old }), noteDraft != before.state.summaryNote {
+                let note = noteDraft
+                Task { await model.setSummaryNote(note, for: old) }
+            }
+            let now = paper
+            draft = now?.meta.csl ?? CSLItem()
+            noteDraft = now?.state.summaryNote ?? ""
+            nameDraft = now?.documentURL.lastPathComponent ?? ""
+            renameError = nil
+        }
         .alert(
             L("이름을 바꾸지 못했어요", "The File Kept Its Name"),
             isPresented: Binding(get: { renameError != nil }, set: { if !$0 { renameError = nil } })
@@ -173,8 +195,9 @@ private struct PaperInspectorForm: View {
                 Text(L("이 PDF는 무엇인가요?", "What is this PDF?"))
                     .font(.headline)
                 Picker("", selection: kindBinding(for: paper)) {
-                    Text(L("논문", "A paper")).tag(DocumentKind.paper)
-                    Text(L("일반 문서", "A document")).tag(DocumentKind.document)
+                    Text(L("논문", "A paper")).tag(ShelfKind.paper)
+                    Text(L("책", "A book")).tag(ShelfKind.book)
+                    Text(L("일반 문서", "A document")).tag(ShelfKind.document)
                 }
                 .pickerStyle(.segmented)
                 .labelsHidden()
@@ -191,9 +214,9 @@ private struct PaperInspectorForm: View {
     /// Before there is an answer the control still shows the app's guess, so
     /// pressing the one already marked is an answer too — "yes, that one" —
     /// rather than a press that appears to do nothing.
-    private func kindBinding(for paper: LoadedPaper) -> Binding<DocumentKind> {
+    private func kindBinding(for paper: LoadedPaper) -> Binding<ShelfKind> {
         Binding(
-            get: { paper.meta.effectiveKind },
+            get: { paper.meta.shelfKind },
             set: { kind in Task { await model.setKind(kind, for: paper.id) } }
         )
     }
@@ -204,8 +227,8 @@ private struct PaperInspectorForm: View {
             L("논문 같아요 — 안에 DOI나 참고문헌이 보여요. 맞으면 그대로 눌러주세요.",
               "It looks like a paper — there is a DOI or a reference list in it. Press it again to agree.")
         case .document:
-            L("논문은 아닌 것 같아요. 일반 문서면 학술지 같은 칸은 숨길게요.",
-              "It doesn't look like a paper. As a document, the journal fields go away.")
+            L("논문은 아닌 것 같아요. 책이나 일반 문서면 학술지 같은 칸은 숨길게요.",
+              "It doesn't look like a paper. As a book or a document, the journal fields go away.")
         case nil:
             L("고르면 이 칸들이 그에 맞게 바뀌어요.", "The fields below follow your answer.")
         }
@@ -340,6 +363,25 @@ private struct PaperInspectorForm: View {
         }
     }
 
+    /// The form a book gets: who published it, where, which edition, its
+    /// ISBN — the fields `@book` carries, and none of a journal's.
+    private var bookSection: some View {
+        Section(L("책 정보", "Details")) {
+            TextField(L("제목", "Title"), text: stringBinding(\.title))
+            TextField(L("부제", "Subtitle"), text: stringBinding(\.subtitle))
+            TextField(L("해", "Year"), text: yearBinding)
+                #if os(iOS)
+                .keyboardType(.numberPad)
+                #endif
+            TextField(L("출판사", "Publisher"), text: stringBinding(\.publisher))
+            TextField(L("펴낸 곳", "Place"), text: stringBinding(\.publisherPlace))
+            TextField(L("판", "Edition"), text: stringBinding(\.edition))
+            TextField("ISBN", text: stringBinding(\.isbn))
+            TextField("DOI", text: stringBinding(\.doi))
+            TextField("URL", text: stringBinding(\.url))
+        }
+    }
+
     /// The form a document gets: what it is, who made it, when — and nothing
     /// about journals, volumes or DOIs, which it does not have.
     private var documentSection: some View {
@@ -353,7 +395,9 @@ private struct PaperInspectorForm: View {
                 #endif
             TextField("URL", text: stringBinding(\.url))
             Picker(L("종류", "Kind"), selection: $draft.type) {
-                ForEach(Self.documentTypes, id: \.self) { type in
+                // «Book» is a shelf of its own since 1.1; a document that
+                // already says it keeps the word so the picker shows it.
+                ForEach(Self.documentTypes.filter { $0 != .book || draft.type == .book }, id: \.self) { type in
                     Text(displayName(for: type)).tag(type)
                 }
             }

@@ -15,8 +15,10 @@ import {
   changed,
   closeOpenPaper,
   isOpenPaper,
+  isSelected,
   patchPaper,
   paper as findPaper,
+  selectedPapers,
   store,
   undock,
   type Paper,
@@ -30,12 +32,14 @@ import { showAttachSheet } from '../ui/attachSheet.js'
 import { askToConfirm } from '../ui/ask.js'
 import { couldNot } from '../notices.js'
 import { L } from '../../shared/lang.js'
-import { isLookedUp, type DocumentKind } from '../../shared/documentKind.js'
+import { SHELF_KINDS, type ShelfKind } from '../../shared/documentKind.js'
 import { entryFor } from '../../shared/bibtex.js'
 import { makeKey } from '../../shared/citationKey.js'
 import { suggestedParent } from '../../shared/attachmentSearch.js'
 import { cslFullTitle, type CSLItem } from '../../shared/model.js'
 import { DOCK_ZONES, type DockZone } from '../../shared/split.js'
+import { addToPlan, newPlan, reloadPlans } from '../plans.js'
+import { addToProject } from '../projects.js'
 
 type ReadingStatus = 'unread' | 'reading' | 'read'
 
@@ -63,35 +67,64 @@ export async function toggleFavorite(id: string) {
   if (entry) await setFavorite(id, !entry.state.isFavorite)
 }
 
-/** The answer to "a paper, a book, course material, or a document?", from the
- *  inspector or the row's menu. */
-export async function setKind(id: string, kind: DocumentKind) {
-  // Nothing but a paper has a registrar to disagree with, so nothing else
-  // stays on the shelf of things to look at.
-  const patch: Record<string, unknown> = { kind }
-  // The Mac's `setKind`: the candidates a lookup offered go, and a record
-  // left for review is no longer one — but a record somebody corrected or a
-  // registrar confirmed keeps its rank, which is what wins a merge.
-  if (!isLookedUp(kind)) {
-    patch.candidates = []
-    if (findPaper(id)?.meta.confidence === 'needsReview') patch.confidence = 'unparsed'
+/**
+ * The answer to "a paper, a book, or a document?", from the inspector, the
+ * row's menu or a drop on the sidebar — the Mac's `setKind`. A book is a
+ * paper whose CSL type is `book` (`shelfKindOf`), so «책» writes the type and
+ * «논문» takes a book's type back off it — to a journal article when it names
+ * a journal, otherwise to the type a new record starts with.
+ */
+export async function setKind(id: string, kind: ShelfKind) {
+  const entry = findPaper(id)
+  if (!entry) return
+  if (!entry.meta.kindIsUnanswered && entry.meta.shelfKind === kind) return
+  const patch: Record<string, unknown> = { kind: kind === 'document' ? 'document' : 'paper' }
+  const csl = entry.meta.csl as Record<string, unknown>
+  if (kind === 'book' && csl.type !== 'book') patch.csl = { ...csl, type: 'book' }
+  if (kind === 'paper' && csl.type === 'book') {
+    const journal = String(csl['container-title'] ?? '').trim() !== ''
+    patch.csl = { ...csl, type: journal ? 'article-journal' : 'document' }
   }
-  // Nothing is cleared for a document: it is not exported at all, so
-  // throwing away what somebody typed would cost them something and buy
-  // nothing.
+  // Nothing but a paper has a registrar to disagree with, so nothing else
+  // stays on the shelf of things to look at. The candidates a lookup offered
+  // go, and a record left for review is no longer one — but a record
+  // somebody corrected or a registrar confirmed keeps its rank, which is
+  // what wins a merge.
+  if (kind !== 'paper') {
+    patch.candidates = []
+    if (entry.meta.confidence === 'needsReview') patch.confidence = 'unparsed'
+  }
+  // Nothing else is cleared: throwing away what somebody typed would cost
+  // them something and buy nothing.
   await editMeta(id, patch)
 }
 
-/** The two kinds as menu rows, the paper's own ticked — the Mac's Kind picker. */
-export function kindEntries(entry: Paper): MenuEntry[] {
-  return ([
-    ['paper', L('논문', 'Paper'), 'text.document'],
-    ['document', L('일반 문서', 'Document'), 'doc'],
-  ] as const).map(([value, label, glyph]) => ({
-    label,
-    icon: glyph,
-    checked: entry.meta.effectiveKind === value,
-    action: () => { if (entry.meta.effectiveKind !== value || entry.meta.kindIsUnanswered) void setKind(entry.id, value) },
+/** The kinds' names: the shelf's, and one paper's answer. */
+export const KIND_NAMES: Record<ShelfKind, { shelf: () => string; answer: () => string; glyph: string }> = {
+  paper: { shelf: () => L('논문', 'Papers'), answer: () => L('논문', 'Paper'), glyph: 'text.document' },
+  book: { shelf: () => L('책', 'Books'), answer: () => L('책', 'Book'), glyph: 'book' },
+  document: { shelf: () => L('문서', 'Documents'), answer: () => L('일반 문서', 'Document'), glyph: 'doc' },
+}
+
+/** «논문 79편», «책 3권», «문서 506개» — each counted the way it is. */
+export function kindCount(kind: ShelfKind, count: number): string {
+  switch (kind) {
+    case 'paper': return L(`논문 ${count}편`, count === 1 ? '1 paper' : `${count} papers`)
+    case 'book': return L(`책 ${count}권`, count === 1 ? '1 book' : `${count} books`)
+    case 'document': return L(`문서 ${count}개`, count === 1 ? '1 document' : `${count} documents`)
+  }
+}
+
+/** The three kinds as menu rows, the paper's own ticked — the Mac's Kind
+ *  picker. From a row's menu (`chosen`) the answer goes to every chosen row
+ *  when this one is among them. */
+export function kindEntries(entry: Paper, options: { chosen?: boolean } = {}): MenuEntry[] {
+  const ids = options.chosen && store.selection.includes(entry.id) ? [...store.selection] : [entry.id]
+  return SHELF_KINDS.map((value) => ({
+    label: KIND_NAMES[value].answer(),
+    icon: KIND_NAMES[value].glyph,
+    checked: entry.meta.shelfKind === value,
+    action: () => { void (async () => { for (const id of ids) await setKind(id, value) })() },
   }))
 }
 
@@ -131,6 +164,7 @@ export async function attach(children: string | string[], parent: string) {
   const target = findPaper(parent)
   if (!target || target.meta.parentID) return
   let attached = 0
+  const attachedIDs: string[] = []
   let refused = false
   for (const child of Array.isArray(children) ? children : [children]) {
     const entry = findPaper(child)
@@ -141,6 +175,7 @@ export async function attach(children: string | string[], parent: string) {
     }
     await editMeta(child, { parentID: parent })
     attached += 1
+    attachedIDs.push(child)
     // Off the shelves now; if it was the one showing, its paper comes
     // forward (`LibraryModel.attach`).
     if (store.selectedID === child) await showPaper(parent)
@@ -148,11 +183,22 @@ export async function attach(children: string | string[], parent: string) {
   if (refused) {
     toast(L('보충 자료가 붙은 논문은 다른 논문에 붙일 수 없어요.', "A paper with supplements of its own can't become one."))
   }
-  if (attached > 0) toast(L(`“${target.meta.displayTitle}”에 붙였어요`, `Attached to “${target.meta.displayTitle}”`))
+  if (attached > 0) {
+    // A supplement is one of its paper's materials, not a paper to read in
+    // a plan's order; and one put back under its paper is no longer one a
+    // person took off (`LibraryModel.attach`).
+    await call('supplements:attached', { ids: attachedIDs })
+    await reloadPlans()
+    toast(L(`“${target.meta.displayTitle}”에 붙였어요`, `Attached to “${target.meta.displayTitle}”`))
+  }
 }
 
-/** Takes a supplement off its paper: a paper of its own again. */
-export const detach = (child: string) => editMeta(child, { parentID: null })
+/** Takes a supplement off its paper: a paper of its own again — and it
+ *  stays so, rather than being attached again on its own. */
+export async function detach(child: string) {
+  await editMeta(child, { parentID: null })
+  await call('supplements:detached', { id: child })
+}
 
 /** Every paper another could go under: standing on its own, and not itself. */
 export function attachTargets(id: string): { id: string; title: string; fileName: string }[] {
@@ -163,10 +209,20 @@ export function attachTargets(id: string): { id: string; title: string; fileName
 
 /**
  * A paper dropped on a sidebar row, filed under it — the Mac's `dropTarget`s:
- * a reading status, the favourites, a collection, a tag. Nothing else takes
+ * a kind, a reading status, the favourites, a collection, a tag. Nothing else takes
  * a drop, and a paper already there is left as it is.
  */
 export async function fileUnder(paperIDs: string | string[], shelf: Shelf) {
+  // Into a plan, all of them as one step, at its end.
+  if (shelf.kind === 'plan') {
+    await addToPlan(shelf.id, Array.isArray(paperIDs) ? paperIDs : [paperIDs])
+    return
+  }
+  // Onto a project: what it draws on (1.1).
+  if (shelf.kind === 'projects') {
+    if (shelf.id) await addToProject(shelf.id, Array.isArray(paperIDs) ? paperIDs : [paperIDs])
+    return
+  }
   // Every paper the drag carried — the whole selection when it started on
   // one of the chosen rows, as on the Mac.
   let filed = 0
@@ -183,6 +239,11 @@ async function fileOne(paperID: string, shelf: Shelf): Promise<boolean> {
   const entry = findPaper(paperID)
   if (!entry) return false
   switch (shelf.kind) {
+    case 'kind':
+      // Onto 논문, 책 or 문서: that is what it is now.
+      if (!entry.meta.kindIsUnanswered && entry.meta.shelfKind === shelf.of) return false
+      await setKind(paperID, shelf.of)
+      return true
     case 'status':
       if (entry.state.readingStatus === shelf.status) return false
       await setStatus(paperID, shelf.status)
@@ -244,6 +305,16 @@ export async function resolveMissingMetadata() {
   toast(count === 0
     ? L('채울 서지가 없어요.', 'Every record is already confirmed.')
     : L(`논문 ${count}편의 서지를 찾고 있어요.`, `Looking up ${count} paper${count === 1 ? '' : 's'}.`))
+}
+
+/** «Refresh All Metadata»: every record the app found, looked up again with
+ *  the engine as it is now — what a person wrote or chose stays, and so do
+ *  the citation keys. Said once, like «Resolve Missing Metadata». */
+export async function refreshAllMetadata() {
+  const count = await call('metadata:refreshAll')
+  toast(count === 0
+    ? L('다시 가져올 서지가 없어요.', 'There is nothing to look up again.')
+    : L(`논문 ${count}편의 서지를 다시 가져오고 있어요.`, `Looking up ${count} paper${count === 1 ? '' : 's'} again.`))
 }
 
 export async function copyKey(id: string) {
@@ -340,11 +411,21 @@ export function attachmentsMenu(id: string, anchor: Element) {
 
 /** A row's own menu, in the Mac's order (`PaperMenu`). */
 export function paperMenu(id: string, anchor: Element) {
+  const entries = paperMenuEntries(id)
+  if (entries.length) showMenu(anchor, entries)
+}
+
+/**
+ * What a right-click on a paper offers — the list's rows and the table's
+ * alike (the Mac's `PaperMenu`, which the board's rows wear too). `open` is
+ * what «Open» does: the table's rows keep the paper open as well.
+ */
+export function paperMenuEntries(id: string, options: { open?: () => void } = {}): MenuEntry[] {
   const entry = findPaper(id)
-  if (!entry) return
+  if (!entry) return []
   const labels = ZONE_LABELS()
-  showMenu(anchor, [
-    { label: L('열기', 'Open'), icon: 'book', action: () => void showPaper(id) },
+  return [
+    { label: L('열기', 'Open'), icon: 'book', action: options.open ?? (() => void showPaper(id)) },
     // Beside the paper already open: a half, or a quarter, of the page.
     {
       label: L('나란히 열기', 'Open Side by Side'),
@@ -366,12 +447,32 @@ export function paperMenu(id: string, anchor: Element) {
     // being dragged out of the open-papers popup; kept here on purpose — the
     // gesture is not one Windows teaches.
     { label: L('새 창으로 열기', 'Open in New Window'), icon: 'macwindow.badge.plus', action: () => openInWindow(id) },
-    // The Mac's row menu has the reading status as a picker of its own. The
-    // kind is not here: it is in the status button's menu and the ⋯ menu.
+    // The Mac's row menu has the reading status and the kind as pickers of
+    // their own. The kind is for every chosen row at once when this one is
+    // among them — a few mis-guessed textbooks fixed in one go; the table's
+    // rows had lost it with the old list's status button (1.1).
     { label: L('읽기 상태', 'Reading Status'), icon: 'circle.lefthalf.filled', children: statusEntries(entry) },
+    { label: L('종류', 'Kind'), icon: KIND_NAMES[entry.meta.shelfKind].glyph, children: kindEntries(entry, { chosen: true }) },
     // Every tag, ticked where this paper wears it; a press puts it on or
     // takes it off. Tags are made in the sidebar.
     { label: L('태그', 'Tags'), icon: 'tag', children: tagEntries(entry) },
+    // Into a plan — every row chosen when this one is among them.
+    {
+      label: L('계획에 넣기', 'Add to Plan'),
+      icon: 'point.topleft.down.to.point.bottomright.curvepath',
+      children: (() => {
+        const ids = isSelected(id) ? selectedPapers() : [id]
+        return [
+          ...store.plans.map((one) => ({
+            label: one.plan.name,
+            checked: ids.every((paperID) => one.plan.entries.some((planEntry) => planEntry.paper === paperID)),
+            action: () => void addToPlan(one.plan.id, ids),
+          })),
+          ...(store.plans.length ? [{ separator: true }] : []),
+          { label: L('새 계획…', 'New Plan…'), icon: 'plus.circle', action: () => void newPlan(ids) },
+        ]
+      })(),
+    },
     {
       label: entry.state.isFavorite
         ? L('즐겨찾기에서 빼기', 'Remove from Favorites')
@@ -404,7 +505,7 @@ export function paperMenu(id: string, anchor: Element) {
     { label: L('서지 다시 찾기', 'Re-run Metadata'), icon: 'arrow.triangle.2.circlepath', action: () => void rerunMetadata([id]) },
     { separator: true },
     { label: L('휴지통에 넣기', 'Move to Trash'), icon: 'trash', danger: true, action: () => void trashPaper(id) },
-  ])
+  ]
 }
 
 /**

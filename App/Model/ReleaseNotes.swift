@@ -230,6 +230,140 @@ enum ReleaseNotes {
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
         Release(
+            version: "1.1.0",
+            date: Text2("2026년 11월", "November 2026"),
+            note: Text2(
+                "읽기 계획과 프로젝트가 생겼어요. 칸에는 무엇이든 끌어다 띄우고, 슬립박스는 문헌 노트와 지식으로 나뉘어요.",
+                "Reading plans and projects are here. Drag anything into a pane to show it there, and the slip-box splits into literature notes and knowledge."
+            ),
+            added: [
+                Entry(
+                    Text2("계획", "Plans"),
+                    Text2(
+                        "옆 목록의 «새 계획…»으로 만들어요. 섹션으로 계열을 나누고, 위의 동그라미 줄이 차례와 읽은 것을 한눈에 보여줘요. 표와 달력 두 가지로 봐요.",
+                        "Make one with New Plan… in the sidebar. Sections split it into lines of work, and the row of circles at the top shows the order and what you’ve read. See it as a table or a calendar."
+                    )
+                ),
+                Entry(
+                    Text2("읽을 날", "A day to read it"),
+                    Text2(
+                        "날짜 칸에 «금요일», «12/3», «+1주»처럼 적거나, 달력에서 끌어요. «고르게 나누기»는 요일과 하루 편수만 물어보고 한 번에 정해요. 밀렸으면 «한 주 미루기».",
+                        "Type Fri, 12/3 or +1w in the date, or drag on the calendar. Spread Out asks only which days and how many a day, then dates them all. Behind? Push a Week."
+                    )
+                ),
+                Entry(
+                    Text2("이번 주", "This Week"),
+                    Text2(
+                        "모든 계획에서 이번 주 논문만 모여요. 밀린 논문은 빨간 경고 없이 맨 위에 올라오고, 한 번에 오늘로 옮길 수 있어요.",
+                        "Every plan’s papers for this week, in one place. Overdue ones rise to the top with no red warnings, and move to today in one click."
+                    )
+                ),
+                Entry(
+                    Text2("자료", "Materials"),
+                    Text2(
+                        "인스펙터에 주소를 붙여넣으면 코드·슬라이드·영상·노트북을 알아채서 붙여요. 파일은 끌어다 놓으면 PDF 옆에 복사돼요.",
+                        "Paste a link in the inspector and it’s kept as code, slides, a video or a notebook. Drop a file and it’s copied beside the PDF."
+                    )
+                ),
+                Entry(
+                    Text2("모든 선반이 표예요", "Every shelf is a table"),
+                    Text2(
+                        "저자·해·학회가 열로 줄 맞춰 서고, 열 머리를 누르면 정렬돼요. 계획은 섹션 안에서 정렬되고, 한 번 더 누르면 계획 순서로 돌아와요. 표가 좁으면 제목은 그대로 두고 나머지 열을 옆으로 넘겨 봐요.",
+                        "Authors, year and venue stand in their own columns; click a column to sort. A plan sorts within its sections, and a third click brings back its order. In a narrow table the title stays put and the other columns slide sideways."
+                    )
+                ),
+                Entry(
+                    Text2("논문 · 책 · 문서", "Papers, Books, Documents"),
+                    Text2(
+                        "«모두» 대신 세 선반에서 시작해요. 종류마다 열이 달라요. 책은 지은이·출판사·진행, 문서는 폴더·쪽·더한 날이에요. 여러 종류가 섞인 선반은 위의 칩으로 하나씩 봐요. 옆 목록의 종류 위로 끌어다 놓으면 종류가 바뀌어요.",
+                        "The library starts on three shelves instead of All, each with its own columns: books show authors, publisher and progress; documents show folder, pages and the day they were added. A shelf with more than one kind shows one at a time, picked with the chips above it. Drag something onto a kind in the sidebar to change what it is."
+                    )
+                ),
+                Entry(
+                    Text2("프로젝트", "Projects"),
+                    Text2(
+                        "슬립박스의 «새 프로젝트…»로 투고나 시험처럼 마감이 있는 일을 계획해요. 마감까지 며칠 남았는지, 이정표, 할 일 보드와 타임라인이 한 쪽에 서요. 옆 칸에 논문 목록을 띄워 두고 끌어다 할 일이나 자료에 놓아요.",
+                        "Plan work with a deadline — a submission, an exam — from New Project… in the slip-box. The days left, the milestones, and the steps as a board or a timeline share one page. Keep a paper list in the pane beside it and drag papers onto a step or into the materials."
+                    ),
+                    demo: .projectBoard,
+                    featured: true
+                ),
+                Entry(
+                    Text2("문헌 노트와 지식", "Literature notes and knowledge"),
+                    Text2(
+                        "슬립박스가 둘로 나뉘어요. 문헌 노트에는 논문·책·문서에 붙은 노트만, 지식에는 직접 쓴 노트가 서요. 지식은 영역으로 나눠 두고, 노트를 영역 위로 끌어다 놓아 옮겨요.",
+                        "The slip-box splits in two: literature notes holds the notes attached to a paper, book or document, and knowledge holds the notes you write yourself. Sort knowledge into areas, and drag a note onto an area to move it there."
+                    )
+                ),
+                Entry(
+                    Text2("칸에 무엇이든 띄워요", "Put anything in any pane"),
+                    Text2(
+                        "옆 목록의 계획이나 선반을 칸 위로 끌어 놓으면 그 칸에 떠요. 가장자리에 놓으면 옆에 새 칸이 생겨요(네 칸까지). 닫은 칸은 아래 «다시 열기»나 ⇧⌘T로 돌아오고, 오른쪽 «+»에서도 열어요. 논문은 칸 위로 끌면 옆에 나란히 열려요(같은 논문 둘도 돼요). 인스펙터는 «띄우기»나 «+» 메뉴로 창 위에 띄울 수 있어요.",
+                        "Drag a plan or a shelf from the sidebar onto a pane to show it there, or onto a pane’s edge to open it beside (up to four panes). A closed pane comes back with Reopen, ⇧⌘T, or the + at the right. Drag a paper onto a pane to open it side by side — the same paper twice if you like. Float the inspector over the window when the panes are full, from its own button or the + menu."
+                    )
+                ),
+                Entry(
+                    Text2("실린 곳으로 서지를", "Filed where it was published"),
+                    Text2(
+                        "arXiv에 올라온 논문이 학회나 저널에 실렸으면 그 기록으로 가져와요. NeurIPS·ICLR·ICML처럼 DOI가 없는 학회는 PDF 첫 쪽의 게재 문구로 알아봐요.",
+                        "A paper on arXiv that has since appeared at a conference or in a journal is filed under that venue. Venues with no DOI, like NeurIPS, ICLR and ICML, are read from the camera-ready line on the first page."
+                    )
+                ),
+                Entry(
+                    Text2("서지 모두 다시 가져오기", "Refresh All Metadata"),
+                    Text2(
+                        "라이브러리 메뉴에서 이미 있는 서지를 새로 가져와요. 직접 고친 기록과 인용 키는 그대로예요. arXiv로 남은 논문은 앱이 가끔 저절로 다시 확인해요.",
+                        "Look every record up again from the Library menu. What you edited, and every citation key, stays as it is. Papers still filed as arXiv are checked again on their own from time to time."
+                    )
+                ),
+                Entry(
+                    Text2("보충 자료는 자료로", "Supplements in materials"),
+                    Text2(
+                        "보충 자료 PDF는 어느 논문 것인지 확실하면 목록 대신 그 논문의 자료로 들어가요. 자료에 PDF를 끌어다 놓아도 돼요.",
+                        "A supplementary PDF goes into its paper’s materials, not the list, when it’s clear which paper it belongs to. You can also drop a PDF on the materials."
+                    )
+                ),
+            ],
+            fixed: [
+                Entry(
+                    Text2("폴더는 제 PDF만", "A folder shows its own PDFs"),
+                    Text2(
+                        "옆 목록에서 폴더를 고르면 그 폴더에 바로 든 PDF만 나와요. 안쪽 폴더의 PDF는 그 폴더를 고르면 보여요. 폴더 옆 숫자도 같은 수예요.",
+                        "Choosing a folder in the sidebar lists only the PDFs directly in it; the ones in a folder inside it show when you choose that folder. The count beside each folder matches."
+                    )
+                ),
+                Entry(
+                    Text2("찾은 논문으로 목록도 가요", "The list goes to what you found"),
+                    Text2(
+                        "전부 찾기(⌘K)에서 논문을 고르면 논문만 열리고 목록은 제자리에 있던 것을 고쳤어요. 이제 목록도 그 논문의 줄로 가고, 지금 선반에 없으면 그 종류의 선반으로 바뀌어요.",
+                        "Choosing a paper in Search Everything (⌘K) opened it but left the list where it was. The list now goes to its row too, switching to the paper’s own shelf when it isn’t on the one you’re looking at."
+                    ),
+                    devices: [.mac]
+                ),
+                Entry(
+                    Text2("옆 목록에 끌어다 놓기", "Dropping on the sidebar"),
+                    Text2(
+                        "목록의 줄을 끌 수 없던 것과, 끌어도 옆 목록의 종류·읽기 상태·즐겨찾기·계획에 놓이지 않던 것을 고쳤어요. 여러 편을 골라 한 번에 끌어도 돼요.",
+                        "Rows in the list could not be dragged, and a drag that did start would not drop on a kind, a reading status, Favorites or a plan in the sidebar. Both work now, and several papers can be dragged at once."
+                    )
+                ),
+                Entry(
+                    Text2("창이 화면을 넘던 것", "A window wider than the screen"),
+                    Text2(
+                        "표 옆에서 인스펙터를 열면 창이 화면보다 넓어지고, 화면에 맞추다 앱이 끝날 수 있었어요. 이제 인스펙터 자리는 표에서 나오고 논문은 읽을 폭을 지켜요.",
+                        "Opening the inspector beside the table could widen the window past the screen, and fitting it back could quit the app. Now the inspector takes its room from the table, and the paper keeps a width you can read."
+                    )
+                ),
+                Entry(
+                    Text2("ECCV와 AAAI의 서지", "ECCV and AAAI records"),
+                    Text2(
+                        "ECCV 논문이 «Lecture Notes in Computer Science»로 나오던 것을 학회 이름으로, AAAI 논문을 학회 논문으로 바로잡았어요.",
+                        "ECCV papers now name their proceedings instead of Lecture Notes in Computer Science, and AAAI papers are filed as conference papers."
+                    )
+                ),
+            ]
+        ),
+        Release(
             version: "1.0.0",
             date: Text2("2026년 11월", "November 2026"),
             note: Text2(
@@ -2949,6 +3083,10 @@ enum ReleaseNotes {
         /// tinted, and the note it goes back to: pressing the tint makes the
         /// quotation in the note glow.
         case quoteLink
+        /// A project in miniature: the days left and the ring, three columns
+        /// of steps, and the paper list beside it — press a step to move it
+        /// on, press a paper to give it to the first step.
+        case projectBoard
 
         var id: String { rawValue }
     }

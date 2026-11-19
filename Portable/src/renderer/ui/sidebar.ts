@@ -10,14 +10,35 @@ import { hasIcon, iconNode, type IconName } from '../icons.js'
 import { showMenu, type MenuEntry } from './toolbar.js'
 import { clear, el, on } from '../dom.js'
 import {
-  authorCounts, folderAbove, folderTrail, isUnderFolder, sameShelf, searchCount, shelfCounts, store, subfolders,
+  authorCounts, directCount, folderAbove, folderTrail, homeShelf, sameShelf, searchCount, shelfCounts, store, subfolders,
   type Shelf,
 } from '../state.js'
+import { SHELF_KINDS, type ShelfKind } from '../../shared/documentKind.js'
+import { KIND_NAMES } from '../actions/paper.js'
 import { L } from '../../shared/lang.js'
 import { providerIcon, providerOf } from '../../shared/cloudProvider.js'
 import { samePath } from '../../shared/paths.js'
-import { carriesPapers, draggedPapers } from '../../shared/split.js'
+import { carriesNote, carriesPapers, draggedNote, draggedPapers, writeDraggedShelf } from '../../shared/split.js'
+import { areaDepth, areaName, knowledgeIn, knowledgeNotes, literatureNotes } from '../../shared/noteAreas.js'
+import { noteAreas } from '../notesModel.js'
+import { askNewArea, askRenameArea, deleteArea, fileNoteInArea, revealArea } from '../actions/notes.js'
 import { tagColor } from './paperList.js'
+import { planPapers } from '../state.js'
+import { weekCount } from '../../shared/planBoard.js'
+import { boardPaper, deletePlan, makePlanFrom, newPlan, renamePlan } from '../plans.js'
+import { donut } from './planBoard.js'
+import { askNewProject } from '../projects.js'
+import { projectMenu } from './projects.js'
+import { daysLeft, ddayText } from '../../shared/project.js'
+
+/** «Make a Plan» on a collection, a tag or a folder: its papers, in the list's order. */
+function makePlanEntry(shelf: Shelf, name: string): MenuEntry {
+  return {
+    label: L('계획으로 만들기', 'Make a Plan'),
+    icon: 'point.topleft.down.to.point.bottomright.curvepath',
+    action: () => void makePlanFrom(shelf, name),
+  }
+}
 
 export interface SidebarActions {
   select: (shelf: Shelf) => void
@@ -40,10 +61,16 @@ export interface SidebarActions {
 interface RowSpec {
   /** Identity across updates: the same row keeps the same node. */
   key: string
-  kind: 'row' | 'section' | 'button'
+  /** `hint` is a quiet line that says what a section is for, before it holds anything. */
+  kind: 'row' | 'section' | 'button' | 'hint'
   icon?: IconName
   label: string
   count?: number
+  /** A count that is not a number — a plan's `3/11` — and the small ring beside it. */
+  countText?: string
+  /** A word where the count goes — a project's «D-72» (1.1). */
+  badge?: string
+  donut?: number
   chip?: boolean
   shelf?: Shelf
   /** For the rows that are not shelves: add a folder, a collection, the graph. */
@@ -61,6 +88,8 @@ interface RowSpec {
   dismiss?: { label: string; press: () => void }
   /** Takes a paper dropped on it (`SidebarActions.file`). */
   drop?: boolean
+  /** Takes a note dragged from the slip-box's list: an area files it there. */
+  noteDrop?: (noteID: string) => void
   /** A colour for the row's mark — a tag's own, drawn as the Mac's dot. */
   tint?: string
   /** The shelf's own colour when it is the one lit (`ScopeRow.symbolColor`):
@@ -150,6 +179,7 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
         // disconnected (the first is where the library began).
         menu: [
           { label: L('폴더에서 보기', 'Show in Folder'), icon: 'folder', action: () => actions.revealFolder(root) },
+          makePlanEntry({ kind: 'folder', root }, basename(root)),
           // Apart, and in red: this one takes a library out of the list.
           ...(root === store.root
             ? []
@@ -168,7 +198,8 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
           shelf: { kind: 'folder', root: path },
           icon: path === open ? 'folder.fill' : 'folder',
           label: basename(path),
-          count: store.papers.filter((entry) => !entry.meta.parentID && isUnderFolder(entry, path)).length,
+          // What its shelf shows: the PDFs directly in it (1.1).
+          count: directCount(path),
           indent: step + 1,
           title: path,
         })
@@ -183,6 +214,7 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
           count: node.count,
           indent: trail.length,
           title: node.path,
+          menu: [makePlanEntry({ kind: 'folder', root: node.path }, node.name)],
         })
       }
     } else {
@@ -198,23 +230,18 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
     // what you did about it. Nine rows in one run made you read all nine to
     // find the one you wanted. No headings — a name over three rows is a
     // label for something that does not need naming.
-    rows.push({ key: 'all', kind: 'row', shelf: { kind: 'all' }, icon: 'tray.full', label: L('모두', 'All'), count: counts.all })
-    // Shown only once the library holds more than one of them. A shelf that
-    // has never seen anything but papers looks exactly as it did.
-    //
-    // Once they appear, all of them do, empty ones included. The kinds are
-    // not a list that grows — they are the two answers to one question.
-    const kinds = ([
-      ['paper', 'text.document', L('논문', 'Papers'), counts.papers],
-      ['document', 'doc', L('문서', 'Documents'), counts.documents],
-    ] as const)
-    if (kinds.filter(([, , , count]) => count > 0).length > 1) {
-      for (const [of, glyph, label, count] of kinds) {
-        rows.push({
-          key: `kind:${of}`, kind: 'row', shelf: { kind: 'kind', of },
-          icon: glyph, label, count,
-        })
-      }
+    // What a thing is — and, since 1.1, where the library starts. «All»
+    // went (2026-11-18, the user's ask): one table cannot have the right
+    // columns for papers, books and documents at once. All three rows always
+    // show, empty ones included — they are the three answers to one question
+    // — and dropping a paper on one is how it changes kind, the way dropping
+    // it on «읽음» marks it read.
+    const kindCounts: Record<ShelfKind, number> = { paper: counts.papers, book: counts.books, document: counts.documents }
+    for (const of of SHELF_KINDS) {
+      rows.push({
+        key: `kind:${of}`, kind: 'row', shelf: { kind: 'kind', of },
+        icon: KIND_NAMES[of].glyph as IconName, label: KIND_NAMES[of].shelf(), count: kindCounts[of], drop: true,
+      })
     }
     rows.push({ key: 'gap:2', kind: 'section', label: '' })
 
@@ -230,8 +257,108 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
     rows.push({ key: 'review', kind: 'row', shelf: { kind: 'review' }, icon: 'exclamationmark.triangle', label: L('살펴볼 것', 'Needs Review'), count: counts.review, hue: 'review' })
     rows.push({ key: 'open', kind: 'row', shelf: { kind: 'open' }, icon: 'rectangle.on.rectangle', label: L('열린 문서', 'Open Documents'), count: store.openPaperIDs.length })
 
+    // What to read and when: this week across every plan, then each plan,
+    // with how far through it is.
+    rows.push({ key: 'sec:plans', kind: 'section', label: L('계획', 'Plans') })
+    rows.push({
+      key: 'week', kind: 'row', shelf: { kind: 'week' }, icon: 'calendar', label: L('이번 주', 'This Week'),
+      count: weekCount(papers.map(boardPaper), store.today),
+    })
+    for (const one of store.plans) {
+      const members = planPapers(one.plan.id)
+      const read = members.filter((entry) => entry.state.readingStatus === 'read').length
+      rows.push({
+        key: `plan:${one.plan.id}`,
+        kind: 'row',
+        shelf: { kind: 'plan', id: one.plan.id },
+        icon: 'point.topleft.down.to.point.bottomright.curvepath',
+        label: one.plan.name,
+        countText: members.length ? `${read}/${members.length}` : '',
+        donut: members.length ? read / members.length : undefined,
+        drop: true,
+        menu: [
+          { label: L('이름 바꾸기…', 'Rename…'), icon: 'square.and.pencil', action: () => void renamePlan(one.plan.id) },
+          { separator: true },
+          { label: L('지우기…', 'Delete…'), icon: 'trash', danger: true, action: () => void deletePlan(one.plan.id) },
+        ],
+      })
+    }
+    rows.push({
+      key: 'add:plan', kind: 'button', icon: 'plus.circle',
+      label: L('새 계획…', 'New Plan…'), press: () => void newPlan(),
+    })
+    // Before there is any plan, what one is for — said once, quietly, where
+    // the first one will go.
+    if (store.plans.length === 0) {
+      rows.push({ key: 'hint:plans', kind: 'hint', label: L('한 계열의 논문을 모아 읽을 날을 정해요', 'Gather a line of papers and give them days.') })
+    }
+
+    // The slip-box's places (1.1): what was written against a source, and
+    // what was written in one's own words — filed in areas that are folders
+    // under the notes folder.
     rows.push({ key: 'sec:slipbox', kind: 'section', label: L('슬립박스', 'Slip-Box') })
-    rows.push({ key: 'notes', kind: 'row', shelf: { kind: 'notes' }, icon: 'tray.full', label: L('노트', 'Notes'), count: counts.notes })
+    rows.push({ key: 'notes', kind: 'row', shelf: { kind: 'notes' }, icon: 'text.quote', label: L('문헌 노트', 'Literature Notes'), count: literatureNotes(store.notes).length })
+    rows.push({
+      key: 'knowledge', kind: 'row', shelf: { kind: 'knowledge', area: null }, icon: 'lightbulb', label: L('지식', 'Knowledge'),
+      count: knowledgeNotes(store.notes).length, noteDrop: (id) => fileNoteInArea(id, ''),
+    })
+    const areas = noteAreas()
+    for (const area of areas) {
+      rows.push({
+        key: `area:${area}`,
+        kind: 'row',
+        shelf: { kind: 'knowledge', area },
+        icon: 'folder',
+        label: areaName(area),
+        count: knowledgeIn(store.notes, area).length,
+        indent: areaDepth(area),
+        noteDrop: (id) => fileNoteInArea(id, area),
+        menu: [
+          { label: L('안에 새 영역…', 'New Area Inside…'), icon: 'plus.circle', action: () => void askNewArea(area) },
+          { label: L('이름 바꾸기…', 'Rename…'), icon: 'square.and.pencil', action: () => void askRenameArea(area) },
+          { label: L('폴더에서 보기', 'Show in Folder'), icon: 'folder', action: () => revealArea(area) },
+          { separator: true },
+          { label: L('영역 지우기 — 노트는 위로 옮겨요', 'Delete Area — Notes Move Up'), icon: 'trash', danger: true, action: () => void deleteArea(area) },
+        ],
+      })
+    }
+    const unfiled = knowledgeIn(store.notes, '').length
+    if (areas.length > 0 && unfiled > 0) {
+      rows.push({
+        key: 'area:', kind: 'row', shelf: { kind: 'knowledge', area: '' }, icon: 'tray', label: L('분류 안 함', 'Unfiled'),
+        count: unfiled, indent: 1, noteDrop: (id) => fileNoteInArea(id, ''),
+      })
+    }
+    rows.push({
+      key: 'add:area', kind: 'button', icon: 'plus.circle',
+      label: L('새 영역…', 'New Area…'), press: () => void askNewArea(''),
+    })
+    // What is being made from the reading: planned backwards from a
+    // deadline. A paper dropped on a project is something it draws on.
+    const active = store.projects.filter((one) => one.project.status !== 'done')
+    rows.push({
+      key: 'projects', kind: 'row', shelf: { kind: 'projects', id: null }, icon: 'flag', label: L('프로젝트', 'Projects'),
+      count: active.length,
+    })
+    for (const one of active) {
+      const days = daysLeft(one.project, store.today)
+      rows.push({
+        key: `project:${one.project.id}`,
+        kind: 'row',
+        shelf: { kind: 'projects', id: one.project.id },
+        icon: one.project.status === 'paused' ? 'pause.circle' : 'circle.dotted',
+        label: one.project.name,
+        // How long is left, the way the project's head says it.
+        badge: days === null ? undefined : ddayText(days),
+        indent: 1,
+        drop: true,
+        menu: projectMenu(one.project.id),
+      })
+    }
+    rows.push({
+      key: 'add:project', kind: 'button', icon: 'plus.circle',
+      label: L('새 프로젝트…', 'New Project…'), press: () => void askNewProject(),
+    })
 
     rows.push({ key: 'sec:collections', kind: 'section', label: L('컬렉션', 'Collections') })
     for (const collection of store.collections) {
@@ -248,6 +375,7 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
         count: counts.collections.get(collection.id) ?? 0,
         // A smart collection is filled by its rule, not by hand.
         drop: !collection.rule,
+        menu: [makePlanEntry({ kind: 'collection', id: collection.id }, collection.name)],
       })
     }
     rows.push({
@@ -266,6 +394,7 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
         count: counts.tags.get(tag.id) ?? 0,
         tint: tagColor(tag.color),
         drop: true,
+        menu: [makePlanEntry({ kind: 'tag', id: tag.id }, tag.name)],
       })
     }
     rows.push({
@@ -329,6 +458,7 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
   }
 
   function build(spec: RowSpec): HTMLElement {
+    if (spec.kind === 'hint') return el('div', { class: 'sidebar-hint', text: spec.label })
     if (spec.kind === 'section') {
       if (!spec.fold) return el('div', { class: 'sidebar-section', text: spec.label })
       const fold = spec.fold
@@ -352,6 +482,7 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
       'aria-selected': spec.shelf ? String(selected) : undefined,
     })
     if (spec.hue) row.dataset.hue = spec.hue
+    row.dataset.key = spec.key
     const glyph = el('span', { class: 'row-icon' })
     if (spec.tint) {
       // A tag is its colour on the Mac: a dot, not a luggage label.
@@ -371,6 +502,13 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
         : label,
     )
     if (spec.count !== undefined) row.append(el('span', { class: 'row-count', text: String(spec.count) }))
+    if (spec.badge !== undefined) row.append(el('span', { class: 'row-count row-badge', text: spec.badge }))
+    if (spec.countText !== undefined) {
+      row.append(el('span', { class: 'row-count row-progress' }, [
+        el('span', { class: 'row-progress-text', text: spec.countText }),
+        el('span', { class: 'row-donut', html: spec.donut === undefined ? '' : donut(spec.donut) }),
+      ]))
+    }
     if (spec.dismiss) {
       // The count steps aside for the × rather than sharing the corner with
       // it: a number with a cross on top of it is two things in one place,
@@ -401,12 +539,24 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
       // be the row your hand is already on.
       if (shelf.kind === 'folder' && same(store.shelf, shelf)) {
         const up = folderAbove(shelf.root)
-        actions.select(up ? { kind: 'folder', root: up } : { kind: 'all' })
+        actions.select(up ? { kind: 'folder', root: up } : homeShelf())
         return
       }
       actions.select(shelf)
     } : (spec.press ?? (() => {}))
     on(row, 'click', press)
+    // Dragged into the row of panes, a row opens what it shows there — in a
+    // pane of its own beside the others, or in place of one (1.1). Search
+    // results are the list's own, not an item to pin.
+    if (shelf && shelf.kind !== 'search') {
+      row.draggable = true
+      on(row, 'dragstart', (event: DragEvent) => {
+        if (!event.dataTransfer) return
+        writeDraggedShelf(event.dataTransfer, shelf)
+        event.dataTransfer.setData('text/plain', spec.label)
+        event.dataTransfer.effectAllowed = 'copyMove'
+      })
+    }
     on(row, 'keydown', (event: KeyboardEvent) => {
       if (event.target !== row || (event.key !== 'Enter' && event.key !== ' ')) return
       event.preventDefault()
@@ -417,6 +567,38 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
       on(row, 'contextmenu', (event: MouseEvent) => {
         event.preventDefault()
         showMenu(row, items)
+      })
+    }
+    if (spec.noteDrop) {
+      // A note filed by dropping it on the area it goes in. Counted in and
+      // out, as the papers' rows are: crossing onto the row's own icon is a
+      // `dragleave` too.
+      const file = spec.noteDrop
+      let over = 0
+      on(row, 'dragenter', (event: DragEvent) => {
+        if (!carriesNote(event.dataTransfer)) return
+        over += 1
+        row.classList.add('drop-target')
+      })
+      on(row, 'dragover', (event: DragEvent) => {
+        if (!carriesNote(event.dataTransfer)) return
+        event.preventDefault()
+        event.stopPropagation()
+        if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'
+        row.classList.add('drop-target')
+      })
+      on(row, 'dragleave', () => {
+        over = Math.max(0, over - 1)
+        if (over === 0) row.classList.remove('drop-target')
+      })
+      on(row, 'drop', (event: DragEvent) => {
+        over = 0
+        row.classList.remove('drop-target')
+        if (!carriesNote(event.dataTransfer)) return
+        event.preventDefault()
+        event.stopPropagation()
+        const id = draggedNote(event.dataTransfer)
+        if (id) file(id)
       })
     }
     if (spec.drop && shelf) {
@@ -456,7 +638,7 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
 
   /** What has to be redrawn rather than merely re-labelled. */
   function shape(spec: RowSpec): string {
-    return `${spec.kind}|${spec.key}|${spec.icon ?? ''}|${spec.label}|${spec.detail ?? ''}|${spec.chip ? 1 : 0}|${spec.menu ? spec.menu.length : 0}|${spec.indent ?? 0}|${spec.fold ? (spec.fold.open ? 'v' : '>') : ''}|${spec.drop ? 1 : 0}|${spec.tint ?? ''}`
+    return `${spec.kind}|${spec.key}|${spec.icon ?? ''}|${spec.label}|${spec.detail ?? ''}|${spec.chip ? 1 : 0}|${spec.menu ? spec.menu.length : 0}|${spec.indent ?? 0}|${spec.fold ? (spec.fold.open ? 'v' : '>') : ''}|${spec.drop ? 1 : 0}|${spec.noteDrop ? 1 : 0}|${spec.tint ?? ''}|${spec.countText !== undefined ? 'p' : ''}|${spec.badge !== undefined ? 'b' : ''}`
   }
 
   let drawnSpecs: RowSpec[] = []
@@ -481,11 +663,22 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
     }
     for (const [at, spec] of wanted.entries()) {
       const node = drawnNodes[at]
-      if (spec.kind === 'section') continue
+      if (spec.kind === 'section' || spec.kind === 'hint') continue
       if (spec.count !== undefined) {
         const cell = node.querySelector('.row-count')
         const text = String(spec.count)
         if (cell && cell.textContent !== text) cell.textContent = text
+      }
+      if (spec.badge !== undefined) {
+        const cell = node.querySelector('.row-badge')
+        if (cell && cell.textContent !== spec.badge) cell.textContent = spec.badge
+      }
+      if (spec.countText !== undefined) {
+        const cell = node.querySelector('.row-progress-text')
+        if (cell && cell.textContent !== spec.countText) cell.textContent = spec.countText
+        const ring = node.querySelector('.row-donut')
+        const drawn = spec.donut === undefined ? '' : donut(spec.donut)
+        if (ring && ring.innerHTML !== drawn) ring.innerHTML = drawn
       }
       if (spec.shelf) {
         const selected = String(same(store.shelf, spec.shelf))

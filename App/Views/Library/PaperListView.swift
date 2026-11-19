@@ -75,8 +75,19 @@ struct PaperListView: View {
     /// What an empty shelf says. Each one is empty for its own reason, and
     /// the reason is what tells you whether anything is wrong — nothing is,
     /// in every case here.
-    private var emptyShelf: (title: String, symbol: String, note: String) {
-        switch model.scope {
+    private var emptyShelf: (title: String, symbol: String, note: String) { Self.emptyShelf(for: model.scope) }
+
+    static func emptyShelf(for scope: LibraryModel.Scope) -> (title: String, symbol: String, note: String) {
+        switch scope {
+        case .papers:
+            (L("아직 논문이 없어요", "No Papers Yet"), "text.document",
+             L("PDF를 끌어다 놓거나 arXiv 주소·DOI로 더해요.", "Drop a PDF here, or add one by its arXiv link or DOI."))
+        case .books:
+            (L("아직 책이 없어요", "No Books Yet"), "book",
+             L("PDF를 옆 목록의 ‘책’으로 끌어다 놓으면 책이 돼요.", "Drag a PDF onto Books in the sidebar to make it a book."))
+        case .documents:
+            (L("아직 문서가 없어요", "No Documents Yet"), "doc",
+             L("강의 자료나 매뉴얼처럼 논문이 아닌 PDF가 여기 모여요.", "PDFs that aren't papers, like slides and manuals, gather here."))
         case .unread:
             (L("안 읽은 논문이 없어요", "Nothing Unread"), "circle",
              L("여기 있는 논문은 모두 열어봤어요.", "Every paper here has been opened."))
@@ -98,9 +109,20 @@ struct PaperListView: View {
         case .tag:
             (L("이 태그를 단 논문이 없어요", "Nothing With This Tag"), "tag",
              L("논문에 이 태그를 달면 여기 나와요.", "Tag a paper and it appears here."))
+        case .folder:
+            // A folder shows what sits in it; what sits in its folders is
+            // theirs (`LibraryModel.isDirectlyIn`).
+            (L("이 폴더에 바로 든 PDF가 없어요", "No PDFs Directly in This Folder"), "folder",
+             L("안쪽 폴더의 PDF는 옆 목록에서 그 폴더를 고르면 보여요.", "Choose a folder inside it in the sidebar to see its PDFs."))
         case .author:
             (L("이 저자의 논문이 없어요", "Nothing by This Author"), "person",
              L("이 이름이 실린 논문이 라이브러리에 없어요.", "No paper here carries this name."))
+        case .plan:
+            (L("이 계획은 비어 있어요", "This Plan Is Empty"), "point.topleft.down.to.point.bottomright.curvepath",
+             L("옆 목록의 계획 위로 논문을 끌어다 놓아보세요.", "Drag papers onto it in the sidebar."))
+        case .thisWeek:
+            (L("이번 주에 읽을 논문이 없어요", "Nothing to Read This Week"), "calendar",
+             L("논문에 읽을 날을 정하면 그 주에 여기 모여요.", "Give a paper a day to read it, and it gathers here that week."))
         default:
             (L("아직 아무것도 없어요", "Nothing Here"), "tray",
              L("이 선반은 비어 있어요.", "This shelf is empty."))
@@ -179,7 +201,8 @@ struct PaperListView: View {
                         pull.distance = distance
                         guard distance > Self.pullThreshold, !app.showsSearchPalette else { return }
                         app.showsSearchPalette = true
-                    }
+                    },
+                    reveal: model.revealRequest
                 )
                 .overlay(alignment: .top) { PullHint(pull: pull, threshold: Self.pullThreshold) }
                 .hiddenScrollers()
@@ -962,8 +985,9 @@ struct PaperRow: View, Equatable {
         // be corrected one after another without going to the inspector for
         // each — which is what a wrongly answered import feels like.
         Picker(L("종류", "Kind"), selection: kindBinding(paper)) {
-            Label(L("논문", "Paper"), systemImage: "text.document").tag(DocumentKind.paper)
-            Label(L("일반 문서", "Document"), systemImage: "doc").tag(DocumentKind.document)
+            ForEach(ShelfKind.allCases, id: \.self) { kind in
+                Label(kind.answer, systemImage: kind.symbolName).tag(kind)
+            }
         }
 
         Picker(L("읽기 상태", "Reading Status"), selection: statusBinding(paper)) {
@@ -985,9 +1009,9 @@ struct PaperRow: View, Equatable {
         .accessibilityLabel(L("읽기 상태: \(label(for: paper.state.readingStatus))", "Reading status: \(label(for: paper.state.readingStatus))"))
     }
 
-    private func kindBinding(_ paper: LoadedPaper) -> Binding<DocumentKind> {
+    private func kindBinding(_ paper: LoadedPaper) -> Binding<ShelfKind> {
         Binding(
-            get: { paper.meta.effectiveKind },
+            get: { paper.meta.shelfKind },
             set: { kind in Task { await model.setKind(kind, for: paper.id) } }
         )
     }
@@ -1043,7 +1067,7 @@ struct PaperRow: View, Equatable {
     /// neither is ever a thing to review — only a paper whose lookup came back
     /// unsure is.
     private func needsReview(_ paper: LoadedPaper) -> Bool {
-        paper.meta.effectiveKind.isLookedUp
+        paper.meta.isLookedUp
             && (paper.meta.confidence == .needsReview || paper.meta.confidence == .unparsed)
     }
 
@@ -1069,7 +1093,7 @@ struct PaperRow: View, Equatable {
 /// What a right-click on a paper offers.
 ///
 /// Its own view, and that is the point: see `PaperRow`.
-private struct PaperMenu: View {
+struct PaperMenu: View {
     let paper: LoadedPaper
     let model: LibraryModel
     @Environment(AppModel.self) private var app
@@ -1122,6 +1146,16 @@ private struct PaperMenu: View {
             }
         }
 
+        // What it is — 논문, 책 or 문서 — for every chosen row at once when
+        // this one is among them: a few mis-guessed textbooks are fixed in one
+        // go. The table's rows lost this when the list became a table (1.1);
+        // the inspector asks only until it is answered.
+        Picker(L("종류", "Kind"), selection: kindBinding(paper)) {
+            ForEach(ShelfKind.allCases, id: \.self) { kind in
+                Label(kind.answer, systemImage: kind.symbolName).tag(kind)
+            }
+        }
+
         Button {
             Task { await model.toggleFavorite(for: paper.id) }
         } label: {
@@ -1154,6 +1188,23 @@ private struct PaperMenu: View {
         } label: {
             Label(L("태그", "Tags"), systemImage: "tag")
         }
+
+        #if os(macOS)
+        // Into a plan — the picked rows, or this one — or a new plan made of
+        // them. The way into planning from where the papers are.
+        Menu {
+            let ids = model.selection.contains(paper.id) ? Array(model.selection) : [paper.id]
+            ForEach(model.plans) { plan in
+                Button(plan.name) { Task { await model.addToPlan(plan.id, papers: ids) } }
+            }
+            if !model.plans.isEmpty { Divider() }
+            Button(L("새 계획…", "New Plan…")) {
+                app.planning.sheet = .new(name: "", papers: ids)
+            }
+        } label: {
+            Label(L("계획에 넣기", "Add to Plan"), systemImage: "point.topleft.down.to.point.bottomright.curvepath")
+        }
+        #endif
 
         // A picker, not a submenu. The submenu listed the first thirty papers
         // in title order, and the one being looked for is a supplement's
@@ -1206,7 +1257,9 @@ private struct PaperMenu: View {
         #endif
 
         Button {
-            Task { await model.resolveMetadata(for: paper.id) }
+            // A confirmed record keeps its key and gives way only to another
+            // confirmed one; a guess is simply looked up again.
+            Task { await model.resolveMetadata(for: paper.id, refreshing: paper.meta.confidence == .verified) }
         } label: {
             Label(L("서지 다시 찾기", "Re-run Metadata"), systemImage: "arrow.triangle.2.circlepath")
         }
@@ -1229,6 +1282,16 @@ private struct PaperMenu: View {
         }
     }
     #endif
+
+    private func kindBinding(_ paper: LoadedPaper) -> Binding<ShelfKind> {
+        Binding(
+            get: { paper.meta.shelfKind },
+            set: { kind in
+                let ids = model.selection.contains(paper.id) ? Array(model.selection) : [paper.id]
+                Task { for id in ids { await model.setKind(kind, for: id) } }
+            }
+        )
+    }
 
     private func statusBinding(_ paper: LoadedPaper) -> Binding<PaperState.ReadingStatus> {
         Binding(

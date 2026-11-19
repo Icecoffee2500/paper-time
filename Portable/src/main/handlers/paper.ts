@@ -1,6 +1,6 @@
 /** One paper: its bytes, its record, its name, its own window. */
 import { PaperMeta } from '../../shared/model.js'
-import { isLookedUp } from '../../shared/documentKind.js'
+import { lookedUp } from '../../shared/documentKind.js'
 import fsp from 'node:fs/promises'
 import { MathScanner } from '../mathScanner.js'
 import { shell } from 'electron'
@@ -10,6 +10,7 @@ import { rightsLock, stripOwnedForDisplay } from '../pdfwrite.js'
 import { readWhole } from '../pdfBytes.js'
 import { FetchError, bytesOf } from '../paperSource.js'
 import type { Context, Handlers } from './context.js'
+import { isFile, pageCount } from './shared.js'
 
 
 /** The scanned papers, by id, with what the file was when it was read. */
@@ -100,7 +101,7 @@ export function paperHandlers(ctx: Context): Partial<Handlers> {
       // or one somebody typed in, has nothing to ask about.
       if (before && saved) {
         const was = new PaperMeta(before.meta)
-        if (!isLookedUp(was.effectiveKind) && was.confidence === 'unparsed') ctx.metadata.rerun([id])
+        if (!lookedUp(was) && was.confidence === 'unparsed' && lookedUp(new PaperMeta(saved))) ctx.metadata.rerun([id])
       }
       if (saved && ('tagIDs' in patch || 'collectionIDs' in patch)) await libraries.wear(holder, saved)
       windows.sendExcept(sender, 'paper:changed', { id, layers: ['record'] })
@@ -124,6 +125,41 @@ export function paperHandlers(ctx: Context): Partial<Handlers> {
     'metadata:resolve': ({ ids }) => ctx.metadata.rerun(ids),
     'metadata:guess': ({ ids }) => ctx.metadata.guess(ids),
     'metadata:resolvePending': () => ctx.metadata.pending(),
+    'metadata:refreshAll': () => ctx.metadata.refreshAll(),
+
+    'supplements:attached': async ({ ids }) => {
+      await ctx.supplements.attached(Array.isArray(ids) ? ids.filter((one): one is string => typeof one === 'string') : [])
+    },
+    'supplements:detached': ({ id }) => {
+      if (typeof id === 'string') ctx.supplements.detached(id)
+    },
+    // PDFs dropped on a paper's materials are its supplements: into the
+    // paper's own library, under it. One already in the library is not
+    // taken in twice, and is not moved from wherever it is.
+    'supplements:import': async ({ id, paths }, sender) => {
+      const owner = typeof id === 'string' ? await libraries.ownerOf(id) : null
+      const report = { added: 0, already: 0 }
+      if (!owner || !Array.isArray(paths)) return report
+      const pdfs = paths.filter((file): file is string => typeof file === 'string' && /\.pdf$/i.test(file) && isFile(file))
+      const added: string[] = []
+      await ctx.sync.run(async () => {
+        const papers = (await owner.read()).papers
+        for (const file of pdfs) {
+          try {
+            const { row, outcome } = await owner.importPDF(file, await pageCount(ctx.pageCounter, file), { papers })
+            if (outcome === 'imported' && row) added.push(row.id)
+            else if (outcome === 'duplicate') report.already += 1
+          } catch {
+            // One file that will not be read does not take the rest down with it.
+          }
+        }
+      })
+      for (const child of added) {
+        if (await ctx.supplements.attach(child, id)) report.added += 1
+      }
+      windows.sendExcept(sender, 'library:changed')
+      return report
+    },
     'metadata:resolving': () => ctx.metadata.resolvingNow,
 
     'paper:provenance': async ({ id }) => (await (await libraries.ownerOf(id))?.provenanceOf(id)) ?? 'unknown',

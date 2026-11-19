@@ -47,9 +47,37 @@ for r in rows:
   if 'firstPage' in r: add('largestFontText', r['firstPage'])
   for line in s['firstPageLines'][:30]: lines.add(line)
   add('referencePageIndices', s['pageCount'])
+  add('venueStamp', '\n'.join(s['firstPageLines']))
 for line in sorted(lines):
   for fn in ['isStamp', 'isLikelyAuthorOrAffiliationLine', 'looksLikeBoilerplate', 'endsMidPhrase', 'splitAuthorLine']: add(fn, line)
 for n in [0, 1, 40, 41, 100, 686]: add('referencePageIndices', n)
+stamps = [
+  'Published as a conference paper at ICLR 2024', 'Under review as a conference paper at ICLR 2024',
+  'Under review as a conference paper at ICLR 2025\nPublished as a conference paper at ICLR 2024',
+  '37th Conference on Neural Information Processing Systems (NeurIPS 2023).',
+  '38th Conference on Neural Information Processing Systems (NeurIPS 2024) Track on Datasets and Benchmarks.',
+  'Submitted to 37th Conference on Neural Information Processing Systems (NeurIPS 2023). Do not distribute.',
+  '37th Conference on Neural Information Processing Systems (NeurIPS 2023) Workshop on Foo.',
+  '34th Conference on Neural Information Processing Systems (NeurIPS 2020), Vancouver, Canada.',
+  'Preprint. Under review.', '31st Conference on Neural Information Processing Systems (NIPS 2017), Long Beach, CA, USA.',
+  'Proceedings of the 40 th International Conference on Machine Learning, Honolulu, Hawaii, USA. PMLR 202, 2023. Copyright 2023 by the author(s).',
+  'Preliminary work. Under review by the International Conference on Machine Learning (ICML).',
+  'Proceedings of the 26th International Conference on Artificial Intelligence and Statistics (AISTATS) 2023, Valencia, Spain. PMLR: Volume 206.',
+  '7th Conference on Robot Learning (CoRL 2023), Atlanta, USA.',
+  'This CVPR paper is the Open Access version, provided by the Computer Vision Foundation.',
+  'This ICCV 2023 paper is the Open Access version, provided by the Computer Vision Foundation.',
+  'This CVPR workshop paper is the Open Access version, provided by the Computer Vision Foundation.',
+  'The Thirty-Eighth AAAI Conference on Artificial Intelligence (AAAI-24)',
+  'Proceedings of the Thirty-Second International Joint Conference on Artificial Intelligence (IJCAI-23)',
+  'Findings of the Association for Computational Linguistics: EMNLP 2023, pages 1-15',
+  'Proceedings of the 2023 Conference on Empirical Methods in Natural Language Processing, pages 1-15',
+  'Proceedings of the 2024 Conference of the North American Chapter of the Association for Computational Linguistics',
+  'Proceedings of the 61st Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers), pages 1-15 July 9-14, 2023',
+  'Published in Transactions on Machine Learning Research (11/2023)',
+  'Journal of Machine Learning Research 24 (2023) 1-41 Submitted 1/22; Published 7/23',
+  '', 'Nothing here at all',
+]
+for t in stamps: add('venueStamp', t)
 tex = ['$\\pi_0$: A Vision-Language-Action Flow Model', 'Caf{\\\'e} na{\\"\\i}ve', '{\\AA}ngstr{\\"o}m', 'Deep {GAN} models --- and \\textit{more}', '\\cite{foo} and \\{braces\\}', '$\\alpha$-divergence of $\\Omega$', 'Costs $5 and $6', '``quoted\'\' text', '{\\c C}a va', '\\v{z} and \\H o and \\u{a}', '50\\% \\& more \\textdegree{}', 'x_1^2 in $x_1^2$']
 for t in tex: add('unescape', t); add('clean', t)
 json.dump(cases, open(sys.argv[3], 'w'), ensure_ascii=False)

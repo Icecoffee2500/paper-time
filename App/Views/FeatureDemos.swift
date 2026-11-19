@@ -67,6 +67,7 @@ struct FeatureDemoView: View {
             case .handwriting: HandwritingDemo(scale: scale)
             case .noteCodeBlock: NoteCodeBlockDemo(scale: scale)
             case .nightPage: NightPageDemo(scale: scale)
+            case .projectBoard: ProjectBoardDemo(scale: scale)
             }
         }
         .padding(scale.pad)
@@ -5097,5 +5098,152 @@ extension Color {
     /// A highlight tone as a SwiftUI colour.
     init(_ tone: HighlightTone.RGB) {
         self.init(red: tone.red, green: tone.green, blue: tone.blue)
+    }
+}
+
+// MARK: - Projects
+
+/// A project in miniature, with the paper list beside it. Pressing a step
+/// moves it to the next column and the ring follows; pressing a paper in the
+/// list gives it to the first step still to do — the drag, made a press.
+private struct ProjectBoardDemo: View {
+    let scale: DemoScale
+
+    private struct Step: Identifiable, Equatable {
+        let id: Int
+        let title: String
+        var column: Int
+        var paper: String?
+    }
+
+    @State private var steps: [Step] = [
+        Step(id: 0, title: ReleaseNotes.string("기준선 재현", "Baselines"), column: 2),
+        Step(id: 1, title: ReleaseNotes.string("삭제 실험", "Deletion runs"), column: 1),
+        Step(id: 2, title: ReleaseNotes.string("증명 다듬기", "Proofs"), column: 0),
+        Step(id: 3, title: ReleaseNotes.string("초고", "Draft"), column: 0),
+    ]
+
+    private let papers = ["Chen et al.", "Zhang et al.", "Casella & Berger"]
+    private var columns: [(String, Color)] {
+        [(ReleaseNotes.string("할 일", "To Do"), .secondary),
+         (ReleaseNotes.string("하는 중", "Doing"), .orange),
+         (ReleaseNotes.string("끝", "Done"), .green)]
+    }
+
+    private var progress: Double { Double(steps.filter { $0.column == 2 }.count) / Double(steps.count) }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: scale.gap) {
+            Paper(scale: scale) {
+                VStack(alignment: .leading, spacing: scale.isFull ? 10 : 6) {
+                    head
+                    HStack(alignment: .top, spacing: scale.isFull ? 6 : 4) {
+                        ForEach(columns.indices, id: \.self) { index in
+                            column(index)
+                        }
+                    }
+                    Text(ReleaseNotes.string("할 일을 누르면 다음 칸으로, 오른쪽 논문을 누르면 할 일에 붙어요.",
+                                             "Press a step to move it on; press a paper to give it to a step."))
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            companion
+                .frame(width: scale.isFull ? 150 : 104)
+        }
+    }
+
+    private var head: some View {
+        HStack(spacing: scale.isFull ? 10 : 6) {
+            ZStack {
+                Circle().stroke(Color.primary.opacity(0.08), lineWidth: scale.isFull ? 4 : 3)
+                Circle().trim(from: 0, to: progress)
+                    .stroke(Color.accentColor, style: StrokeStyle(lineWidth: scale.isFull ? 4 : 3, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                Text("\(Int((progress * 100).rounded()))%")
+                    .font(.system(size: scale.isFull ? 10 : 7.5, weight: .semibold))
+                    .monospacedDigit()
+            }
+            .frame(width: scale.isFull ? 38 : 26, height: scale.isFull ? 38 : 26)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(ReleaseNotes.string("ICML 투고", "ICML submission")).font(scale.body.weight(.semibold))
+                Text(ReleaseNotes.string("마감 1월 29일", "Due January 29")).font(.caption2).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 4)
+            Text(ReleaseNotes.string("D-72", "72d left"))
+                .font(.system(size: scale.isFull ? 17 : 12, weight: .bold))
+                .monospacedDigit()
+        }
+    }
+
+    private func column(_ index: Int) -> some View {
+        VStack(alignment: .leading, spacing: scale.isFull ? 5 : 3) {
+            HStack(spacing: 4) {
+                Circle().fill(columns[index].1).frame(width: 5, height: 5)
+                Text(columns[index].0).font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+            }
+            ForEach(steps.filter { $0.column == index }) { step in
+                Button {
+                    withAnimation(Motion.move) {
+                        if let at = steps.firstIndex(of: step) { steps[at].column = (step.column + 1) % 3 }
+                    }
+                } label: {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(step.title)
+                            .font(scale.small.weight(.medium))
+                            .strikethrough(step.column == 2, color: .secondary)
+                            .foregroundStyle(step.column == 2 ? .secondary : .primary)
+                            .lineLimit(1)
+                        if let paper = step.paper {
+                            Label(paper, systemImage: "text.document")
+                                .font(.system(size: scale.isFull ? 9.5 : 7.5, weight: .medium))
+                                .foregroundStyle(.tint)
+                                .lineLimit(1)
+                        }
+                    }
+                    .padding(.horizontal, scale.isFull ? 7 : 5)
+                    .padding(.vertical, scale.isFull ? 5 : 3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(RoundedRectangle(cornerRadius: scale.isFull ? 7 : 5, style: .continuous)
+                        .fill(Color.primary.opacity(0.045)))
+                }
+                .buttonStyle(.plain)
+                .transition(.opacity)
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: scale.isFull ? 96 : 66, alignment: .top)
+    }
+
+    private var companion: some View {
+        VStack(alignment: .leading, spacing: scale.isFull ? 6 : 4) {
+            Text(ReleaseNotes.string("논문 목록", "Papers"))
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+            ForEach(papers, id: \.self) { paper in
+                Button {
+                    withAnimation(Motion.move) {
+                        if let at = steps.firstIndex(where: { $0.column != 2 && $0.paper == nil }) { steps[at].paper = paper }
+                    }
+                } label: {
+                    HStack(spacing: 5) {
+                        Image(systemName: paper.contains("Berger") ? "book" : "text.document")
+                            .font(.system(size: scale.isFull ? 10 : 8))
+                            .foregroundStyle(.tint)
+                        Text(paper).font(scale.small).lineLimit(1)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, scale.isFull ? 5 : 3)
+                    .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(Color.accentColor.opacity(0.07)))
+                }
+                .buttonStyle(.plain)
+                .disabled(steps.contains { $0.paper == paper })
+                .opacity(steps.contains { $0.paper == paper } ? 0.45 : 1)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(scale.isFull ? 10 : 6)
+        .frame(maxHeight: .infinity, alignment: .top)
+        .background(RoundedRectangle(cornerRadius: scale.corner, style: .continuous).fill(.background.opacity(0.6)))
     }
 }

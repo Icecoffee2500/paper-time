@@ -147,15 +147,17 @@ extension SearchResult {
 /// cut the plain text and the editor holds the Markdown.
 @MainActor
 func openNotePassage(_ place: NotePassage, words: String, in model: LibraryModel) {
-    model.scope = .notes
+    model.scope = model.slipBoxScope(for: place.noteID)
     model.notes.reveal = words
     model.notes.openNoteID = place.noteID
 }
 
 @MainActor
-func openPassage(_ passage: PaperTextIndex.Passage, in model: LibraryModel, link: ReaderLink) {
+func openPassage(_ passage: PaperTextIndex.Passage, in model: LibraryModel, link: ReaderLink, reveals: Bool = false) {
     guard let paper = model.paper(passage.paperID) else { return }
-    model.selectedPaperID = passage.paperID
+    // From the palette, the list goes to the paper too (`reveal`); from the
+    // found list, the list is already where the passage is.
+    if reveals { model.reveal(passage.paperID) } else { model.selectedPaperID = passage.paperID }
     Task {
         let rect = await PaperTextIndex.shared.rect(for: passage, at: paper.documentURL)
         link.anchorRequest = ReaderLink.Anchor(

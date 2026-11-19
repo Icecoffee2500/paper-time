@@ -216,6 +216,10 @@ export async function rendererStateSuite(test: Test, suite: (name: string) => vo
     assert.equal(store.slipBox.paperID, 'A')
     setShelf({ kind: 'notes' })
     assert.equal(store.slipBox.paperID, null)
+    // 지식 is the slip-box too.
+    store.slipBox.paperID = 'A'
+    setShelf({ kind: 'knowledge', area: '통계' })
+    assert.equal(store.slipBox.paperID, null)
   })
 
   await test('changes are named: a listener hears the names it was sent', () => {

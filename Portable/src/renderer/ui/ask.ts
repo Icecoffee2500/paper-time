@@ -22,6 +22,11 @@ export interface NameQuestion {
   /** A row of colours under the field, one of them chosen — a tag's. The
    *  choice is left in `chosen` when the sheet resolves. */
   swatches?: { options: readonly string[]; colorOf: (value: string) => string; chosen: string }
+  /** What is wrong with a name, said under the field while the button is
+   *  greyed — or null when the name will do (an area's: no `/`, no dot first). */
+  problem?: (name: string) => string | null
+  /** Whether a name will do at all; one it will not greys the button, said or not. */
+  accepts?: (name: string) => boolean
 }
 
 /** Resolves with the trimmed name, or null when the sheet was put away. */
@@ -52,12 +57,13 @@ export function askForName(question: NameQuestion): Promise<string | null> {
         row.append(dot)
       }
     }
+    const problem = question.problem || question.accepts ? el('p', { class: 'ask-problem' }) : null
     const cancel = el('button', { class: 'plain-button', text: L('취소', 'Cancel') })
     const create = el('button', { class: 'filled-button', text: question.confirm }) as HTMLButtonElement
     const foot = el('div', { class: 'set-foot' }, [el('span', { class: 'fb-spacer' }), cancel, create])
     sheet.append(
       el('h2', { class: 'fb-title', text: question.title }),
-      el('div', { class: 'set-body ask-body' }, row ? [input, row] : [input]),
+      el('div', { class: 'set-body ask-body' }, [input, ...(row ? [row] : []), ...(problem ? [problem] : [])]),
       foot,
     )
     backdrop.append(sheet)
@@ -71,7 +77,15 @@ export function askForName(question: NameQuestion): Promise<string | null> {
       resolve(value)
     }
     const name = () => input.value.trim()
-    const refresh = () => create.toggleAttribute('disabled', name().length === 0)
+    const takes = () => name().length > 0 && (question.accepts?.(name()) ?? true) && !question.problem?.(name())
+    const refresh = () => {
+      create.toggleAttribute('disabled', !takes())
+      if (problem) {
+        const said = question.problem?.(name()) ?? null
+        problem.textContent = said ?? ''
+        problem.style.display = said ? '' : 'none'
+      }
+    }
     refresh()
 
     on(input, 'input', refresh)
@@ -79,7 +93,7 @@ export function askForName(question: NameQuestion): Promise<string | null> {
       // The window's own keys — a letter picks a drawing tool — must not see
       // what is typed here.
       event.stopPropagation()
-      if (event.key === 'Enter' && name()) {
+      if (event.key === 'Enter' && takes()) {
         event.preventDefault()
         finish(name())
       } else if (event.key === 'Escape') {
@@ -88,7 +102,7 @@ export function askForName(question: NameQuestion): Promise<string | null> {
       }
     })
     on(cancel, 'click', () => finish(null))
-    on(create, 'click', () => { if (name()) finish(name()) })
+    on(create, 'click', () => { if (takes()) finish(name()) })
     on(backdrop, 'mousedown', (event: MouseEvent) => {
       if (event.target === backdrop) finish(null)
     })

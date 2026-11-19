@@ -81,6 +81,28 @@ export function demoFrame(demo: string | undefined): HTMLElement | null {
   return frame
 }
 
+/**
+ * The reading-plans window (`Website/plans-demo.js`), the one the page and
+ * the Mac's About show — drawn at 900 points and shown smaller in a narrower
+ * frame, and as tall as it turns out to be. In the window's own theme.
+ */
+export function plansDemoFrame(): HTMLElement {
+  const theme = document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'
+  const frame = el('iframe', {
+    class: 'rn-demo rn-plans-demo',
+    src: `demos.html?demo=readingPlan&lang=${prefersKorean() ? 'ko' : 'en'}&theme=${theme}`,
+    title: L('읽기 계획 — 작동하는 예시', 'Reading Plans — a working example'),
+  }) as HTMLIFrameElement
+  const listen = (event: MessageEvent) => {
+    if (!frame.isConnected) return window.removeEventListener('message', listen)
+    const answer = event.data as { paperTimeDemo?: string; height?: number }
+    if (event.source !== frame.contentWindow || answer?.paperTimeDemo !== 'readingPlan' || !answer.height) return
+    frame.style.height = `${Math.min(Math.max(answer.height, 320), 2400)}px`
+  }
+  window.addEventListener('message', listen)
+  return frame
+}
+
 // MARK: - The Log
 
 const DEVICE_NAME: Record<string, string> = { mac: 'Mac', ipad: 'iPad', iphone: 'iPhone' }

@@ -52,14 +52,14 @@ export async function paperAddressSuite(test: Test, suite: (name: string) => voi
   // A fetch that answers from a table: status and body by address, and a
   // log of what was asked, in order.
   const PDF = Buffer.from('%PDF-1.4\n%\xe2\xe3\xcf\xd3\n1 0 obj << >> endobj\ntrailer << >>\n%%EOF\n', 'latin1')
-  const table = (answers: Record<string, { status: number; body?: Buffer | string; throws?: string }>) => {
+  const table = (answers: Record<string, { status?: number; body?: Buffer | string; throws?: string }>) => {
     const asked: string[] = []
     const fetch: Fetch = async (url) => {
       asked.push(url)
       const answer = answers[url] ?? { status: 404 }
       if (answer.throws) throw new Error(answer.throws)
       const body = typeof answer.body === 'string' ? Buffer.from(answer.body, 'utf8') : (answer.body ?? Buffer.alloc(0))
-      return { status: answer.status, url, body, type: typeof answer.body === 'string' ? 'text/html' : 'application/pdf' }
+      return { status: answer.status ?? 200, url, body, type: typeof answer.body === 'string' ? 'text/html' : 'application/pdf' }
     }
     return { fetch, asked }
   }

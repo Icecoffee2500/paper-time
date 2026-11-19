@@ -48,6 +48,8 @@ import { noteTableSuite } from './noteTable.js'
 import { noteCodeSuite } from './noteCode.js'
 import { paperAddressSuite } from './paperAddress.js'
 import { quotedPassagesSuite } from './quotedPassages.js'
+import { readingPlanSuite } from './readingPlan.js'
+import { planBoardSuite } from './planBoard.js'
 import { noteListSuite } from './noteList.js'
 import { codeHighlightSuite } from './codeHighlight.js'
 import { feedbackNameSuite } from './feedbackName.js'
@@ -69,6 +71,7 @@ import { readerSuite } from './reader.js'
 import { sketchGeometrySuite } from './sketchGeometry.js'
 import { sketchCommandsSuite } from './sketchCommands.js'
 import { focusSuite } from './focus.js'
+import { projectsSuite } from './projects.js'
 import { voiceSuite } from './voice.js'
 import { tokensSuite } from './tokens.js'
 import { libraryListSuite } from './libraryList.js'
@@ -84,7 +87,7 @@ import { Library, RecordUnreadable, readJSON } from '../main/library.js'
 import { providerIcon, providerOf } from '../shared/cloudProvider.js'
 import { linesFromRuns, type RunBox } from '../shared/textLines.js'
 import { encodeSwiftJSON as encode } from '../shared/coding.js'
-import { splitDock, splitPapers, splitRemove, zoneAt, zoneRect } from '../shared/split.js'
+import { dockTarget, splitDock, splitPapers, splitRemove, splitReplace, splitSwap, zoneAt, zoneRect, zoneSide } from '../shared/split.js'
 import { latexSuiteTests } from './latexSuite.js'
 
 let passed = 0
@@ -443,6 +446,8 @@ async function main() {
   await noteCodeSuite(test, suite)
   await paperAddressSuite(test, suite)
   await quotedPassagesSuite(test, suite)
+  await readingPlanSuite(test, suite)
+  await planBoardSuite(test, suite)
   await noteListSuite(test, suite)
   await codeHighlightSuite(test, suite)
   await feedbackNameSuite(test, suite)
@@ -464,6 +469,7 @@ async function main() {
   await sketchGeometrySuite(test, suite)
   await sketchCommandsSuite(test, suite)
   await focusSuite(test, suite)
+  await projectsSuite(test, suite)
   await libraryListSuite(test, suite)
   await marksSuite(test, suite)
   await librarySuite(test, suite)
@@ -723,6 +729,46 @@ async function main() {
   await test('a zone is drawn inset eight points, as on the Mac', () => {
     const rect = zoneRect('right', { width: 1000, height: 900 })
     assert.deepEqual(rect, { x: 504, y: 8, width: 488, height: 884 })
+  })
+
+  // The Mac's `DockDropDelegate.target` (2026-11-18), the same numbers.
+  await test('one reader: the outer three tenths go beside it, the middle opens in its place', () => {
+    const size = { width: 1000, height: 900 }
+    assert.deepEqual(dockTarget(100, 450, size, null, {}), { kind: 'zone', zone: 'left' })
+    assert.deepEqual(dockTarget(950, 100, size, null, {}), { kind: 'zone', zone: 'topRight' })
+    assert.deepEqual(dockTarget(500, 450, size, null, {}), { kind: 'open', pane: null }, 'the middle: in place of the paper shown')
+    assert.deepEqual(dockTarget(310, 450, size, null, {}), { kind: 'open', pane: null })
+    assert.equal(dockTarget(10, 10, { width: 0, height: 900 }, null, {}), null)
+  })
+
+  await test('side by side: a thin strip at the edge adds a pane; anywhere else is the pane under the pointer', () => {
+    const size = { width: 1000, height: 900 }
+    const two = { left: { top: 'A' }, right: { top: 'B' } }
+    const frames = { A: { x: 0, y: 0, width: 495, height: 900 }, B: { x: 505, y: 0, width: 495, height: 900 } }
+    assert.deepEqual(dockTarget(50, 450, size, two, frames), { kind: 'zone', zone: 'left' })
+    assert.deepEqual(dockTarget(950, 850, size, two, frames), { kind: 'zone', zone: 'bottomRight' })
+    assert.deepEqual(dockTarget(150, 450, size, two, frames), { kind: 'open', pane: 'A' }, 'no longer a half: the left pane')
+    assert.deepEqual(dockTarget(800, 100, size, two, frames), { kind: 'open', pane: 'B' })
+    assert.deepEqual(dockTarget(500, 450, size, two, frames), { kind: 'open', pane: 'A' }, 'in the gap: the nearest')
+    const four = { left: { top: 'A', bottom: 'B' }, right: { top: 'C', bottom: 'D' } }
+    const quarters = {
+      A: { x: 0, y: 0, width: 495, height: 445 }, B: { x: 0, y: 455, width: 495, height: 445 },
+      C: { x: 505, y: 0, width: 495, height: 445 }, D: { x: 505, y: 455, width: 495, height: 445 },
+    }
+    assert.deepEqual(dockTarget(30, 450, size, four, quarters), { kind: 'open', pane: 'A' }, 'four: the edge is a pane too, nearest')
+    assert.deepEqual(dockTarget(30, 800, size, four, quarters), { kind: 'open', pane: 'B' })
+    assert.deepEqual(dockTarget(970, 700, size, four, quarters), { kind: 'open', pane: 'D' })
+    assert.equal(zoneSide('bottomLeft'), 'left')
+    assert.equal(zoneSide('topRight'), 'right')
+  })
+
+  await test('a pane’s paper replaced keeps its place; two panes dragged onto each other trade places', () => {
+    const split = { left: { top: 'A', bottom: 'B' }, right: { top: 'C' } }
+    assert.deepEqual(splitReplace(split, 'B', 'X'), { left: { top: 'A', bottom: 'X' }, right: { top: 'C' } })
+    assert.deepEqual(splitReplace(split, 'C', 'A@2'), { left: { top: 'A', bottom: 'B' }, right: { top: 'A@2' } }, 'the same paper twice')
+    assert.deepEqual(splitSwap(split, 'C', 'A'), { left: { top: 'C', bottom: 'B' }, right: { top: 'A' } })
+    assert.deepEqual(splitSwap(split, 'A', 'A'), split)
+    assert.deepEqual(splitSwap(split, 'A', 'Z'), split, 'a pane not there trades nothing')
   })
 
   await test('a new record carries the date the Mac insists on', () => {

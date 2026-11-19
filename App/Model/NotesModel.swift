@@ -73,6 +73,9 @@ public final class NotesModel {
     @ObservationIgnored private var folderOfPaper: (UUID) -> LibraryStore? = { _ in nil }
 
     public private(set) var notes: [Zettel] = []
+    /// The areas of knowledge — the folders under the notes folder, empty
+    /// ones too (1.1).
+    public private(set) var areas: [String] = []
     public private(set) var byID: [String: Zettel] = [:]
     /// For each note, the notes that point at it.
     public private(set) var backlinks: [String: [String]] = [:]
@@ -219,6 +222,8 @@ public final class NotesModel {
         }
         boxByNote = homes
         sharedNames = shared
+        let found = await loose.areas()
+        if found != areas { areas = found }
         let notes = order.compactMap { loaded[$0] }
         Trace.time("notes: index \(notes.count)") { apply(notes) }
         await Trace.time("notes: settle") { await settle() }
@@ -679,8 +684,9 @@ public final class NotesModel {
 
     // MARK: - Writing
 
-    public func create(paperID: UUID?, kind: Zettel.Kind = .note) -> Zettel {
-        let note = Zettel(id: Zettel.makeID(avoiding: Set(byID.keys)), kind: kind, paperID: paperID)
+    public func create(paperID: UUID?, kind: Zettel.Kind = .note, area: String = "") -> Zettel {
+        let note = Zettel(id: Zettel.makeID(avoiding: Set(byID.keys)), kind: kind, paperID: paperID,
+                          area: paperID == nil ? area : "")
         boxByNote[note.id] = box(for: note).boxID
         // Not on the disk until somebody types into it, and a reading of the
         // boxes in the meantime must not take it away from them.
@@ -705,6 +711,10 @@ public final class NotesModel {
     public func update(_ note: Zettel) {
         var edited = note
         edited.modified = .now
+        // Where it is filed is the box's to say, not the editor's: a note
+        // moved to another area while it was open still carries the old
+        // one in the editor's hands, and writing that would move it back.
+        if let known = byID[note.id] { edited.area = known.area }
         if let index = notes.firstIndex(where: { $0.id == note.id }) {
             let before = notes[index]
             notes[index] = edited
@@ -740,6 +750,8 @@ public final class NotesModel {
     public func flush(_ note: Zettel) async {
         saveTasks[note.id]?.cancel()
         saveTasks[note.id] = nil
+        var note = note
+        if let known = byID[note.id] { note.area = known.area }
         await write(note)
         // The editor lets go of a note by flushing it, and an empty note let
         // go of is a note nobody wrote: the next reading may drop it, as it
@@ -760,6 +772,80 @@ public final class NotesModel {
             if let relocation = self?.relocation { _ = await relocation.value }
             try? await home.deleteNote(id)
         }
+    }
+
+    // MARK: - Areas of knowledge
+
+    /// The notes about no paper — the slip-box's 지식.
+    public var knowledge: [Zettel] { notes.filter { $0.paperID == nil } }
+
+    /// The notes written against a paper, a book or a document — 문헌 노트.
+    public var literature: [Zettel] { notes.filter { $0.paperID != nil } }
+
+    /// The knowledge in an area and the areas inside it; nil is every area,
+    /// "" is the notes filed in none.
+    public func knowledge(in area: String?) -> [Zettel] {
+        guard let area else { return knowledge }
+        if area.isEmpty { return knowledge.filter { $0.area.isEmpty } }
+        return knowledge.filter { $0.area == area || $0.area.hasPrefix(area + "/") }
+    }
+
+    /// Files a note of no paper under an area. A literature note stays
+    /// beside its paper.
+    public func move(_ id: String, toArea area: String) async {
+        guard var note = byID[id], note.paperID == nil, note.area != area else { return }
+        saveTasks[id]?.cancel()
+        saveTasks[id] = nil
+        if let pending = unwritten[id] { note = pending }
+        note.area = area
+        replaceInPlace(note)
+        unwritten[id] = note
+        await write(note)
+    }
+
+    @discardableResult
+    public func createArea(named name: String, inside parent: String = "") async -> String? {
+        guard let made = try? await loose.createArea(named: name, inside: parent) else { return nil }
+        areas = await loose.areas()
+        return made
+    }
+
+    @discardableResult
+    public func renameArea(_ area: String, to name: String) async -> String? {
+        await writePending(inArea: area)
+        guard let renamed = try? await loose.renameArea(area, to: name) else { return nil }
+        for note in knowledge(in: area) {
+            var moved = note
+            moved.area = renamed + note.area.dropFirst(area.count)
+            replaceInPlace(moved)
+        }
+        areas = await loose.areas()
+        return renamed
+    }
+
+    /// Takes an area away; its notes go up one level, never away.
+    public func removeArea(_ area: String) async {
+        await writePending(inArea: area)
+        guard (try? await loose.removeArea(area)) != nil else { return }
+        await reload()
+    }
+
+    /// What was typed in an area's notes, written before its folder moves —
+    /// a write still waiting would put the note back where the folder was.
+    private func writePending(inArea area: String) async {
+        for note in knowledge(in: area) where saveTasks[note.id] != nil || unwritten[note.id] != nil {
+            saveTasks[note.id]?.cancel()
+            saveTasks[note.id] = nil
+            await write(unwritten[note.id] ?? note)
+        }
+    }
+
+    /// One note swapped for a new version of itself, where it was in the list.
+    private func replaceInPlace(_ note: Zettel) {
+        guard let index = notes.firstIndex(where: { $0.id == note.id }) else { return }
+        notes[index] = note
+        byID[note.id] = note
+        revision += 1
     }
 
     // MARK: - Indexes

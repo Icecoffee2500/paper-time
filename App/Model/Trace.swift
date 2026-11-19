@@ -227,6 +227,10 @@ enum Hitches {
         }
     }
 
+    /// The main thread's working time so far, in seconds — for a probe that
+    /// puts it on the step that spent it (`PerfProbe`).
+    static var busySeconds: Double { busyTotal }
+
     /// What the main thread did with its time, for the summary at the end.
     static var summary: String {
         guard busySpells > 0 else { return "" }

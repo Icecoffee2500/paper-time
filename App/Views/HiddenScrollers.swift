@@ -17,6 +17,16 @@ import SwiftUI
 /// here worked for a moment and then SwiftUI put it back on its next layout,
 /// which is a fight not worth having with a framework over its own views.
 private struct ScrollerSweep: NSViewRepresentable {
+    /// The size it is given, without asking AppKit. Left to itself SwiftUI
+    /// asks an AppKit view for its layout traits on every pass of the
+    /// window's layout, and AppKit answers by updating the constraints of
+    /// the view's whole subtree — for a table, every row on screen, each
+    /// row's SwiftUI body with it. That was most of what a pane opening or
+    /// closing cost (2026-11-19, `--papertime-perf`).
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSViewType, context: Context) -> CGSize? {
+        CGSize(width: proposal.width ?? 0, height: proposal.height ?? 0)
+    }
+
     /// Whether the scrollers should be slim rather than gone.
     ///
     /// Gone is right for the reader, where the page itself says where you are.

@@ -5,6 +5,7 @@
  * spreads them into one `Handlers`, which the compiler checks for
  * completeness against `shared/api.ts`.
  */
+import type { Supplements } from '../supplements.js'
 import type { Fetch, FetchedPapers } from '../paperSource.js'
 import type { MetadataQueue } from '../metadata/queue.js'
 import type { Updates } from '../updates.js'
@@ -42,6 +43,8 @@ export interface Context {
   pageCounter: PageCounter
   /** Papers looked up at the registrars, one after another (`metadata/queue.ts`). */
   metadata: MetadataQueue
+  /** Supplements under their papers (`supplements.ts`). */
+  supplements: Supplements
   /** Whether there is a newer version, and installing it on Windows (`updates.ts`). */
   updates: Updates
   /** The bytes of papers that have no file, for the session (`paperSource.ts`). */

@@ -53,6 +53,36 @@ public enum DocumentKind: String, Codable, Hashable, Sendable, CaseIterable {
     public var isLookedUp: Bool { self == .paper }
 }
 
+/// Which shelf a record stands on: 논문, 책 or 문서.
+///
+/// 1.1 brought the book back as a shelf (2026-11-18, the user's ask: «모두
+/// 보기를 그냥 없애고, 논문/일반/책 이렇게 나눴으면 좋겠어») — not as a
+/// fourth answer written into the record. A book is still a paper to
+/// everything that cites (`DocumentKind.paper`), and what makes it a book is
+/// the one field every build already writes and every export already reads:
+/// its CSL type, `book`. So nothing new goes into `meta.json`, a 1.0 build
+/// reading the same folder sees what it always saw, and the books 1.0 folded
+/// into papers come back on their own.
+public enum ShelfKind: String, CaseIterable, Hashable, Sendable {
+    case paper, book, document
+}
+
+public extension PaperMeta {
+    /// The shelf: a document, or — among the papers — a book, by its CSL type.
+    var shelfKind: ShelfKind {
+        switch effectiveKind {
+        case .document: .document
+        case .paper: csl.type == .book ? .book : .paper
+        }
+    }
+
+    /// Whether a registrar may be asked about this record. A paper — not a
+    /// book: a textbook's title matches a journal article's often enough
+    /// (Sutton & Barto came back as «권 9, 호 5, 1054–1054쪽» in 0.9), and a
+    /// book has no preprint to be published from.
+    var isLookedUp: Bool { shelfKind == .paper }
+}
+
 /// What the app thinks a file is, before anybody has said.
 ///
 /// Deliberately small and explainable. A DOI or an arXiv identifier printed

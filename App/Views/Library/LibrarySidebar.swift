@@ -34,6 +34,9 @@ struct LibrarySidebar: View {
     @State private var hoveringDismiss = false
 
     @State private var isPresentingNewCollection = false
+    /// The area being made or renamed, when the name sheet is up.
+    @State private var areaPrompt: AreaPrompt?
+    @State private var isPresentingNewProject = false
     @State private var isPresentingNewTag = false
     @State private var newCollectionName = ""
 
@@ -45,6 +48,10 @@ struct LibrarySidebar: View {
             .scrollContentBackground(.hidden)
             .background(alignment: .topLeading) { litGlass }
             .onPreferenceChange(LitShelf.self) { litShelf = $0 }
+            #if os(macOS)
+            // Takes papers dropped on any row (`SidebarDrops`); clicks pass.
+            .overlay { SidebarDropCatcher(model: model) }
+            #endif
     }
 
     /// The shelf you are on, lit: one piece of glass carrying the row's own
@@ -176,9 +183,11 @@ struct LibrarySidebar: View {
                     } icon: {
                         Image(systemName: source.provider.symbolName)
                     }
-                    .count(model.counts.folders[source.url] ?? 0, current: model.scope == .folder(source.url))
+                    // What the library's own shelf shows: the PDFs at its top.
+                    .count(model.papers.count { $0.meta.parentID == nil && model.isDirectlyIn($0, source.url) },
+                           current: model.scope == .folder(source.url))
                     .scopeRow(.folder(source.url), in: model, whenCurrent: {
-                        withAnimation(Motion.surface) { model.scope = .all }
+                        withAnimation(Motion.surface) { model.scope = model.homeScope }
                     })
                     .contextMenu {
                         Button {
@@ -187,6 +196,11 @@ struct LibrarySidebar: View {
                             #endif
                         } label: {
                             Label(L("Finder에서 보기", "Show in Finder"), systemImage: "folder")
+                        }
+                        Button {
+                            Task { await newPlan(from: .folder(source.url), named: source.url.lastPathComponent) }
+                        } label: {
+                            Label(L("계획으로 만들기", "Make a Plan"), systemImage: "point.topleft.down.to.point.bottomright.curvepath")
                         }
                         if source.url != model.location.url {
                             Divider()
@@ -225,25 +239,20 @@ struct LibrarySidebar: View {
             // headings — a name over three rows is a label for something that
             // does not need naming.
             Section {
-                Label(L("모두", "All"), systemImage: "tray.full")
-                    .count(model.counts.all, current: model.scope == .all)
-                    .scopeRow(.all, in: model)
-                // The kinds appear only once the library holds more than one
-                // of them. A shelf that has never seen anything but papers
-                // looks exactly as it did, which is most libraries here.
-                //
-                // Once they appear, all three do, empty ones included. The
-                // kinds are not a list that grows — they are the three answers
-                // to one question, and a run that shows two of them says the
-                // app knows two. Books were missing from the strip in exactly
-                // the libraries that most needed to be told books exist.
-                if showsKinds {
-                    Label(L("논문", "Papers"), systemImage: "text.document")
-                        .count(model.counts.papers, current: model.scope == .papers)
-                        .scopeRow(.papers, in: model)
-                    Label(L("문서", "Documents"), systemImage: "doc")
-                        .count(model.counts.documents, current: model.scope == .documents)
-                        .scopeRow(.documents, in: model)
+                // What a thing is — and, since 1.1, where the library starts.
+                // «All» went (2026-11-18, the user's ask): one table cannot
+                // have the right columns for papers, books and documents at
+                // once, and a semester's slides under «Authors · Year ·
+                // Venue» were a column of dashes. All three rows always show,
+                // empty ones included — they are the three answers to one
+                // question — and dropping a paper on one is how it changes
+                // kind, the way dropping it on «읽음» marks it read.
+                ForEach(ShelfKind.allCases, id: \.self) { kind in
+                    let scope = LibraryModel.Scope.of(kind)
+                    Label(kind.label, systemImage: kind.symbolName)
+                        .count(kindCount(kind), current: model.scope == scope)
+                        .scopeRow(scope, in: model)
+                        .dropTarget(in: model) { await model.setKind(kind, for: $0) }
                 }
             } header: {
                 // No name: these are not a category, they are the list. The
@@ -290,10 +299,127 @@ struct LibrarySidebar: View {
                 Color.clear.frame(height: 8)
             }
 
+            // What to read next, and when: the week across every plan, then
+            // each plan with how far through it is.
+            Section(L("계획", "Plans")) {
+                Label(L("이번 주", "This Week"), systemImage: "calendar")
+                    .count(model.thisWeekCount, current: model.scope == .thisWeek)
+                    .scopeRow(.thisWeek, in: model)
+                ForEach(model.plans) { plan in
+                    let papers = plan.readingOrder.compactMap(model.paper)
+                    let read = papers.filter { $0.state.readingStatus == .read }.count
+                    Label {
+                        HStack(spacing: 6) {
+                            Text(plan.name).lineLimit(1)
+                            Spacer(minLength: 2)
+                            PlanDonut(fraction: papers.isEmpty ? 0 : Double(read) / Double(papers.count))
+                        }
+                    } icon: {
+                        Image(systemName: "point.topleft.down.to.point.bottomright.curvepath")
+                    }
+                    .badge(Text("\(read)/\(papers.count)").monospacedDigit()
+                        .foregroundStyle(model.scope == .plan(plan.id) ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary)))
+                    .scopeRow(.plan(plan.id), in: model)
+                    .dropTarget(in: model) { await model.addToPlan(plan.id, papers: [$0]) }
+                    .contextMenu {
+                        Button(L("이름 바꾸기…", "Rename…")) { Task { await renamePlan(plan) } }
+                        Divider()
+                        Button(L("지우기…", "Delete…"), role: .destructive) { Task { await deletePlan(plan) } }
+                    }
+                }
+                Button {
+                    Task { await newPlan(from: nil, named: nil) }
+                } label: {
+                    Label(L("새 계획…", "New Plan…"), systemImage: "plus.circle")
+                        .foregroundStyle(.secondary)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                // What a plan is, said once, where the button is — until the
+                // first one exists.
+                if model.plans.isEmpty {
+                    Text(L("한 계열의 논문을 모아 읽을 날을 정해요", "Gather a line of papers and give them days."))
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.leading, 2)
+                }
+            }
+
+            // The slip-box's places (1.1): what was written against a
+            // source, what was written in one's own words — filed in areas
+            // that are folders under the notes folder.
             Section(L("슬립박스", "Slip-Box")) {
-                Label(L("노트", "Notes"), systemImage: "tray.full")
-                    .count(model.notes.notes.count, current: model.scope == .notes)
+                Label(L("문헌 노트", "Literature Notes"), systemImage: "text.quote")
+                    .count(model.notes.literature.count, current: model.scope == .notes)
                     .scopeRow(.notes, in: model)
+                Label(L("지식", "Knowledge"), systemImage: "lightbulb")
+                    .count(model.notes.knowledge.count, current: model.scope == .knowledge(nil))
+                    .scopeRow(.knowledge(nil), in: model)
+                    .noteDropTarget { await model.notes.move($0, toArea: "") }
+                ForEach(model.notes.areas, id: \.self) { area in
+                    Label(KnowledgeArea.name(area), systemImage: "folder")
+                        .count(model.notes.knowledge(in: area).count, current: model.scope == .knowledge(area))
+                        .padding(.leading, CGFloat(KnowledgeArea.depth(area)) * 11)
+                        .scopeRow(.knowledge(area), in: model)
+                        .noteDropTarget { await model.notes.move($0, toArea: area) }
+                        .contextMenu {
+                            Button(L("안에 새 영역…", "New Area Inside…")) { areaPrompt = .create(inside: area) }
+                            Button(L("이름 바꾸기…", "Rename…")) { areaPrompt = .rename(area) }
+                            #if os(macOS)
+                            Button(L("Finder에서 보기", "Show in Finder")) {
+                                NSWorkspace.shared.activateFileViewerSelecting([model.notes.looseBox.appending(path: area, directoryHint: .isDirectory)])
+                            }
+                            #endif
+                            Divider()
+                            Button(L("영역 지우기 — 노트는 위로 옮겨요", "Delete Area — Notes Move Up"), role: .destructive) {
+                                if model.scope == .knowledge(area) { model.scope = .knowledge(nil) }
+                                Task { await model.notes.removeArea(area) }
+                            }
+                        }
+                }
+                if !model.notes.areas.isEmpty, !model.notes.knowledge(in: "").isEmpty {
+                    Label(L("분류 안 함", "Unfiled"), systemImage: "tray")
+                        .count(model.notes.knowledge(in: "").count, current: model.scope == .knowledge(""))
+                        .padding(.leading, 11)
+                        .scopeRow(.knowledge(""), in: model)
+                        .noteDropTarget { await model.notes.move($0, toArea: "") }
+                }
+                Button {
+                    areaPrompt = .create(inside: "")
+                } label: {
+                    Label(L("새 영역…", "New Area…"), systemImage: "plus.circle")
+                        .foregroundStyle(.secondary)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                #if os(macOS)
+                // What is being made from the reading: planned backwards from
+                // a deadline. A paper dropped on a project is something it
+                // draws on.
+                Label(L("프로젝트", "Projects"), systemImage: "flag")
+                    .count(model.activeProjects.count, current: model.scope == .projects(nil))
+                    .scopeRow(.projects(nil), in: model)
+                ForEach(model.activeProjects) { project in
+                    Label(project.name, systemImage: project.status == .paused ? "pause.circle" : "circle.dotted")
+                        // How long is left, the way the project's head says it.
+                        .badge(project.daysLeft(today: model.today).map {
+                            Text(ProjectText.dday($0)).monospacedDigit()
+                                .foregroundStyle(model.scope == .projects(project.id) ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
+                        })
+                        .padding(.leading, 11)
+                        .scopeRow(.projects(project.id), in: model)
+                        .dropTarget(in: model) { await model.addToProject(project.id, papers: [$0]) }
+                }
+                Button {
+                    isPresentingNewProject = true
+                } label: {
+                    Label(L("새 프로젝트…", "New Project…"), systemImage: "plus.circle")
+                        .foregroundStyle(.secondary)
+                        .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                #endif
             }
 
             Section(L("컬렉션", "Collections")) {
@@ -303,6 +429,11 @@ struct LibrarySidebar: View {
                         .scopeRow(.collection(collection.id), in: model)
                         .dropTarget(in: model, isEnabled: !collection.isSmart) { paperID in
                             await model.addToCollection(collection.id, paperID: paperID)
+                        }
+                        .contextMenu {
+                            Button(L("계획으로 만들기", "Make a Plan")) {
+                                Task { await newPlan(from: .collection(collection.id), named: collection.name) }
+                            }
                         }
                 }
                 Button {
@@ -331,6 +462,11 @@ struct LibrarySidebar: View {
                     .count(model.counts.tags[tag.id] ?? 0, current: model.scope == .tag(tag.id))
                     .scopeRow(.tag(tag.id), in: model)
                     .dropTarget(in: model) { await model.addTag(tag.id, to: $0) }
+                    .contextMenu {
+                        Button(L("계획으로 만들기", "Make a Plan")) {
+                            Task { await newPlan(from: .tag(tag.id), named: tag.name) }
+                        }
+                    }
                 }
                 // The way a tag comes to be. There was none: tags could be
                 // worn — dropped onto, filtered by — but never made, so a
@@ -367,6 +503,30 @@ struct LibrarySidebar: View {
         .scrollContentBackground(.hidden)
         #endif
         .navigationTitle(model.displayName)
+        #if os(macOS)
+        .sheet(isPresented: $isPresentingNewProject) {
+            ProjectNameSheet { name in
+                Task { if let id = await model.createProject(named: name) { model.scope = .projects(id) } }
+            }
+        }
+        #endif
+        .sheet(item: $areaPrompt) { prompt in
+            AreaNameSheet(prompt: prompt) { name in
+                Task {
+                    switch prompt {
+                    case let .create(parent):
+                        if let made = await model.notes.createArea(named: name, inside: parent) {
+                            model.scope = .knowledge(made)
+                        }
+                    case let .rename(area):
+                        if let renamed = await model.notes.renameArea(area, to: name),
+                           model.scope == .knowledge(area) {
+                            model.scope = .knowledge(renamed)
+                        }
+                    }
+                }
+            }
+        }
         .sheet(isPresented: $isPresentingNewCollection) {
             NewCollectionSheet(
                 name: $newCollectionName,
@@ -380,6 +540,23 @@ struct LibrarySidebar: View {
                 Task { await model.addTag(named: name, color: color) }
             }
         }
+    }
+
+    // MARK: Plans
+
+    /// The New Plan sheet — named after a shelf and holding its papers when
+    /// it is made from one, else holding whatever is picked in the list.
+    private func newPlan(from shelf: LibraryModel.Scope?, named name: String?) async {
+        let papers = shelf.map { model.paperIDs(in: $0) } ?? Array(model.selection)
+        app.planning.sheet = .new(name: name ?? "", papers: papers)
+    }
+
+    private func renamePlan(_ plan: ReadingPlan) async {
+        app.planning.prompt = .renamePlan(plan.id)
+    }
+
+    private func deletePlan(_ plan: ReadingPlan) async {
+        app.planning.deleting = plan.id
     }
 
     /// Who is on the most papers here.
@@ -444,25 +621,24 @@ struct LibrarySidebar: View {
 
     private func folderRow(_ url: URL, depth: Int, isOpen: Bool, count: Int? = nil) -> some View {
         Label(url.lastPathComponent, systemImage: isOpen ? "folder.fill" : "folder")
-            .count(count ?? model.papers.count { model.isUnder($0, url) },
+            .count(count ?? model.papers.count { $0.meta.parentID == nil && model.isDirectlyIn($0, url) },
                    current: model.scope == .folder(url))
             .padding(.leading, CGFloat(depth) * 11)
             .scopeRow(.folder(url), in: model, whenCurrent: {
                 // Already here: the press means "out", and out of a library
                 // root means out of the folders.
                 withAnimation(Motion.surface) {
-                    model.scope = model.folderAbove(url).map(LibraryModel.Scope.folder) ?? .all
+                    model.scope = model.folderAbove(url).map(LibraryModel.Scope.folder) ?? model.homeScope
                 }
             })
     }
 
-    /// Whether the kinds are worth listing: only when the library holds more
-    /// than one of them. One kind on its own is the library, and a row saying
-    /// so is a row that filters nothing. Past that line all three are listed,
-    /// including the empty ones — see the strip itself.
-    private var showsKinds: Bool {
-        [model.counts.papers, model.counts.documents]
-            .count { $0 > 0 } > 1
+    private func kindCount(_ kind: ShelfKind) -> Int {
+        switch kind {
+        case .paper: model.counts.papers
+        case .book: model.counts.books
+        case .document: model.counts.documents
+        }
     }
 
     private func symbolName(for collection: Collection) -> String {
@@ -613,6 +789,11 @@ private struct PaperDropTarget: ViewModifier {
                     .padding(.horizontal, -8)
                     .padding(.vertical, -3)
             )
+            #if os(macOS)
+            // In AppKit, found by the catcher over the whole sidebar — see
+            // `SidebarDrops`: SwiftUI's own drop in this list worked once.
+            .background(SidebarDropMark(isEnabled: isEnabled, action: handle, lit: $isTargeted))
+            #else
             .dropDestination(for: PaperTransfer.self) { items, _ in
                 guard isEnabled, !items.isEmpty else { return false }
                 // A drag that started on one of several selected rows brings
@@ -630,10 +811,40 @@ private struct PaperDropTarget: ViewModifier {
             } isTargeted: { targeted in
                 isTargeted = isEnabled && targeted
             }
+            #endif
+    }
+}
+
+/// Makes a sidebar row take a dragged note — an area files it there.
+private struct NoteDropTarget: ViewModifier {
+    let handle: (String) async -> Void
+    @State private var isTargeted = false
+
+    func body(content: Content) -> some View {
+        content
+            .overlay(
+                RoundedRectangle(cornerRadius: Corner.row, style: .continuous)
+                    .strokeBorder(Color.accentColor.opacity(isTargeted ? 0.6 : 0), lineWidth: 1.5)
+                    .padding(.horizontal, -8)
+                    .padding(.vertical, -3)
+            )
+            #if os(macOS)
+            .background(SidebarDropMark(isEnabled: true, noteAction: handle, lit: $isTargeted))
+            #else
+            .dropDestination(for: NoteTransfer.self) { items, _ in
+                guard !items.isEmpty else { return false }
+                Task { for item in items { await handle(item.id) } }
+                return true
+            } isTargeted: { isTargeted = $0 }
+            #endif
     }
 }
 
 extension View {
+    func noteDropTarget(_ handle: @escaping (String) async -> Void) -> some View {
+        modifier(NoteDropTarget(handle: handle))
+    }
+
     func dropTarget(
         in model: LibraryModel,
         isEnabled: Bool = true,
@@ -651,7 +862,7 @@ private struct ScopeRow: ViewModifier {
     let scope: LibraryModel.Scope
     let model: LibraryModel
     /// What pressing the row you are already on means. Nothing, for most
-    /// rows — pressing «모두» twice should not take you somewhere. For a
+    /// rows — pressing «논문» twice should not take you somewhere. For a
     /// folder it means "out one level", which is the only way back out.
     var whenCurrent: (() -> Void)?
 
@@ -713,6 +924,7 @@ private struct ScopeRow: ViewModifier {
             .onTapGesture {
                 if isCurrent, let whenCurrent {
                     whenCurrent()
+                    app.sidebarRowPressed()
                     app.compactColumn = .sidebar
                     dismissPanel()
                     return
@@ -720,6 +932,9 @@ private struct ScopeRow: ViewModifier {
                 // Animated, so the lit shape travels from the row you were on
                 // to this one rather than blinking out and in somewhere else.
                 withAnimation(Motion.surface) { model.scope = scope }
+                // The page lets go of what a pinned pane put there, and with
+                // no list pane open one comes in (`Workspace.swift`).
+                app.sidebarRowPressed()
                 // On the iPad the list is the split view's first column and
                 // the shelves came from a panel, which has done its job —
                 // but not before the glass has been seen arriving. A panel
@@ -727,6 +942,11 @@ private struct ScopeRow: ViewModifier {
                 app.compactColumn = .sidebar
                 dismissPanel()
             }
+            #if os(macOS)
+            // Dragged onto a pane, the row shows there — in the middle of
+            // it, or as a new pane at either edge (`Workspace.swift`).
+            .modifier(ShelfDragSource(scope: scope, model: model))
+            #endif
             // The row says where it is when it is the one lit; the list
             // draws the glass there. Nothing of its own: a row's background
             // is clipped to the row, and a shape clipped to where it starts
@@ -754,6 +974,32 @@ private struct ScopeRow: ViewModifier {
         }
     }
 }
+
+#if os(macOS)
+/// A sidebar row as something to drag: the item it stands for, by its pane
+/// key. A row that cannot be pinned — the search, the graph — drags nothing.
+private struct ShelfDragSource: ViewModifier {
+    let scope: LibraryModel.Scope
+    let model: LibraryModel
+
+    func body(content: Content) -> some View {
+        if let key = scope.paneKey {
+            content.onDrag {
+                .shelf(key)
+            } preview: {
+                Label(ShelfTitle.of(scope, in: model), systemImage: ShelfTitle.symbol(of: scope))
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .padding(.horizontal, 12)
+                    .frame(height: 28)
+                    .background(Capsule().fill(.regularMaterial))
+            }
+        } else {
+            content
+        }
+    }
+
+}
+#endif
 
 /// Where the lit shelf is. Only the row that is lit answers; the first
 /// answer wins, and none at all means it has been scrolled out of sight.

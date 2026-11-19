@@ -9,6 +9,8 @@ import * as L from '../layout.js'
 import { update } from '../settings.js'
 import { isFolder } from '../suggestions.js'
 import { probe } from '../probeMode.js'
+import { AreaRefused } from '../slipBox.js'
+import type { AreaRefusal } from '../../shared/api.js'
 import type { Context, Handlers } from './context.js'
 
 export function notesHandlers(ctx: Context): Partial<Handlers> {
@@ -31,6 +33,44 @@ export function notesHandlers(ctx: Context): Partial<Handlers> {
       await notes().delete(id)
       ctx.notesChanged(null, id)
       windows.sendExcept(sender, 'notes:changed', { id })
+    },
+
+    // The areas of knowledge (1.1): folders under the loose box. Another
+    // window reads the box again — its areas and its notes' areas moved.
+    'notes:createArea': async ({ name, inside }, sender) => {
+      try {
+        const area = await notes().createArea(String(name ?? ''), typeof inside === 'string' ? inside : '')
+        windows.sendExcept(sender, 'library:changed')
+        return { area, notesFolder: notes().info() }
+      } catch (error) {
+        return { error: refusal(error) }
+      }
+    },
+
+    'notes:renameArea': async ({ area, name }, sender) => {
+      try {
+        const renamed = await notes().renameArea(String(area ?? ''), String(name ?? ''))
+        windows.sendExcept(sender, 'library:changed')
+        return { area: renamed, notesFolder: notes().info() }
+      } catch (error) {
+        return { error: refusal(error) }
+      }
+    },
+
+    'notes:removeArea': async ({ area }, sender) => {
+      try {
+        const moved = await notes().removeArea(String(area ?? ''))
+        const read = await notes().load()
+        windows.sendExcept(sender, 'library:changed')
+        return { moved, notes: read, notesFolder: notes().info() }
+      } catch (error) {
+        return { error: refusal(error) }
+      }
+    },
+
+    'notes:revealArea': async ({ area }) => {
+      const folder = notes().areaFolder(String(area ?? ''))
+      if (folder) (await import('electron')).shell.showItemInFolder(folder)
     },
 
     /**
@@ -146,6 +186,13 @@ export function notesHandlers(ctx: Context): Partial<Handlers> {
       return { ...moved, notesFolder: notes().info() }
     },
   }
+}
+
+/** Why an area was refused, for the window to say — anything the disk threw is the folder being away. */
+function refusal(error: unknown): AreaRefusal {
+  if (error instanceof AreaRefused) return error.why
+  console.error('notes: area -', String((error as Error)?.message ?? error))
+  return 'away'
 }
 
 /**

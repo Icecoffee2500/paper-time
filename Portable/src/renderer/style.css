@@ -41,6 +41,9 @@
   --radius-bar: 12px;
   --radius-popover: 14px;
   --radius-panel: 22px;
+  /* A sheet of glass floating over the window — the floating inspector — as
+     round as the system's own (the Mac's `FloatingInspector.corner`). */
+  --radius-sheet: 26px;
   /* The window's four panes float on the ground at the panel's radius —
      the Mac's `Corner.panel`. */
   --panel-radius: var(--radius-panel);
@@ -102,6 +105,13 @@
   --shelf-favorites: #ffcc00;
   --shelf-review: #ff3b30;
   --warning: #ff9500;
+  /* The reading plan's board: a control lifted off the panel, the faint
+     wash of this week, and the two rings' tracks. */
+  --raised: #ffffff;
+  --wash: rgba(47, 110, 240, 0.06);
+  --reading-track: rgba(255, 149, 0, 0.22);
+  --ring-empty: #b6b6be;
+  --lift: 0 0 0 0.5px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.07);
   /* What a shelf's words are drawn in: its colour deepened toward black, so
      a yellow reads as type (`ScopeRow.textColor`). */
   --shelf-ink: black;
@@ -195,6 +205,11 @@
   --shelf-favorites: #ffd60a;
   --shelf-review: #ff453a;
   --warning: #ff9f0a;
+  --raised: #2c2c33;
+  --wash: rgba(120, 155, 255, 0.09);
+  --reading-track: rgba(255, 159, 10, 0.26);
+  --ring-empty: #5c5c66;
+  --lift: 0 0 0 0.5px rgba(255, 255, 255, 0.08), 0 1px 2px rgba(0, 0, 0, 0.4);
   --shelf-ink: white;
   --shelf-ink-share: 25%;
 
@@ -2394,6 +2409,8 @@ body[data-window-focused='false'] .paper-row[aria-selected='true'] {
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 .ask-sheet .set-foot { gap: 8px; }
+/* What is wrong with the name, quietly, under the field (an area's). */
+.ask-problem { margin: 6px 2px 0; font-size: 11.5px; line-height: 1.4; color: var(--text-secondary); }
 
 /* The menu that hangs off ⋯, and the pop-ups in the inspector. */
 .menu {
@@ -3665,7 +3682,31 @@ textarea:focus-visible {
 }
 
 .dock-zone[data-on='true'] {
-  display: block;
+  display: grid;
+  place-items: center;
+}
+
+/* In place of a pane's paper — or of the one paper — rather than beside it:
+   a dashed ring, the page's middle or the pane under the pointer. */
+.dock-zone[data-kind='open'] {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  box-shadow: none;
+  outline: 1.5px dashed color-mix(in srgb, var(--accent) 80%, transparent);
+  outline-offset: -1.5px;
+}
+
+/* What letting go there does, in words (the Mac's `DockZoneOverlay.label`). */
+.dock-zone-words {
+  padding: 5px 10px;
+  border-radius: 99px;
+  /* On a solid capsule, as the row's zones have it: over a page of text a
+     wash of the accent leaves the words unreadable. */
+  background: var(--panel);
+  box-shadow: var(--lift);
+  color: var(--accent-text);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 /* A window for one paper: the toolbar keeps only the window's own buttons,
@@ -4375,6 +4416,42 @@ body[data-solo='true'] .reader-header button {
 .slipbox-tag-count { color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 .slipbox-tag[aria-pressed='true'] .slipbox-tag-count { color: rgba(255, 255, 255, .75); }
 
+/* 문헌 노트's kinds — «모두 n · 논문 n · 책 n · 문서 n» — over the list: the
+   one chosen in the accent, the rest quiet (the Mac's `kindChips`). */
+.slipbox-kinds { flex: 0 0 auto; display: flex; gap: 4px; padding: 0 16px 10px; }
+.slipbox-kind {
+  display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px; border-radius: 11px;
+  font-size: 11.5px; color: var(--text-secondary); background: transparent;
+  transition: background-color var(--motion-tap) var(--ease), color var(--motion-tap) var(--ease);
+}
+.slipbox-kind:hover { background: var(--hover); }
+.slipbox-kind[aria-pressed='true'] { color: var(--accent-text); background: var(--accent-soft); font-weight: 600; }
+.slipbox-kind-count { opacity: .7; font-variant-numeric: tabular-nums; }
+
+/* One note in a place's list (`SlipNoteRow`): the title, under it where it
+   came from — the source's kind and title, or the area — and the date at
+   the end, on the title's line. */
+.slip-row { display: flex; align-items: baseline; gap: 10px; padding: 6px 10px; }
+.slip-row-lines { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.slip-row .note-row-title { font-weight: 500; }
+.slip-row-second {
+  display: flex; align-items: center; gap: 6px; min-width: 0;
+  font-size: 11.5px; color: var(--text-secondary); white-space: nowrap;
+}
+.slip-row-second > svg { width: 12px; height: 12px; flex: none; color: var(--text-tertiary); }
+.slip-source, .slip-preview, .slip-area > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.slip-kind {
+  --k: var(--accent);
+  flex: none; display: inline-flex; align-items: center; height: 17px; padding: 0 6px; border-radius: 9px;
+  font-size: 10.5px; font-weight: 600;
+  color: color-mix(in srgb, var(--k) 78%, var(--text));
+  background: color-mix(in srgb, var(--k) 12%, transparent);
+}
+.slip-kind[data-kind='book'] { --k: var(--tag-purple); }
+.slip-kind[data-kind='document'] { --k: var(--tag-orange); }
+.slip-row .note-row-date { font-size: 11.5px; }
+.slip-row[draggable='true'] { -webkit-user-drag: element; }
+
 /* ═══════════════════ the first-run and unavailable screens ═════════════════
    The whole window, centred: the Mac's LibrarySetupView and
    LibraryUnavailableView. */
@@ -4610,7 +4687,7 @@ textarea.memo {
 /* The child's title kept at both ends, as the Mac's truncates it. */
 .attach-child .attach-child-title { direction: ltr; text-overflow: ellipsis; }
 /* The kind question's four answers: two by two, each whole, in either language. */
-.choices.kind-choices { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.choices.kind-choices { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
 .choices.kind-choices button { display: block; text-align: center; line-height: 24px; }
 .author-byline { flex-direction: row; justify-content: flex-start; align-items: flex-start; }
 .author-byline .author-lines { align-items: flex-start; text-align: left; flex: 1 1 auto; }
@@ -4632,6 +4709,10 @@ textarea.memo {
    The Mac's pages beside a rail: the page you are on is lifted off the
    ground rather than painted blue (`SettingsView`). */
 .set-sheet.set-paged { width: 820px; height: min(640px, calc(100vh - 48px)); flex-direction: row; }
+/* About is a working window with words under it, not a form: it gets the
+   room the Mac's About gets (`SettingsView`), so the reading-plans window is
+   shown nearly at size. */
+.set-sheet.set-paged.set-about { width: min(1000px, calc(100vw - 48px)); height: min(780px, calc(100vh - 48px)); }
 .set-rail { flex: 0 0 176px; display: flex; flex-direction: column; gap: 2px; padding: 14px 10px; background: var(--ground, color-mix(in srgb, var(--text) 4%, var(--panel))); }
 .set-rail-title { padding: 0 10px 8px; margin: 0; }
 .set-rail-row { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 8px; text-align: left; color: var(--text); font-size: 13px; }
@@ -4678,6 +4759,7 @@ textarea.memo {
 .rn-card { flex: 1 1 auto; min-width: 0; border-radius: 16px; padding: 14px; background: color-mix(in srgb, var(--text) 5%, transparent); }
 .rn-stage { min-height: 240px; display: flex; }
 .rn-demo { width: 100%; height: 340px; border: none; border-radius: 12px; background: transparent; }
+.rn-plans-demo { display: block; height: 640px; margin-top: 10px; border-radius: 0; }
 .rn-stage-empty { flex: 1; display: grid; place-items: center; color: var(--text-tertiary); }
 .rn-stage-empty svg { width: 44px; height: 44px; }
 .rn-words { display: grid; margin-top: 12px; }
@@ -4890,3 +4972,961 @@ textarea.memo {
 .ask-address .ask-hint { margin: 6px 0 0; }
 .ask-address .ask-status { margin: 8px 0 0; min-height: 1.3em; }
 .ask-address .ask-status-failed { color: var(--danger); }
+
+/* ===================================================== Reading plans ===== */
+/* The board (`ui/planBoard.ts`): where the list and the page were while a
+   shelf shows its table, or a plan its calendar. The demo's shapes, in the
+   window's tokens — chips and pills on soft fills, no ruled lines. */
+.plan-board { flex: 1 1 auto; container-type: inline-size; }
+.pb-head { padding: 18px 20px 6px; display: flex; flex-direction: column; gap: 10px; flex: 0 0 auto; }
+.pb-head-top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.pb-tile {
+  width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; flex: none;
+  background: var(--accent-soft); color: var(--accent-text);
+}
+.pb-tile svg { width: 18px; height: 18px; }
+.pb-titles { min-width: 0; }
+.pb-titles h2 { font-size: 19px; font-weight: 650; letter-spacing: -0.01em; margin: 0; line-height: 1.2; }
+.pb-sub { font-size: 12.5px; color: var(--text-secondary); margin: 2px 0 0; }
+.pb-actions { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.pb-spacer { flex: 1; }
+.pb-cap {
+  display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 12px; border-radius: 14px;
+  background: var(--hover); font-size: 12.5px; font-weight: 500; white-space: nowrap; color: var(--text);
+  transition: background-color var(--motion-tap) var(--ease), box-shadow var(--motion-move) var(--ease);
+}
+.pb-cap svg { width: 14px; height: 14px; }
+.pb-cap:hover { background: var(--pressed); }
+.pb-cap.strong { background: var(--accent); color: #fff; font-weight: 600; }
+.pb-cap.strong[disabled] { opacity: 0.4; cursor: default; }
+.pb-icon { width: 28px; height: 28px; border-radius: 14px; display: grid; place-items: center; color: var(--text-secondary); }
+.pb-icon:hover { background: var(--hover); color: var(--text); }
+.pb-icon svg { width: 14px; height: 14px; }
+.pb-range { font-size: 12px; color: var(--text-tertiary); margin-left: 4px; font-variant-numeric: tabular-nums; }
+.pb-seg { display: inline-flex; padding: 2px; border-radius: 10px; background: var(--hover); }
+.pb-seg button {
+  height: 24px; padding: 0 11px; border-radius: 8px; font-size: 12.5px; display: inline-flex; gap: 5px;
+  align-items: center; justify-content: center; color: var(--text-secondary); white-space: nowrap;
+}
+.pb-seg button svg { width: 14px; height: 14px; }
+.pb-seg button[aria-pressed='true'] { background: var(--raised); color: var(--text); box-shadow: var(--lift); font-weight: 600; }
+.panel-header .list-views { font-weight: 400; }
+.panel-header .list-views button { height: 22px; padding: 0 9px; font-size: 12px; }
+.pb-stats { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.pb-stat {
+  --k: var(--tag-gray);
+  display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 11px; font-size: 11.5px;
+  font-weight: 600; font-variant-numeric: tabular-nums;
+  background: color-mix(in srgb, var(--k) 13%, transparent); color: color-mix(in srgb, var(--k) 62%, var(--text));
+}
+
+/* The path: one ring per paper, the sections under their names. */
+.pb-path { display: flex; gap: 20px; align-items: flex-start; overflow-x: auto; padding: 6px 2px 4px; }
+.pb-segment { display: flex; flex-direction: column; gap: 5px; flex: none; }
+.pb-dots { display: flex; gap: 8px; position: relative; align-self: flex-start; }
+.pb-dots::before {
+  content: ''; position: absolute; left: 8px; right: 8px; top: 50%; height: 1.5px; margin-top: -0.75px;
+  background: var(--separator-strong);
+}
+.pb-dot {
+  position: relative; width: 18px; height: 18px; border-radius: 50%; background: var(--panel);
+  display: grid; place-items: center; transition: box-shadow var(--motion-tap) var(--ease);
+}
+.pb-dot.on { box-shadow: 0 0 0 2.5px color-mix(in srgb, var(--accent) 55%, transparent); }
+.pb-segment small { font-size: 10.5px; color: var(--text-tertiary); white-space: nowrap; }
+
+/* The table. */
+.pb-viewbar { display: flex; align-items: center; gap: 8px; padding: 6px 20px 0; font-size: 11.5px; color: var(--text-tertiary); flex: 0 0 auto; }
+.pb-gchips { display: inline-flex; gap: 4px; }
+.pb-gchips button { height: 22px; padding: 0 9px; border-radius: 11px; font-size: 11.5px; color: var(--text-secondary); }
+.pb-gchips button:hover { background: var(--hover); }
+.pb-gchips button[aria-pressed='true'] { background: var(--accent-soft); color: var(--accent-text); font-weight: 600; }
+.pb-gchips .pb-gcount { margin-left: 5px; opacity: 0.7; font-variant-numeric: tabular-nums; }
+.pb-viewbar .pb-cap { height: 24px; font-size: 11.5px; padding: 0 10px; }
+.pb-unsort { white-space: nowrap; flex: none; display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px; border-radius: 11px; font-size: 11.5px; font-weight: 500; color: var(--accent-text); background: var(--accent-soft); cursor: pointer; }
+.pb-unsort svg { width: 9px; height: 9px; stroke-width: 2.2; }
+
+.pb-scroll { flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; padding-bottom: 12px; }
+.pb-table { padding: 0 8px; }
+/* The ring, the title, and the columns' viewport. Where the title ends is
+   the board's (`--pb-title-col`, `--pb-cols-col`, from `boardGeometry`):
+   every column at its own width; when they do not all fit, the title is
+   pinned and they slide by `--pb-x` (2026-11-16, the user's choice). */
+.pb-thead, .pb-row { display: grid; grid-template-columns: 22px var(--pb-title-col, minmax(0, 1fr)) var(--pb-cols-col, auto); align-items: center; column-gap: 10px; padding: 0 12px; }
+.pb-cols {
+  min-width: 0; align-self: stretch; display: flex; align-items: center; overflow: hidden;
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 var(--pb-fade-l, 0px), #000 calc(100% - var(--pb-fade-r, 0px)), transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0, #000 var(--pb-fade-l, 0px), #000 calc(100% - var(--pb-fade-r, 0px)), transparent 100%);
+}
+.plan-board.pb-can-left { --pb-fade-l: 16px; }
+.plan-board.pb-can-right { --pb-fade-r: 16px; }
+.pb-track { flex: none; display: grid; column-gap: 10px; align-items: center; transform: translateX(calc(-1 * var(--pb-x, 0px))); }
+.plan-board.pb-sliding .pb-track { transition: transform var(--motion-move) var(--ease); }
+.pb-hcols { position: relative; min-width: 0; align-self: stretch; display: flex; }
+.pb-hcols .pb-cols { flex: 1 1 auto; }
+.pb-thead .pb-track > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* At the viewport's edges, a chevron says there is more and goes there. */
+.pb-slide {
+  position: absolute; top: 50%; transform: translateY(-50%); z-index: 1;
+  width: 18px; height: 18px; border-radius: 50%; display: none; align-items: center; justify-content: center;
+  color: var(--text-secondary); background: linear-gradient(var(--hover), var(--hover)), var(--panel); cursor: pointer;
+  transition: color var(--motion-tap) var(--ease);
+}
+.pb-slide:hover { color: var(--text); }
+.pb-slide svg { width: 10px; height: 10px; }
+/* Off the names, as on the Mac: «‹» in the empty end of the title's header,
+   «›» in the row's margin past the last column it shows. */
+.pb-thead > .pb-hcols { overflow: visible; }
+.pb-slide.left { left: -16px; }
+.pb-slide.right { right: -14px; }
+.plan-board.pb-can-left .pb-slide.left, .plan-board.pb-can-right .pb-slide.right { display: flex; }
+.pb-thead { height: 28px; font-size: 11px; color: var(--text-tertiary); font-weight: 500; margin-top: 6px; position: sticky; top: 0; background: var(--panel); z-index: 1; }
+.pb-thead button { color: inherit; font-size: inherit; text-align: left; }
+.pb-thead > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Every title that sorts answers the pointer the way a row does: a shade
+   darker and a soft wash, the wash spilling past the words so they stay on
+   their column's line. The one sorted by wears the accent and its arrow. */
+.pb-thead .pb-sort {
+  padding: 2px 6px; margin: 0 -6px; border-radius: 6px; cursor: pointer; max-width: calc(100% + 12px);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  transition: background-color var(--motion-tap) var(--ease), color var(--motion-tap) var(--ease);
+}
+.pb-thead .pb-sort:hover { color: var(--text-secondary); background: var(--hover); }
+.pb-thead .pb-sort.current { color: var(--accent); }
+.pb-thead .pb-sort.current:hover { color: var(--accent); }
+/* «Title · Authors · Year · Venue»: the title cell's words, one button each,
+   when the table folds the facts under its titles. */
+.pb-row { height: 36px; border-radius: var(--radius-row); font-size: 13px; cursor: default; transition: background-color var(--motion-tap) var(--ease); }
+.pb-row:hover { background: var(--hover); }
+.pb-row.on, .pb-row.on:hover { background: var(--accent-soft); }
+.pb-row:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.pb-row.over { box-shadow: inset 0 2px 0 var(--accent); }
+.pb-row.dragging { opacity: 0.4; }
+.pb-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.pb-row.s-read .pb-title { color: var(--text-secondary); font-weight: 400; }
+.pb-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.pb-text.secondary { color: var(--text-secondary); }
+.pb-text.stars { color: var(--star); letter-spacing: 1px; }
+.pb-st { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; }
+.pb-st:hover { background: var(--hover); }
+.pb-st svg, .pb-dot svg { display: block; }
+.pb-date {
+  justify-self: start; height: 22px; padding: 0 8px; margin-left: -8px; border-radius: 11px; font-size: 12px;
+  color: var(--text-secondary); font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.pb-date:hover { background: var(--hover); }
+.pb-date.today { background: var(--accent-soft); color: var(--accent-text); font-weight: 600; margin-left: 0; }
+.pb-date.behind {
+  --k: var(--tag-orange); margin-left: 0; font-weight: 600;
+  background: color-mix(in srgb, var(--k) 14%, transparent); color: color-mix(in srgb, var(--k) 66%, var(--text));
+}
+.pb-date.none { color: var(--text-tertiary); }
+.pb-prog { display: flex; align-items: center; gap: 7px; font-size: 11.5px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.pb-bar { width: 34px; height: 4px; border-radius: 2px; background: var(--separator); overflow: hidden; flex: none; }
+.pb-bar i { display: block; height: 100%; border-radius: 2px; background: var(--shelf-reading); }
+.pb-bar.done i { background: var(--shelf-read); }
+.pb-links { display: flex; gap: 4px; align-items: center; min-width: 0; }
+.pb-kchip {
+  display: inline-grid; place-items: center; width: 24px; height: 22px; border-radius: 7px; flex: none;
+  background: color-mix(in srgb, var(--k, var(--tag-gray)) 15%, transparent); color: color-mix(in srgb, var(--k, var(--tag-gray)) 64%, var(--text));
+}
+.pb-kchip svg { width: 14px; height: 14px; }
+.pb-kchip[data-tone='blue'], .pi-tile[data-tone='blue'], .pb-stat[data-tone='blue'] { --k: var(--tag-blue); }
+.pb-kchip[data-tone='orange'], .pi-tile[data-tone='orange'], .pb-stat[data-tone='orange'] { --k: var(--tag-orange); }
+.pb-kchip[data-tone='gray'], .pi-tile[data-tone='gray'] { --k: var(--tag-gray); }
+.pb-kchip[data-tone='yellow'], .pi-tile[data-tone='yellow'] { --k: var(--tag-yellow); }
+.pb-kchip[data-tone='pink'], .pi-tile[data-tone='pink'] { --k: var(--tag-pink); }
+.pb-kchip[data-tone='teal'], .pi-tile[data-tone='teal'] { --k: var(--tag-teal); }
+.pb-kchip[data-tone='green'], .pi-tile[data-tone='green'] { --k: var(--tag-green); }
+.pb-kchip[data-tone='indigo'], .pi-tile[data-tone='indigo'] { --k: var(--tag-indigo); }
+.pb-kchip[data-tone='purple'], .pi-tile[data-tone='purple'] { --k: var(--tag-purple); }
+.pb-more { font-size: 11px; color: var(--text-tertiary); }
+.pb-tags { display: flex; gap: 4px; min-width: 0; overflow: hidden; }
+.pb-tag {
+  --k: var(--tag-gray);
+  display: inline-block; max-width: 100%; height: 20px; line-height: 20px; padding: 0 8px; border-radius: 10px;
+  font-size: 11px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  background: color-mix(in srgb, var(--k) 13%, transparent); color: color-mix(in srgb, var(--k) 60%, var(--text));
+}
+.pb-dim { color: var(--text-tertiary); }
+.pb-grp { display: flex; align-items: baseline; gap: 8px; padding: 14px 12px 5px; font-size: 12px; font-weight: 650; border-radius: var(--radius-row); }
+.pb-grp small { font-weight: 500; color: var(--text-tertiary); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.pb-grp .pb-cap { margin-left: auto; height: 24px; font-size: 11.5px; align-self: center; }
+.pb-grp.over, .pb-drop-hint.over { background: var(--accent-soft); }
+.pb-drop-hint { font-size: 11.5px; color: var(--text-tertiary); padding: 6px 12px; border-radius: var(--radius-row); }
+.pb-addrow {
+  display: flex; align-items: center; gap: 10px; margin: 10px 0 2px; padding: 0 12px; height: 38px; border-radius: 10px;
+  background: var(--wash); color: var(--accent-text); transition: box-shadow var(--motion-move) var(--ease);
+}
+.pb-addrow svg { width: 14px; height: 14px; flex: none; }
+.pb-addrow input { flex: 1; min-width: 0; border: 0; background: none; outline: none; font-size: 13px; color: var(--text); }
+.pb-addrow input::placeholder { color: var(--text-tertiary); }
+.pb-addrow .pb-hint { font-size: 11.5px; color: var(--text-tertiary); white-space: nowrap; }
+/* In a column the width of a list the field keeps the room, the hint steps aside. */
+@container (max-width: 560px) { .pb-addrow .pb-hint { display: none; } }
+/* A narrow table keeps the group chips and the sort on one line: «Add
+   Section» gives up its word first, the way the Mac's does. */
+@container (max-width: 420px) {
+  .pb-viewbar .pb-cap { width: 26px; padding: 0; justify-content: center; }
+  .pb-viewbar .pb-cap-label { display: none; }
+  .pb-viewbar > span:first-child { display: none; }
+}
+.pb-addrow:focus-within, .pb-table.over .pb-addrow, .pb-addrow.over { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent); }
+.pb-note { font-size: 12px; color: var(--text-tertiary); margin: 10px 12px; }
+.pb-empty { color: var(--text-tertiary); font-size: 13px; text-align: center; padding: 60px 0; }
+
+/* The calendar. */
+.pb-cal-wrap { display: flex; gap: 12px; padding: 8px 14px 14px; align-items: flex-start; flex-wrap: wrap; }
+.pb-cal-scroll { flex: 1 1 380px; min-width: 0; overflow-x: auto; }
+.pb-cal { min-width: 520px; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)) repeat(2, minmax(0, 0.62fr)); gap: 4px; }
+.pb-dh { font-size: 11px; color: var(--text-tertiary); padding: 2px 7px; font-weight: 500; }
+.pb-day {
+  min-height: 92px; border-radius: 10px; padding: 5px 5px 6px; display: flex; flex-direction: column; gap: 3px;
+  background: var(--hover); transition: background-color var(--motion-tap) var(--ease), box-shadow var(--motion-tap) var(--ease);
+}
+.pb-day.past { background: color-mix(in srgb, var(--hover) 45%, transparent); }
+.pb-day.week { background: var(--wash); }
+.pb-num {
+  font-size: 11px; color: var(--text-tertiary); padding: 0 4px; font-variant-numeric: tabular-nums; height: 18px;
+  display: inline-flex; align-items: center; align-self: flex-start; white-space: nowrap;
+}
+.pb-day.today .pb-num { background: var(--accent); color: #fff; border-radius: 9px; padding: 0 7px; font-weight: 700; }
+.pb-day.over, .pb-tray.over { box-shadow: inset 0 0 0 2px var(--accent); background: var(--accent-soft); }
+.pb-pill {
+  display: block; padding: 4px 6px; border-radius: 7px; font-size: 11px; line-height: 1.3;
+  background: var(--raised); box-shadow: var(--lift); cursor: grab; user-select: none;
+}
+.pb-pill > span { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; min-width: 0; overflow-wrap: anywhere; }
+.pb-pill svg { display: inline-block; vertical-align: -2px; margin-right: 4px; }
+.pb-pill.on { box-shadow: 0 0 0 2px var(--accent); }
+.pb-pill.s-read > span { color: var(--text-secondary); }
+.pb-pill.late { --k: var(--tag-orange); background: color-mix(in srgb, var(--k) 16%, var(--raised)); }
+.pb-pill.ghost { background: none; box-shadow: none; color: var(--text-tertiary); cursor: default; outline: 1px dashed var(--separator-strong); outline-offset: -1px; }
+.pb-pill.dragging { opacity: 0.4; }
+.pb-tray {
+  flex: 0 0 168px; border-radius: 14px; background: var(--hover); padding: 10px; display: flex; flex-direction: column;
+  gap: 6px; min-height: 150px; margin-top: 22px; transition: background-color var(--motion-tap) var(--ease), box-shadow var(--motion-tap) var(--ease);
+}
+.pb-tray h4 { margin: 0; font-size: 12px; font-weight: 650; }
+.pb-tray p { margin: 0 0 2px; font-size: 11px; color: var(--text-tertiary); line-height: 1.35; }
+
+/* The popovers (`ui/planPopovers.ts`). */
+.plan-pop {
+  position: fixed; z-index: 105; background: var(--panel); border-radius: var(--radius-popover);
+  box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.1), 0 14px 40px -10px rgba(0, 0, 0, 0.28);
+  padding: 12px; width: 296px; font-size: 13px; color: var(--text);
+}
+:root[data-theme='dark'] .plan-pop { background: #1f1f24; box-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.12), 0 14px 40px -10px rgba(0, 0, 0, 0.7); }
+.plan-pop h4 { margin: 0 0 2px; font-size: 13px; font-weight: 650; }
+.pp-sub { margin: 0 0 10px; font-size: 11.5px; color: var(--text-secondary); }
+.pp-field { width: 100%; height: 30px; border-radius: 15px; border: 0; outline: none; background: var(--hover); padding: 0 12px; font-size: 12.5px; color: var(--text); }
+.pp-field:focus { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent); }
+.pp-preview { min-height: 20px; font-size: 11.5px; color: var(--accent-text); padding: 4px 4px 0; font-weight: 600; }
+.pp-quick { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; margin: 6px 0 10px; }
+.pp-quick-button > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.pp-quick-button > small { flex: none; }
+.pp-quick-button { display: flex; justify-content: space-between; align-items: center; gap: 6px; height: 28px; padding: 0 9px; border-radius: 8px; background: var(--hover); font-size: 12px; white-space: nowrap; }
+.pp-quick-button:hover { background: var(--pressed); }
+.pp-quick-button small { color: var(--text-tertiary); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+.pp-week, .pp-month { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; text-align: center; }
+.pp-week span { font-size: 10.5px; color: var(--text-tertiary); padding-bottom: 2px; }
+.pp-day { height: 26px; border-radius: 8px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.pp-day:hover { background: var(--hover); }
+.pp-day.today { color: var(--accent-text); font-weight: 700; }
+.pp-day.chosen { background: var(--accent); color: #fff; font-weight: 600; }
+.pp-clear { margin-top: 8px; width: 100%; height: 28px; border-radius: 8px; font-size: 12px; color: var(--text-secondary); text-align: center; }
+.pp-clear:hover { background: var(--hover); }
+.pp-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; font-size: 12px; }
+.pp-row > span:first-child { width: 44px; color: var(--text-secondary); flex: none; }
+.pp-weekdays { display: flex; gap: 3px; }
+.pp-weekdays button { width: 25px; height: 25px; border-radius: 50%; font-size: 11.5px; text-align: center; background: var(--hover); color: var(--text-secondary); }
+.pp-weekdays button[aria-pressed='true'] { background: var(--accent); color: #fff; font-weight: 600; }
+.pp-stepper { display: inline-flex; align-items: center; gap: 8px; }
+.pp-stepper button { width: 24px; height: 24px; border-radius: 50%; background: var(--hover); text-align: center; font-size: 14px; line-height: 1; }
+.pp-stepper b { min-width: 30px; text-align: center; font-variant-numeric: tabular-nums; }
+.pp-spread-preview { border-radius: 10px; background: var(--wash); padding: 8px 10px; font-size: 12px; margin-bottom: 10px; }
+.pp-foot { display: flex; justify-content: flex-end; }
+
+/* The inspector's plan and materials (`ui/planInspector.ts`). */
+.pi-kv { display: grid; grid-template-columns: 64px minmax(0, 1fr); align-items: center; gap: 8px; padding: 4px 12px; font-size: 12.5px; }
+.pi-key { color: var(--text-secondary); }
+.pi-value { min-width: 0; }
+.pi-value .pb-date { margin-left: -8px; }
+.pi-value .pb-date.today, .pi-value .pb-date.behind { margin-left: 0; }
+.pi-plans { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.pi-plan { font-size: 12.5px; color: var(--text); text-align: left; border-radius: 6px; padding: 1px 4px; margin-left: -4px; }
+.pi-plan:hover { background: var(--hover); }
+.pi-mats { display: flex; flex-direction: column; gap: 2px; padding: 0 6px; }
+.pi-mat { display: flex; align-items: center; gap: 9px; padding: 5px 6px; border-radius: 9px; cursor: default; }
+.pi-mat:hover { background: var(--hover); }
+.pi-tile {
+  width: 26px; height: 26px; border-radius: 8px; display: grid; place-items: center; flex: none;
+  background: color-mix(in srgb, var(--k, var(--tag-gray)) 15%, transparent); color: color-mix(in srgb, var(--k, var(--tag-gray)) 64%, var(--text));
+}
+.pi-tile svg { width: 14px; height: 14px; }
+.pi-mat-text { min-width: 0; flex: 1; }
+.pi-mat-title { font-size: 12.5px; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pi-mat-detail { font-size: 11px; color: var(--text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pi-x { opacity: 0; width: 20px; height: 20px; border-radius: 50%; color: var(--text-tertiary); display: grid; place-items: center; flex: none; }
+.pi-x svg { width: 11px; height: 11px; }
+.pi-mat:hover .pi-x, .pi-x:focus-visible { opacity: 1; }
+.pi-x:hover { background: var(--hover); color: var(--text); }
+.pi-none { margin: 2px 12px 0; font-size: 12px; color: var(--text-tertiary); }
+.pi-foot { margin: 8px 12px 0; font-size: 11px; line-height: 1.4; color: var(--text-tertiary); }
+.pi-linkfield {
+  display: flex; align-items: center; gap: 7px; height: 32px; padding: 0 11px; border-radius: 16px; margin: 8px 12px 0;
+  background: var(--hover); color: var(--text-tertiary); transition: box-shadow var(--motion-move) var(--ease);
+}
+.pi-linkfield svg { width: 14px; height: 14px; flex: none; }
+.pi-linkfield input { flex: 1; min-width: 0; border: 0; outline: none; background: none; font-size: 12.5px; color: var(--text); }
+.pi-linkfield:focus-within { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent); }
+.pi-detect { font-size: 11.5px; color: var(--text-secondary); min-height: 20px; display: flex; gap: 6px; align-items: center; padding: 4px 16px 0; }
+.pi-materials.over { box-shadow: inset 0 0 0 2px var(--accent); }
+
+/* The sidebar's plan rows: how far through, as a count and a ring. */
+.row-progress { display: inline-flex; align-items: center; gap: 5px; }
+.row-donut { display: inline-flex; }
+.row-donut svg { display: block; }
+
+/* A toast with the way back on it: pressable, unlike the others. */
+.toast.toast-action { pointer-events: auto; display: flex; align-items: center; gap: 10px; padding: 6px 7px 6px 15px; }
+.toast-button {
+  height: 24px; padding: 0 10px; border-radius: 12px; font-weight: 600; font-size: 12px; white-space: nowrap;
+  background: color-mix(in srgb, var(--text) 10%, transparent); color: var(--text);
+}
+.toast-button:hover { background: color-mix(in srgb, var(--text) 16%, transparent); }
+
+/* Reading plans, made obvious: the New Plan and Add Papers sheets, the empty
+   plan, the «When will you read them?» strip and the sidebar's first line. */
+.plan-sheet { width: 520px; }
+.plan-sheet .fb-title { padding-bottom: 4px; }
+.ps-sub { margin: 0 20px 6px; text-align: center; font-size: 12.5px; color: var(--text-secondary); }
+.ps-body { display: flex; flex-direction: column; gap: 14px; padding-top: 10px; }
+.ps-part { display: flex; flex-direction: column; gap: 8px; }
+.ps-part-head { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; }
+.ps-num {
+  display: grid; place-items: center; width: 20px; height: 20px; border-radius: 50%; flex: none;
+  background: var(--accent-soft); color: var(--accent-text); font-size: 11.5px; font-weight: 700; font-variant-numeric: tabular-nums;
+}
+.ps-count { font-size: 12px; font-weight: 500; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.ps-optional { font-size: 11.5px; font-weight: 500; color: var(--text-tertiary); }
+.ps-search-row { display: flex; gap: 8px; align-items: center; }
+.ps-search { flex: 1; min-width: 0; }
+.ps-chip {
+  height: 28px; padding: 0 11px; border-radius: 14px; font-size: 12px; white-space: nowrap;
+  background: var(--hover); color: var(--text-secondary);
+}
+.ps-chip[aria-pressed='true'] { background: var(--accent-soft); color: var(--accent-text); font-weight: 600; }
+.ps-list {
+  height: 260px; overflow-y: auto; border-radius: var(--radius-control);
+  background: var(--panel-soft); padding: 4px;
+}
+.ps-row {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 6px 8px; border-radius: var(--radius-row);
+  text-align: left; transition: background-color var(--motion-tap) var(--ease);
+}
+.ps-row:hover { background: var(--hover); }
+.ps-row.on { background: var(--accent-soft); }
+.ps-row.locked { cursor: default; opacity: 0.6; }
+.ps-row.locked:hover { background: none; }
+.ps-check {
+  display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; flex: none;
+  box-shadow: inset 0 0 0 1.5px var(--ring-empty);
+}
+.ps-row.on .ps-check { background: var(--accent); box-shadow: none; color: #fff; }
+.ps-check svg { width: 12px; height: 12px; stroke-width: 2.2; }
+.ps-text { display: flex; flex-direction: column; min-width: 0; }
+.ps-title { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ps-who { font-size: 11.5px; color: var(--text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ps-none { padding: 40px 0; text-align: center; font-size: 12.5px; color: var(--text-tertiary); }
+.ps-toggle { padding: 0; }
+.ps-days { padding: 4px 0 0; }
+
+.pb-empty-plan {
+  max-width: 460px; margin: 40px auto 24px; padding: 28px 28px 22px; border-radius: var(--radius-popover);
+  background: var(--panel-soft); display: flex; flex-direction: column; align-items: center; text-align: center; gap: 10px;
+}
+.pb-empty-plan.over { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent); }
+.pb-empty-icon {
+  display: grid; place-items: center; width: 44px; height: 44px; border-radius: 14px;
+  background: var(--accent-soft); color: var(--accent-text);
+}
+.pb-empty-icon svg { width: 22px; height: 22px; }
+.pb-empty-plan h3 { margin: 4px 0 0; font-size: 16px; font-weight: 650; }
+.pb-empty-plan p { margin: 0 0 6px; font-size: 12.5px; color: var(--text-secondary); line-height: 1.5; }
+.pb-empty-plan .pb-cap.strong { height: 32px; padding: 0 16px; font-size: 13px; }
+.pb-empty-add { width: 100%; margin: 6px 0 0; }
+
+/* The head every left column wears (`ui/shelfHeader.ts`, the Mac's
+   `ShelfHeader`): a 36 tile tinted with the shelf's sidebar colour, the name
+   at 19, one line under it, the column's own controls at the end. The
+   tables, the plans, the week, the search results and the slip-box all
+   wear it, so moving between shelves reads as moving within one place. */
+.shelf-head-wrap { flex: 0 0 auto; padding: 18px 20px 6px; }
+.slipbox .shelf-head-wrap { padding-bottom: 10px; }
+.shelf-head { --tone: var(--accent); display: flex; align-items: center; gap: 12px; min-width: 0; }
+.shelf-head[data-tone='reading'] { --tone: var(--shelf-reading); }
+.shelf-head[data-tone='read'] { --tone: var(--shelf-read); }
+.shelf-head[data-tone='favorites'] { --tone: var(--shelf-favorites); }
+.shelf-head[data-tone='review'] { --tone: var(--shelf-review); }
+.shelf-tile {
+  width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; flex: none;
+  background: color-mix(in srgb, var(--tone) 13%, transparent);
+  /* Inked toward the text, as the sidebar's lit row is: a yellow glyph on a
+     pale yellow tile is not read. */
+  color: color-mix(in srgb, var(--tone) calc(100% - var(--shelf-ink-share)), var(--shelf-ink));
+}
+.shelf-head[data-tone='accent'] .shelf-tile { background: var(--accent-soft); color: var(--accent-text); }
+.shelf-tile svg { width: 18px; height: 18px; }
+.shelf-titles { min-width: 64px; flex: 1 1 auto; }
+.shelf-titles h2 {
+  font-size: 19px; font-weight: 650; letter-spacing: -0.01em; margin: 0; line-height: 1.2; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.shelf-sub { font-size: 12.5px; color: var(--text-secondary); margin: 2px 0 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.shelf-trailing { margin-left: auto; display: flex; gap: 8px; align-items: center; flex: 0 1 auto; min-width: 0; overflow: hidden; }
+.pane-controls { flex: none; display: flex; gap: 6px; align-items: center; margin-left: -2px; }
+.shelf-trailing:empty + .pane-controls { margin-left: auto; }
+.shelf-trailing:empty { display: none; }
+.shelf-trailing .icon-button { width: 28px; height: 28px; }
+
+/* The slip-box's search, full width under its head, as a table's columns
+   sit under a shelf's head. */
+.slipbox-search-row { flex: 0 0 auto; display: flex; padding: 0 16px 10px; }
+.slipbox-search-row .slipbox-search-box { height: 28px; padding: 0 10px; }
+
+/* «읽을 날·계획»: a shelf's table shows its Read On and Plan columns on asking. */
+.pb-chip-toggle {
+  display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 10px; border-radius: 13px;
+  font-size: 12px; color: var(--text-secondary); background: var(--hover); white-space: nowrap;
+  transition: background-color var(--motion-tap) var(--ease), color var(--motion-tap) var(--ease);
+}
+.pb-chip-toggle svg { width: 13px; height: 13px; }
+.pb-chip-toggle:hover { background: var(--pressed); }
+.pb-chip-toggle.on { color: var(--accent-text); background: var(--accent-soft); font-weight: 600; }
+
+/* A plan's buttons on a row of their own under its name, the counts beside
+   or under them; the symbols alone when the words do not fit (`fitActions`). */
+.pb-plan-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-width: 0; }
+.pb-plan-actions { display: flex; gap: 8px; flex: none; }
+.pb-plan-actions.compact .pb-cap { width: 32px; padding: 0; justify-content: center; }
+.pb-plan-actions.compact .pb-cap-label { display: none; }
+
+/* The materials column, one tile wide: more than one, and a count in its corner. */
+.pb-kchip { position: relative; }
+.pb-kcount {
+  position: absolute; top: -5px; right: -6px; min-width: 14px; height: 14px; padding: 0 3.5px; box-sizing: border-box;
+  border-radius: 7px; background: var(--accent); color: #fff; font-size: 9px; font-weight: 700; line-height: 14px;
+  text-align: center; font-variant-numeric: tabular-nums;
+}
+
+/* What the old list said about the folder, said over a shelf's table. */
+.pb-notices {
+  flex: 0 0 auto; display: flex; flex-direction: column; gap: 1px; margin: 4px 16px 0; padding: 4px 0;
+  border-radius: var(--radius-popover); background: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+.pb-notices .list-note.quiet { padding: 7px 18px; }
+.pb-empty-shelf { padding-bottom: 60px; }
+
+.pb-guide {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 6px 20px 0; padding: 10px 10px 10px 14px; flex: 0 0 auto;
+  border-radius: 12px; background: var(--wash);
+}
+.pb-guide-icon { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 9px; background: var(--accent-soft); color: var(--accent-text); flex: none; }
+.pb-guide-icon svg { width: 15px; height: 15px; }
+.pb-guide-text { display: flex; flex-direction: column; min-width: 0; flex: 1 1 220px; }
+.pb-guide-text strong { font-size: 13px; font-weight: 600; }
+.pb-guide-text span { font-size: 12px; color: var(--text-secondary); }
+.pb-guide .pb-cap { height: 28px; background: var(--raised); box-shadow: var(--lift); }
+.pb-guide-x { width: 24px; height: 24px; }
+
+.pb-stat-button { cursor: pointer; }
+.pb-stat-button:hover { background: color-mix(in srgb, var(--k) 22%, transparent); }
+
+.sidebar-hint { padding: 0 10px 6px 34px; font-size: 11.5px; line-height: 1.4; color: var(--text-tertiary); }
+
+/* ------------------------------------------------- the row of panes (1.1) */
+
+/* What every pane wears (the Mac's `PaneControls`): a ⌄ that says what the
+   pane shows and changes it, and a small round ×. In the pane's own head —
+   the shelf's, a slip-box's, a project's list — and over the top corner of a
+   pane with no head to put them in: the page, a project's page, the
+   inspector. */
+.pane-close,
+.pane-menu,
+.pane-float {
+  flex: none; width: 20px; height: 20px; border-radius: 50%; display: inline-grid; place-items: center;
+  color: var(--text-secondary); background: color-mix(in srgb, var(--text) 6%, transparent);
+  -webkit-app-region: no-drag;
+  transition: background-color var(--motion-tap) var(--ease), color var(--motion-tap) var(--ease), opacity var(--motion-tap) var(--ease);
+}
+.pane-close svg { width: 9px; height: 9px; stroke-width: 2.6; display: block; }
+.pane-menu svg { width: 10px; height: 10px; stroke-width: 2.2; display: block; }
+.pane-float svg { width: 12px; height: 12px; display: block; }
+.pane-close:hover, .pane-menu:hover, .pane-float:hover { background: var(--pressed); color: var(--text); }
+.pane-menu[aria-expanded='true'] { background: var(--pressed); color: var(--text); }
+/* The last pane's × is there, and does nothing: there must be something to look at. */
+.panes[data-single='true'] [data-pane-id] .pane-close,
+.panes[data-single='true'] [data-pane-id].pane-close { opacity: 0.35; pointer-events: none; }
+
+/* Every pane is a container its heads can ask about: in a narrow pane the
+   head's own controls give up their words, then step aside, before the name
+   or the pane's ⌄ and × do. */
+.panes > [data-pane-id] { container: pane / inline-size; }
+@container pane (max-width: 420px) {
+  .shelf-head .shelf-tile { display: none; }
+  .shelf-head .pb-chip-toggle { padding: 0 7px; }
+  .shelf-head .pb-chip-toggle span { display: none; }
+  .shelf-head .pb-seg button { font-size: 0; gap: 0; }
+}
+@container pane (max-width: 250px) {
+  .shelf-head .shelf-trailing { display: none; }
+  .shelf-head { gap: 8px; }
+  .shelf-head .shelf-titles { min-width: 0; }
+  .shelf-head-wrap { padding-left: 14px; padding-right: 10px; }
+}
+
+/* A head is the pane's handle: it moves the pane when dragged. */
+.pane-handle { -webkit-user-select: none; user-select: none; }
+.pane-handle:active { cursor: grabbing; }
+
+/* Over the corner of a pane with no head. The reader's head makes room for it. */
+.pane-corner {
+  position: absolute; top: 8px; right: 8px; z-index: 6;
+  display: flex; align-items: center; gap: 4px;
+  padding: 2px; border-radius: 99px;
+  opacity: 0.8;
+  transition: opacity var(--motion-tap) var(--ease);
+}
+.pane-corner:hover { opacity: 1; }
+/* A window for one paper has no row of panes: nothing to choose, nothing to close. */
+body[data-solo='true'] .pane-corner, body[data-solo='true'] .pane-plus { display: none; }
+body[data-solo='true'] .page-area > .panel .reader-header { padding-right: 14px; }
+.has-corner, .inspector-panel { position: relative; }
+.page-area > .panel .reader-header,
+.page-area .split-column:last-child > .panel:first-child .reader-header { padding-right: 64px; }
+.pj-page.has-corner .pj-content { padding-top: 34px; }
+
+/* The «+» column at the row's end: always there, slim, a dashed outline —
+   wider and tinted under the pointer, and lit while a shelf or a pane is
+   held over it. It grows into the gap beside it rather than pushing the
+   panes. */
+.pane-gap { flex: 0 0 var(--gap); }
+.pane-plus { position: relative; min-width: 0; }
+.pane-plus-button {
+  position: absolute; top: 0; bottom: 0; right: 0; left: 0;
+  display: grid; place-items: center;
+  border-radius: 11px;
+  border: 1.5px dashed var(--separator-strong);
+  background: transparent;
+  color: var(--text-tertiary);
+  transition: left var(--motion-tap) var(--ease), background-color var(--motion-tap) var(--ease), border-color var(--motion-tap) var(--ease), color var(--motion-tap) var(--ease);
+}
+.pane-plus-glyph { display: grid; place-items: center; width: 16px; height: 16px; }
+.pane-plus-button svg { width: 12px; height: 12px; stroke-width: 2; }
+.pane-plus-button:hover,
+.pane-plus.drop-target .pane-plus-button {
+  left: -8px;
+  color: var(--accent-text);
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.pane-plus.drop-target .pane-plus-button { background: color-mix(in srgb, var(--accent) 18%, transparent); }
+
+/* The three zones over a pane while a shelf or a pane is held over it. */
+.pane-drop {
+  position: fixed; z-index: 80; pointer-events: none;
+  display: none; grid-template-columns: 26% 1fr 26%; gap: 6px; padding: 6px;
+  border-radius: var(--radius-panel);
+  /* The pane under it steps back, so the three places read over a page of text. */
+  background: color-mix(in srgb, var(--panel) 70%, transparent);
+  backdrop-filter: blur(6px) saturate(0.8);
+}
+.pane-drop[data-on='true'] { display: grid; }
+/* A paper with a page to stand beside: the whole pane is the one zone. */
+.pane-drop[data-mode='one'] { grid-template-columns: 1fr; }
+.pane-drop[data-mode='one'] .pane-drop-zone:not([data-zone='middle']) { display: none; }
+.pane-drop-zone {
+  display: grid; place-items: center; text-align: center;
+  border-radius: var(--radius-popover);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent-text);
+  font-size: 12px; font-weight: 600; padding: 8px; min-width: 0;
+  transition: background-color var(--motion-tap) var(--ease), outline-color var(--motion-tap) var(--ease);
+  outline: 2px dashed transparent; outline-offset: -2px;
+}
+.pane-drop-zone span {
+  padding: 4px 10px; border-radius: 99px; max-width: 100%;
+  background: var(--panel);
+  box-shadow: var(--lift);
+  word-break: keep-all; overflow-wrap: break-word; line-height: 1.35;
+  opacity: 0.8;
+  transition: opacity var(--motion-tap) var(--ease);
+}
+.pane-drop-zone[data-lit='true'] {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+  outline-color: var(--accent);
+}
+.pane-drop-zone[data-lit='true'] span { opacity: 1; }
+
+/* The inspector floating: a sheet of glass over the window (the Mac's
+   `FloatingInspector`/`FloatingGlass`, 2026-11-19: the user asked for it to
+   be glass the way iOS 27 is). Translucent, so the page behind it shows
+   through blurred and brighter; a faint light along its top edge and its
+   rim where a hard border would be; a soft, wide shadow — no outline and no
+   rule under its head. Dragged by its head, resized from its corner. */
+.inspector-float {
+  position: fixed; z-index: 60;
+  display: flex; flex-direction: column; min-width: 0; min-height: 0;
+  border-radius: var(--radius-sheet);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0) 140px),
+    color-mix(in srgb, var(--panel) 66%, transparent);
+  -webkit-backdrop-filter: blur(30px) saturate(1.8);
+  backdrop-filter: blur(30px) saturate(1.8);
+  box-shadow:
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.85),
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.4),
+    0 1px 3px rgba(0, 0, 0, 0.06),
+    0 20px 56px -10px rgba(0, 0, 0, 0.24);
+  overflow: hidden;
+}
+:root[data-theme='dark'] .inspector-float {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0) 140px),
+    color-mix(in srgb, var(--panel) 74%, transparent);
+  box-shadow:
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.22),
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.1),
+    0 1px 3px rgba(0, 0, 0, 0.3),
+    0 24px 64px -10px rgba(0, 0, 0, 0.62);
+}
+.inspector-float.arriving { animation: pane-in var(--motion-surface) var(--ease); }
+.inspector-float.moving {
+  box-shadow:
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.85),
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.4),
+    0 2px 6px rgba(0, 0, 0, 0.08),
+    0 28px 72px -10px rgba(0, 0, 0, 0.3);
+}
+:root[data-theme='dark'] .inspector-float.moving {
+  box-shadow:
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.22),
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.1),
+    0 2px 6px rgba(0, 0, 0, 0.35),
+    0 30px 80px -10px rgba(0, 0, 0, 0.7);
+}
+.inspector-float-head {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 8px;
+  height: 46px; padding: 6px 12px 0 16px; cursor: grab; -webkit-user-select: none; user-select: none;
+}
+.inspector-float.moving .inspector-float-head { cursor: grabbing; }
+.inspector-float-title { flex: 1 1 auto; min-width: 0; font-size: 12.5px; font-weight: 600; color: var(--text-secondary); }
+/* «붙이기» and ×, the way a floating glass sheet wears its buttons: a
+   capsule and a circle of glass. */
+.inspector-float-dock,
+.inspector-float-head .pane-close {
+  background: color-mix(in srgb, var(--panel) 52%, transparent);
+  -webkit-backdrop-filter: blur(12px) saturate(1.6);
+  backdrop-filter: blur(12px) saturate(1.6);
+  box-shadow:
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.9),
+    0 0 0 0.5px rgba(0, 0, 0, 0.06),
+    0 1px 3px rgba(0, 0, 0, 0.1);
+  color: var(--text);
+  transition: background-color var(--motion-tap) var(--ease), color var(--motion-tap) var(--ease), box-shadow var(--motion-tap) var(--ease);
+}
+:root[data-theme='dark'] .inspector-float-dock,
+:root[data-theme='dark'] .inspector-float-head .pane-close {
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow:
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.2),
+    0 0 0 0.5px rgba(255, 255, 255, 0.06),
+    0 1px 3px rgba(0, 0, 0, 0.35);
+}
+.inspector-float-dock {
+  display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 11px 0 9px;
+  border-radius: 99px; font-size: 11.5px; font-weight: 500;
+}
+.inspector-float-head .pane-close { width: 26px; height: 26px; }
+.inspector-float-head .pane-close svg { width: 10px; height: 10px; }
+.inspector-float-dock svg { width: 13px; height: 13px; display: block; }
+.inspector-float-dock:hover,
+.inspector-float-head .pane-close:hover { background: color-mix(in srgb, var(--panel) 80%, transparent); color: var(--text); }
+:root[data-theme='dark'] .inspector-float-dock:hover,
+:root[data-theme='dark'] .inspector-float-head .pane-close:hover { background: rgba(255, 255, 255, 0.14); }
+.inspector-float-body { flex: 1 1 auto; min-height: 0; display: flex; }
+/* The content sits on the glass, not on a page of its own. */
+.inspector-float-body > .panel { flex: 1 1 auto; border-radius: 0; box-shadow: none; background: transparent; }
+.inspector-float .insp-section { background: color-mix(in srgb, var(--panel) 48%, transparent); }
+.inspector-float .inspector-corner { display: none; }
+.inspector-float-grip {
+  position: absolute; right: 4px; bottom: 4px; width: 16px; height: 16px; cursor: nwse-resize;
+  background:
+    linear-gradient(135deg, transparent 0 55%, var(--separator-strong) 55% 62%, transparent 62% 72%, var(--separator-strong) 72% 79%, transparent 79%);
+  border-bottom-right-radius: var(--radius-sheet);
+}
+
+/* A pinned list of notes and a note pane: the slip-box's look, smaller. */
+.pinned-notes, .note-pane { display: flex; flex-direction: column; }
+.pinned-notes .shelf-head-wrap, .note-pane .shelf-head-wrap { padding-bottom: 10px; }
+.pinned-notes-list { padding: 0 4px 12px; }
+.note-pane-body, .note-pane-view, .note-pane-editor { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; }
+.note-pane-search { gap: 6px; align-items: center; }
+.note-pane-search .slipbox-search-box { flex: 1 1 auto; min-width: 0; }
+.note-pane-back-row { flex: 0 0 auto; display: flex; padding: 0 14px 4px; }
+.note-pane-back { background: none; padding: 3px 6px 3px 2px; display: inline-flex; align-items: center; gap: 4px; font-size: 12px; color: var(--text-secondary); }
+.note-pane-back svg { width: 12px; height: 12px; display: block; }
+.pane-missing { display: flex; flex-direction: column; }
+
+/* The sidebar's word where a count goes: a project's «D-72». */
+.row-badge { font-weight: 600; color: var(--text-secondary); }
+.row[aria-selected='true'] .row-badge { color: var(--accent-text); }
+
+
+/* -------------------------------------------------------- projects (1.1) */
+
+/* The list of them: a ring, the name and the goal, how long is left. */
+.pj-list-column { display: flex; flex-direction: column; }
+.pj-list-body { padding: 0 8px 12px; }
+.pj-group { padding: 12px 10px 4px; font-size: 11.5px; font-weight: 600; color: var(--text-secondary); user-select: none; }
+.pj-group-fold { display: flex; align-items: center; gap: 4px; background: none; width: 100%; text-align: left; }
+.pj-group-fold .fold-chevron { display: inline-flex; width: 11px; height: 11px; transition: transform var(--motion-tap) var(--ease); }
+.pj-group-fold .fold-chevron svg { width: 11px; height: 11px; }
+.pj-group-fold.open .fold-chevron { transform: rotate(90deg); }
+.pj-row {
+  display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: var(--radius-row); outline: none;
+  transition: background-color var(--motion-tap) var(--ease);
+}
+.pj-row:hover { background: var(--hover); }
+.pj-row[aria-selected='true'] { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.pj-row-ring { flex: none; display: inline-flex; }
+.pj-row-lines { min-width: 0; flex: 1 1 auto; display: flex; flex-direction: column; gap: 2px; }
+.pj-row-name { font-size: 13px; font-weight: 500; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pj-row-goal { font-size: 11.5px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pj-row-large { padding: 10px 12px; }
+.pj-row-large .pj-row-name { font-size: 14px; }
+.pj-row-large .pj-row-goal { font-size: 12.5px; }
+.pj-dday { flex: none; font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text-secondary); }
+.pj-dday[data-tone='near'] { color: var(--accent-text); }
+.pj-dday[data-tone='late'] { color: var(--warning); }
+.pj-empty .filled-button { margin-top: 4px; }
+.pj-empty svg { width: 30px; height: 30px; }
+
+/* The page. */
+.pj-page { display: flex; flex-direction: column; }
+.pj-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
+.pj-content { display: flex; flex-direction: column; gap: 16px; padding: 20px 20px 28px; }
+.pj-overview { padding: 18px 20px 20px; display: flex; flex-direction: column; gap: 8px; }
+.pj-overview-body { display: flex; flex-direction: column; }
+
+.pj-head { display: flex; align-items: center; gap: 14px; padding-right: 22px; }
+.pj-head-ring { flex: none; display: inline-flex; }
+.pj-head-titles { min-width: 0; flex: 1 1 auto; display: flex; flex-direction: column; gap: 3px; }
+.pj-name, .pj-goal {
+  border: 0; outline: none; background: transparent; padding: 1px 4px; margin-left: -4px; border-radius: 6px; font: inherit; color: var(--text);
+  transition: background-color var(--motion-tap) var(--ease);
+}
+.pj-name { font-size: 20px; font-weight: 650; letter-spacing: -0.01em; }
+.pj-goal { font-size: 13px; color: var(--text-secondary); }
+.pj-name:hover, .pj-goal:hover { background: var(--hover); }
+.pj-name:focus, .pj-goal:focus { background: var(--hover); }
+.pj-name::placeholder, .pj-goal::placeholder { color: var(--text-tertiary); }
+.pj-head-side { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+.pj-head-dday { background: none; padding: 0 2px; border-radius: 6px; }
+.pj-head-dday:hover { background: var(--hover); }
+.pj-head-dday-text { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text); }
+.pj-head-dday-text[data-late='true'] { color: var(--warning); }
+.pj-head-dday-set { font-size: 13px; font-weight: 600; color: var(--accent-text); }
+.pj-head-meta { display: flex; align-items: center; gap: 6px; }
+.pj-due { font-size: 12px; color: var(--text-secondary); }
+.pj-status {
+  height: 20px; padding: 0 8px; border-radius: 10px; font-size: 11.5px; font-weight: 600;
+  color: var(--text-secondary); background: color-mix(in srgb, var(--tag-gray) 13%, transparent);
+  transition: filter var(--motion-tap) var(--ease);
+}
+.pj-status[data-status='active'] { color: var(--accent-text); background: color-mix(in srgb, var(--accent) 13%, transparent); }
+.pj-status:hover { filter: brightness(0.96); }
+
+.pj-section { display: flex; flex-direction: column; gap: 6px; }
+.pj-section-head { display: flex; align-items: center; gap: 10px; }
+.pj-section-title { flex: 1 1 auto; font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+.pj-section-trailing { display: flex; align-items: center; gap: 12px; }
+.pj-link {
+  display: inline-flex; align-items: center; gap: 4px; background: none; padding: 2px 4px; border-radius: 6px;
+  font-size: 11.5px; font-weight: 500; color: var(--accent-text); white-space: nowrap;
+  transition: background-color var(--motion-tap) var(--ease);
+}
+.pj-link:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.pj-link svg { width: 12px; height: 12px; }
+
+/* The milestones on a track from the start to the deadline, today marked. */
+.pj-track { position: relative; height: 64px; border-radius: var(--radius-bar); background: var(--hover); user-select: none; }
+.pj-track-line, .pj-track-fill { position: absolute; left: 14px; top: 28px; height: 2px; border-radius: 1px; }
+.pj-track-line { right: 14px; background: color-mix(in srgb, var(--text) 9%, transparent); }
+.pj-track-fill { background: var(--accent); }
+.pj-track-today { position: absolute; top: 8px; width: 2px; height: 40px; margin-left: -1px; background: color-mix(in srgb, var(--accent) 50%, transparent); }
+.pj-track-today-label { position: absolute; top: 3px; margin-left: 4px; font-size: 9.5px; font-weight: 600; color: var(--accent-text); white-space: nowrap; }
+.pj-milestone {
+  position: absolute; top: 22px; display: flex; flex-direction: column; align-items: center; gap: 3px;
+  transform: translateX(-50%); cursor: grab; touch-action: none;
+}
+.pj-milestone.dragging { cursor: grabbing; }
+.pj-diamond {
+  display: block; width: 11px; height: 11px; margin: 1.5px; border-radius: 3px; transform: rotate(45deg);
+  background: var(--panel); box-shadow: inset 0 0 0 2px var(--accent);
+}
+.pj-diamond.done { background: var(--accent); }
+.pj-diamond-due { position: absolute; top: 22px; margin: 1.5px 0 0; transform: translateX(-50%) rotate(45deg); background: var(--warning); box-shadow: none; }
+.pj-track-label { font-size: 10.5px; color: var(--text-secondary); white-space: nowrap; line-height: 1.2; }
+.pj-track-due { position: absolute; top: 41px; transform: translateX(-50%); }
+.pj-milestone:hover .pj-track-label { color: var(--text); }
+
+/* The switch, and one line in, one step out. */
+.pj-controls { display: flex; align-items: center; gap: 10px; }
+.pj-views { flex: none; }
+.pj-add {
+  flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px;
+  border-radius: var(--radius-control); background: color-mix(in srgb, var(--accent) 7%, transparent); color: var(--accent-text);
+}
+.pj-add svg { width: 12px; height: 12px; flex: none; stroke-width: 2.2; }
+.pj-add-field { flex: 1 1 auto; min-width: 0; border: 0; outline: none; background: transparent; font: inherit; font-size: 13px; color: var(--text); }
+.pj-add-field::placeholder { color: var(--text-tertiary); }
+
+/* The board: three columns, and a card for each step. */
+.pj-board { display: flex; align-items: flex-start; gap: 10px; }
+.pj-col {
+  flex: 1 1 0; min-width: 0; min-height: 150px; display: flex; flex-direction: column; gap: 6px; padding: 8px;
+  border-radius: var(--radius-popover); background: var(--hover);
+  box-shadow: inset 0 0 0 2px transparent; transition: box-shadow var(--motion-tap) var(--ease);
+}
+.pj-col.drop-target { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 60%, transparent); }
+.pj-col-head { display: flex; align-items: center; gap: 6px; padding: 2px 4px; }
+.pj-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--text-secondary); }
+.pj-dot[data-state='doing'] { background: var(--warning); }
+.pj-dot[data-state='done'] { background: var(--shelf-read); }
+.pj-col-name { font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+.pj-col-count { font-size: 11.5px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.pj-col-empty { min-height: 44px; display: grid; place-items: center; font-size: 11.5px; color: var(--text-tertiary); }
+.pj-card {
+  display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border-radius: var(--radius-control);
+  background: var(--raised); box-shadow: var(--lift); cursor: default;
+  transition: box-shadow var(--motion-tap) var(--ease), opacity var(--motion-tap) var(--ease);
+}
+.pj-card:hover { box-shadow: var(--lift), 0 2px 8px rgba(0, 0, 0, 0.06); }
+.pj-card.dragging { opacity: 0.45; }
+.pj-card.drop-target { box-shadow: var(--lift), inset 0 0 0 2px color-mix(in srgb, var(--accent) 70%, transparent); }
+.pj-card-title { font-size: 13px; font-weight: 500; color: var(--text); line-height: 1.35; overflow-wrap: anywhere; }
+.pj-card[data-state='done'] .pj-card-title { color: var(--text-secondary); text-decoration: line-through; text-decoration-color: var(--text-tertiary); }
+.pj-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.pj-chip {
+  --k: var(--text-secondary);
+  display: inline-flex; align-items: center; gap: 3px; max-width: 100%; height: 18px; padding: 0 6px; border-radius: 9px;
+  font-size: 10.5px; font-weight: 500; font-variant-numeric: tabular-nums;
+  color: var(--k); background: color-mix(in srgb, var(--k) 12%, transparent);
+}
+.pj-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pj-chip svg { width: 10px; height: 10px; flex: none; }
+.pj-chip[data-tone='late'] { --k: var(--warning); }
+.pj-chip[data-tone='accent'] { --k: var(--accent-text); }
+.pj-chip[data-tone='note'] { --k: var(--shelf-read); }
+
+/* The timeline: weeks, today, the milestones faintly, the deadline, a bar per step. */
+.pj-timeline { position: relative; user-select: none; }
+.pj-tl-grid { position: absolute; top: 0; right: 0; bottom: 0; }
+.pj-tl-week { position: absolute; top: 0; bottom: 0; width: 1px; background: color-mix(in srgb, var(--text) 5%, transparent); }
+.pj-tl-week-label { position: absolute; top: 0; margin-left: 3px; font-size: 9.5px; color: var(--text-tertiary); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pj-tl-milestone { position: absolute; top: 0; bottom: 0; width: 1px; background: color-mix(in srgb, var(--accent) 18%, transparent); }
+.pj-tl-diamond {
+  position: absolute; top: 12px; width: 7px; height: 7px; margin-left: -3.5px; border-radius: 1.5px; transform: rotate(45deg);
+  background: var(--panel); box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+.pj-tl-diamond.done { background: var(--accent); }
+.pj-tl-deadline { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: color-mix(in srgb, var(--warning) 70%, transparent); }
+.pj-tl-today { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: color-mix(in srgb, var(--accent) 50%, transparent); }
+.pj-tl-rows { position: absolute; left: 0; right: 0; top: 26px; display: flex; flex-direction: column; gap: 6px; }
+.pj-tl-row { display: flex; align-items: center; gap: 10px; height: 24px; }
+.pj-tl-title { flex: none; font-size: 12px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pj-tl-lane { position: relative; flex: 1 1 auto; height: 24px; border-radius: 6px; background: color-mix(in srgb, var(--text) 3%, transparent); }
+.pj-tl-empty { font-size: 12px; color: var(--text-tertiary); }
+.pj-tl-bar {
+  --k: var(--text-secondary);
+  position: absolute; top: 2px; height: 20px; border-radius: 6px; display: flex; align-items: center; overflow: hidden;
+  background: color-mix(in srgb, var(--k) 15%, transparent); cursor: grab; touch-action: none;
+}
+.pj-tl-bar[data-state='doing'] { --k: var(--warning); background: color-mix(in srgb, var(--k) 22%, transparent); }
+.pj-tl-bar[data-state='done'] { --k: var(--shelf-read); background: color-mix(in srgb, var(--k) 22%, transparent); }
+.pj-tl-bar.dragging { cursor: grabbing; box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--k) 60%, transparent); }
+.pj-tl-due { padding-left: 6px; font-size: 9.5px; color: var(--text-secondary); white-space: nowrap; font-variant-numeric: tabular-nums; pointer-events: none; }
+.pj-tl-handle { position: absolute; right: 0; top: 0; bottom: 0; width: 8px; cursor: ew-resize; }
+
+/* What it draws on. */
+.pj-materials {
+  display: flex; flex-direction: column; gap: 8px; padding: 10px; margin: 0 -10px; border-radius: var(--radius-popover);
+  box-shadow: inset 0 0 0 2px transparent; transition: box-shadow var(--motion-tap) var(--ease);
+}
+.pj-materials.drop-target { box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 60%, transparent); }
+.pj-materials-hint {
+  padding: 12px; border-radius: var(--radius-popover); font-size: 12.5px; color: var(--accent-text);
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
+}
+.pj-materials-rows { display: flex; flex-direction: column; gap: 2px; }
+.pj-material {
+  display: flex; align-items: center; gap: 9px; padding: 4px 6px; border-radius: var(--radius-row); outline: none;
+  transition: background-color var(--motion-tap) var(--ease);
+}
+.pj-material:hover { background: var(--hover); }
+.pj-material[aria-selected='true'] { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.pj-material-icon {
+  --k: var(--accent);
+  flex: none; width: 22px; height: 22px; border-radius: 6px; display: grid; place-items: center;
+  color: var(--k); background: color-mix(in srgb, var(--k) 12%, transparent);
+}
+.pj-material-icon svg { width: 12px; height: 12px; }
+.pj-material-icon[data-tone='book'] { --k: var(--tag-purple); }
+.pj-material-icon[data-tone='document'] { --k: var(--tag-gray); }
+.pj-material-icon[data-tone='note'] { --k: var(--shelf-read); }
+.pj-material-icon[data-tone='plan'] { --k: var(--tag-indigo); }
+.pj-material-lines { min-width: 0; flex: 1 1 auto; display: flex; flex-direction: column; gap: 1px; }
+.pj-material-title { font-size: 12.5px; font-weight: 500; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pj-material-detail { font-size: 11px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* A paper opened from the project: the project, cut down, where the list was. */
+.pj-side-body { padding: 0 8px 12px; }
+.pj-side-step { display: flex; align-items: center; gap: 8px; padding: 5px 10px; font-size: 12.5px; }
+.pj-side-step-title { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* The small surfaces: a step, a milestone, a day. */
+.pj-pop { width: auto; }
+.pj-editor { display: flex; flex-direction: column; gap: 10px; width: 276px; }
+.pj-todo-editor { width: 300px; }
+.pj-field {
+  width: 100%; height: 30px; border: 0; outline: none; border-radius: var(--radius-control); padding: 0 10px;
+  background: var(--hover); font: inherit; font-size: 13px; color: var(--text);
+}
+.pj-field:focus, .pj-memo:focus { box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 40%, transparent); }
+.pj-field-title { font-size: 14px; font-weight: 500; }
+.pj-states { align-self: flex-start; }
+.pj-days { display: flex; gap: 8px; }
+.pj-day-button { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 9px; border-radius: 12px; background: var(--hover); font-size: 12px; font-variant-numeric: tabular-nums; }
+.pj-day-button:hover { background: var(--pressed); }
+.pj-day-label { color: var(--text-secondary); }
+.pj-caption { margin: 0; font-size: 11.5px; color: var(--text-secondary); }
+.pj-quiet { color: var(--text-tertiary); }
+.pj-memo {
+  width: 100%; height: 70px; resize: none; border: 0; outline: none; border-radius: var(--radius-control); padding: 6px 8px;
+  background: var(--hover); font: inherit; font-size: 12.5px; color: var(--text);
+}
+.pj-todo-papers { display: flex; flex-direction: column; gap: 2px; }
+.pj-todo-paper-row { display: flex; align-items: center; gap: 6px; }
+.pj-todo-paper { flex: 1 1 auto; min-width: 0; text-align: left; background: none; font-size: 12px; color: var(--accent-text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 2px 0; }
+.pj-todo-paper:hover { text-decoration: underline; }
+.pj-minus { width: 20px; height: 20px; }
+.pj-check { display: flex; align-items: center; gap: 6px; font-size: 12.5px; }
+.pj-editor-foot { display: flex; align-items: center; gap: 8px; }
+.plain-button.danger { color: var(--danger); }
+.pj-daypick { width: 272px; }
+.pj-month-head { display: flex; align-items: center; justify-content: space-between; margin: 2px 0 4px; }
+.pj-month-head .icon-button { width: 24px; height: 22px; }
+.pj-month-title { font-size: 12.5px; font-weight: 600; }
+.pp-day.pj-other-month { color: var(--text-tertiary); }

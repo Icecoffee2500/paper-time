@@ -41,10 +41,15 @@ import { drawingHandlers } from './handlers/drawing.js'
 import { notesHandlers } from './handlers/notes.js'
 import { windowHandlers } from './handlers/window.js'
 import { textHandlers } from './handlers/text.js'
+import { planHandlers } from './handlers/plans.js'
+import { PlanFiles } from './plans.js'
+import { projectHandlers } from './handlers/projects.js'
+import { ProjectFiles } from './projects.js'
 import { pageCount } from './handlers/shared.js'
 import { MetadataQueue } from './metadata/queue.js'
 import { lookupNetwork } from './metadata/wiring.js'
 import { importedPapers } from './library.js'
+import { SupplementChoices, Supplements } from './supplements.js'
 import { readWhole } from './pdfBytes.js'
 import { FetchedPapers, bytesOf, chromiumFetch, type Fetch } from './paperSource.js'
 import { PaperMeta } from '../shared/model.js'
@@ -241,6 +246,24 @@ const metadata = new MetadataQueue({
   resolving: (ids) => send('metadata:resolving', { ids }),
   changed: (id) => send('paper:changed', { id, layers: ['record'] }),
   log: probe.isRun ? log : undefined,
+  publishedChecks: publishedChecks(),
+  idle: () => void supplements.attachAll(),
+})
+
+// The plans' files, for the handlers and for taking a supplement out of them.
+const planFiles = new PlanFiles(() => libraries.all())
+// The projects' files (1.1), read and written the way the plans' are.
+const projectFiles = new ProjectFiles(() => libraries.all())
+
+// Supplements under their papers (`supplements.ts`).
+const supplements = new Supplements({
+  libraries,
+  records,
+  plans: planFiles,
+  choices: new SupplementChoices(probe.isRun ? null : path.join(app.getPath('userData'), 'supplements-left-alone.json')),
+  changed: (id) => send('paper:changed', { id, layers: ['record'] }),
+  plansChanged: () => send('plans:changed'),
+  log: probe.isRun ? log : undefined,
 })
 importedPapers.on('imported', (id: string) => metadata.arrived([id]))
 
@@ -253,11 +276,46 @@ async function openLibrary(root: string): Promise<LibrarySnapshot | { error: str
   await libraries.open(root)
   openNotes(root)
   sync.start()
+  // Preprints that have since been published, a few seconds later; the
+  // supplements already here, under their papers, sooner.
+  metadata.checkPublishedSoon()
+  supplements.attachSoon()
   return libraries.snapshot()
 }
 
+/** When each preprint was last asked about its published version — this
+ *  machine's business, in the app's folder, not the library's. A probe keeps
+ *  it in memory: it must not remember anything. */
+function publishedChecks(): { load: () => Record<string, number>; save: (dates: Record<string, number>) => void } {
+  if (probe.isRun) {
+    let memory: Record<string, number> = {}
+    return { load: () => ({ ...memory }), save: (dates) => { memory = { ...dates } } }
+  }
+  const file = () => path.join(app.getPath('userData'), 'published-checks.json')
+  return {
+    load: () => {
+      try {
+        const parsed = JSON.parse(fs.readFileSync(file(), 'utf8')) as unknown
+        return parsed && typeof parsed === 'object' ? parsed as Record<string, number> : {}
+      } catch {
+        return {}
+      }
+    },
+    save: (dates) => {
+      try {
+        const target = file()
+        const temporary = `${target}.${process.pid}.tmp`
+        fs.writeFileSync(temporary, JSON.stringify(dates))
+        fs.renameSync(temporary, target)
+      } catch {
+        // Only a note of when we last asked; losing it asks again.
+      }
+    },
+  }
+}
+
 const context: Context = {
-  libraries, sync, flush, journals, records, text, semantic, ocr, notes, windows, pageCounter, metadata, updates,
+  libraries, sync, flush, journals, records, text, semantic, ocr, notes, windows, pageCounter, metadata, updates, supplements,
   fetched, fetch: paperFetch,
   isProbe: probe.hasLibrary,
   probeLibrary: probe.argument('library') ?? null,
@@ -298,6 +356,8 @@ const handlers: Handlers = {
   ...notesHandlers(context),
   ...windowHandlers(context),
   ...textHandlers(context),
+  ...planHandlers(context, planFiles),
+  ...projectHandlers(context, projectFiles),
 } as Handlers
 
 registerIPC(handlers)
@@ -428,12 +488,14 @@ app.whenReady().then(async () => {
   })
 })
 
-/** `--papertime-resolve=<id|all|pending>`: looks the papers up (with the
+/** `--papertime-resolve=<id|all|pending|refresh|published>`: looks the papers up (with the
  *  replayed or permitted network only — see `metadata/wiring.ts`), waits,
  *  and says what each record became. */
 async function runResolveProbe(which: string) {
   const all = (await Promise.all(libraries.all().map(async (one) => (await one.read()).papers))).flat()
   if (which === 'pending') await metadata.pending()
+  else if (which === 'refresh') await metadata.refreshAll()
+  else if (which === 'published') await metadata.checkPublished()
   else metadata.rerun(which === 'all' ? all.map((row) => row.id) : which.split(','))
   await metadata.drain()
   for (const library of libraries.all()) {

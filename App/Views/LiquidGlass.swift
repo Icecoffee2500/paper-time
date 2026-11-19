@@ -204,6 +204,16 @@ extension View {
 }
 
 private struct PlainTitlebar: NSViewRepresentable {
+    /// The size it is given, without asking AppKit. Left to itself SwiftUI
+    /// asks an AppKit view for its layout traits on every pass of the
+    /// window's layout, and AppKit answers by updating the constraints of
+    /// the view's whole subtree — for a table, every row on screen, each
+    /// row's SwiftUI body with it. That was most of what a pane opening or
+    /// closing cost (2026-11-19, `--papertime-perf`).
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSViewType, context: Context) -> CGSize? {
+        CGSize(width: proposal.width ?? 0, height: proposal.height ?? 0)
+    }
+
     func makeNSView(context: Context) -> NSView { Setter() }
     func updateNSView(_ view: NSView, context: Context) {}
 
@@ -247,6 +257,16 @@ private struct PlainTitlebar: NSViewRepresentable {
 /// to sit on: the desktop still shows through, blurred, and it is something
 /// rather than nothing.
 private struct WindowBackdrop: NSViewRepresentable {
+    /// The size it is given, without asking AppKit. Left to itself SwiftUI
+    /// asks an AppKit view for its layout traits on every pass of the
+    /// window's layout, and AppKit answers by updating the constraints of
+    /// the view's whole subtree — for a table, every row on screen, each
+    /// row's SwiftUI body with it. That was most of what a pane opening or
+    /// closing cost (2026-11-19, `--papertime-perf`).
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSViewType, context: Context) -> CGSize? {
+        CGSize(width: proposal.width ?? 0, height: proposal.height ?? 0)
+    }
+
     func makeNSView(context: Context) -> NSVisualEffectView {
         let view = NSVisualEffectView()
         view.material = .underWindowBackground
@@ -259,6 +279,16 @@ private struct WindowBackdrop: NSViewRepresentable {
 }
 
 private struct TranslucentWindow: NSViewRepresentable {
+    /// The size it is given, without asking AppKit. Left to itself SwiftUI
+    /// asks an AppKit view for its layout traits on every pass of the
+    /// window's layout, and AppKit answers by updating the constraints of
+    /// the view's whole subtree — for a table, every row on screen, each
+    /// row's SwiftUI body with it. That was most of what a pane opening or
+    /// closing cost (2026-11-19, `--papertime-perf`).
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSViewType, context: Context) -> CGSize? {
+        CGSize(width: proposal.width ?? 0, height: proposal.height ?? 0)
+    }
+
     func makeNSView(context: Context) -> NSView { Opener() }
     func updateNSView(_ view: NSView, context: Context) {}
 

@@ -19,6 +19,10 @@ public enum RecordSanitizer {
         result.collectionTitle = result.collectionTitle.map(clean)
         result.eventTitle = result.eventTitle.map(clean)
         result.publisher = result.publisher.map(clean)
+        // OpenAlex and DataCite call arXiv «arXiv (Cornell University)»,
+        // which reads as a journal wherever it is shown.
+        if result.containerTitle?.localizedCaseInsensitiveContains("arxiv") == true { result.containerTitle = "arXiv" }
+        if result.publisher?.localizedCaseInsensitiveContains("arxiv") == true { result.publisher = "arXiv" }
         return result
     }
 

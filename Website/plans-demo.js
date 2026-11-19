@@ -233,7 +233,7 @@ function mount(host, opts) {
   function row(p, kind) {
     if (p.pending) return '<div class="row pending"><span class="st">' + ring(p) + '</span><div class="t"><span class="shimmer">arxiv.org/abs/' + p.arxiv + ' · ' + L('서지를 채우는 중…', 'Filling in the details…') + '</span></div></div>';
     const cells = kind === 'plan' ? dateChip(p) + progCell(p) + linkCell(p) + tagCell(p)
-      : kind === 'all' ? '<div class="who">' + who(p) + ' · ' + p.year + '</div>' + dateChip(p) + planCell(p) + linkCell(p)
+      : kind === 'all' ? '<div class="who">' + who(p) + '</div><div class="who">' + p.year + '</div><div class="who">' + esc(p.venue) + '</div>' + dateChip(p) + planCell(p) + linkCell(p)
         : planCell(p) + dateChip(p) + linkCell(p);
     return '<div class="row s-' + p.status + (p.id === S.sel ? ' on' : '') + '" data-act="select" data-id="' + p.id + '" tabindex="0"><button type="button" class="st" data-act="status" data-id="' + p.id + '" aria-label="' + L('읽기 상태 바꾸기', 'Change Reading Status') + '" title="' + L('누르면 상태가 바뀌어요', 'Click to change the status') + '">' + ring(p) + '</button><div class="t" title="' + esc(p.title) + '">' + esc(p.title) + '</div>' + cells + '</div>';
   }
@@ -286,7 +286,7 @@ function mount(host, opts) {
     const ds = real.filter(p => p.date).map(p => p.date).sort();
     const when = ds.length ? span(ds[0], ds[ds.length - 1]) : L('날짜를 아직 안 정했어요', 'No dates yet');
     const head = '<div class="head"><div class="head-top"><span class="tile">' + I('route', 18) + '</span><div><h2>' + esc(PLANS.offline.name) + '</h2><p class="sub">' + when + ' · ' + L(real.length + '편 중 ' + read + '편 읽음', read + ' of ' + real.length + ' read') + '</p></div>'
-      + '<div class="head-actions"><button type="button" class="cap" id="ptp-btn-spread" data-act="spread">' + I('calendar', 14) + L('고르게 나누기…', 'Spread Out…') + '</button><button type="button" class="cap" id="ptp-btn-push" data-act="push">' + I('arrow', 14) + L('한 주 미루기', 'Push a Week') + '</button>'
+      + '<div class="head-actions"><button type="button" class="cap" id="ptp-btn-add" data-act="say" data-msg="' + esc(L('데모에는 논문을 미리 넣어 뒀어요. 앱에서는 여기서 라이브러리의 논문을 골라요.', 'The demo has its papers in already. In the app, you choose them from your library here.')) + '">' + I('plus', 14) + L('논문 더하기…', 'Add Papers…') + '</button><button type="button" class="cap" id="ptp-btn-spread" data-act="spread">' + I('calendar', 14) + L('고르게 나누기…', 'Spread Out…') + '</button><button type="button" class="cap" id="ptp-btn-push" data-act="push">' + I('arrow', 14) + L('한 주 미루기', 'Push a Week') + '</button>'
       + '<span class="seg2" role="group" aria-label="' + L('보기', 'View') + '"><button type="button" data-act="view" data-v="table" aria-pressed="' + (S.view === 'table') + '">' + I('table', 14) + L('표', 'Table') + '</button><button type="button" data-act="view" data-v="calendar" aria-pressed="' + (S.view === 'calendar') + '">' + I('calendar', 14) + L('달력', 'Calendar') + '</button></span></div></div>'
       + '<div class="stats"><span class="stat" style="--k:var(--tag-blue)">' + L('이번 주 ' + wk + '편', wk + ' this week') + '</span>' + (late ? '<span class="stat" style="--k:var(--tag-orange)">' + L('밀린 것 ' + late + '편', late + ' overdue') + '</span>' : '') + (none ? '<span class="stat">' + L('날짜 없음 ' + none + '편', none + ' with no date') + '</span>' : '') + '</div>'
       + pathHTML(ps) + '</div>';
@@ -332,11 +332,12 @@ function mount(host, opts) {
 
   function mainAll() {
     const ps = P.filter(p => !p.pending).slice(), key = S.sort.key, dir = S.sort.dir;
-    if (key) ps.sort((a, b) => { const va = key === 'title' ? a.title.toLowerCase() : key === 'year' ? a.year : (a.date || '9999'), vb = key === 'title' ? b.title.toLowerCase() : key === 'year' ? b.year : (b.date || '9999'); return (va < vb ? -1 : va > vb ? 1 : 0) * dir; });
+    const sortValue = p => key === 'title' ? p.title.toLowerCase() : key === 'author' ? p.first.toLowerCase() : key === 'year' ? p.year : key === 'venue' ? p.venue.toLowerCase() : (p.date || '9999');
+    if (key) ps.sort((a, b) => { const va = sortValue(a), vb = sortValue(b); return (va < vb ? -1 : va > vb ? 1 : 0) * dir; });
     const th = (k, n) => '<button type="button" data-act="sort" data-k="' + k + '" title="' + L('눌러서 정렬', 'Click to sort') + '">' + n + (key === k ? (dir > 0 ? ' ↑' : ' ↓') : '') + '</button>';
     return '<div class="head"><div class="head-top"><span class="tile">' + I('tray', 18) + '</span><div><h2>' + L('모두', 'All') + '</h2><p class="sub">' + L('논문 ' + ps.length + '편 · 열 머리를 눌러 정렬해요', ps.length + ' papers · Click a column heading to sort') + '</p></div>'
       + '<div class="head-actions"><span class="seg2" role="group" aria-label="' + L('보기', 'View') + '"><button type="button" data-act="say" data-msg="' + esc(L('지금 쓰는 목록 그대로예요. 데모에는 표만 넣었어요.', 'The list you use now. The demo has only the table.')) + '" aria-pressed="false">' + L('목록', 'List') + '</button><button type="button" aria-pressed="true">' + I('table', 14) + L('표', 'Table') + '</button></span></div></div></div>'
-      + '<div class="scroll"><div class="table cols-all"><div class="thead"><span></span><span>' + th('title', L('제목', 'Title')) + '</span><span>' + th('year', L('저자 · 해', 'Author · Year')) + '</span><span>' + th('date', L('읽을 날', 'Read On')) + '</span><span>' + L('계획', 'Plan') + '</span><span>' + L('자료', 'Materials') + '</span></div>'
+      + '<div class="scroll"><div class="table cols-all"><div class="thead"><span></span><span>' + th('title', L('제목', 'Title')) + '</span><span>' + th('author', L('저자', 'Authors')) + '</span><span>' + th('year', L('해', 'Year')) + '</span><span>' + th('venue', L('학회', 'Venue')) + '</span><span>' + th('date', L('읽을 날', 'Read On')) + '</span><span>' + L('계획', 'Plan') + '</span><span>' + L('자료', 'Materials') + '</span></div>'
       + ps.map(p => row(p, 'all')).join('') + '</div></div>';
   }
 

@@ -23,6 +23,16 @@ import UniformTypeIdentifiers
 /// The rows are still SwiftUI — the same `PaperRow` the list drew. What changed
 /// is who is asked how tall they are, and how often.
 struct PaperTable: NSViewRepresentable {
+    /// The size it is given, without asking AppKit. Left to itself SwiftUI
+    /// asks an AppKit view for its layout traits on every pass of the
+    /// window's layout, and AppKit answers by updating the constraints of
+    /// the view's whole subtree — for a table, every row on screen, each
+    /// row's SwiftUI body with it. That was most of what a pane opening or
+    /// closing cost (2026-11-19, `--papertime-perf`).
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSViewType, context: Context) -> CGSize? {
+        CGSize(width: proposal.width ?? 0, height: proposal.height ?? 0)
+    }
+
     /// What a row stands for.
     ///
     /// Everything the list used to hold in sections lives here as an entry, so
@@ -50,6 +60,8 @@ struct PaperTable: NSViewRepresentable {
     let note: (Entry) -> AnyView
     /// What a scroll past the top should report — the same pull the list had.
     var onPull: ((CGFloat) -> Void)?
+    /// The paper the list was last asked to go to (`LibraryModel.reveal`).
+    var reveal: LibraryModel.RevealRequest? = nil
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -178,6 +190,18 @@ struct PaperTable: NSViewRepresentable {
                 }
             }
             applySelection()
+            applyReveal()
+        }
+
+        private var revealed = 0
+
+        /// Goes to the row asked for, once per request (see `BoardTable`).
+        private func applyReveal() {
+            guard let table, let reveal = owner.reveal, reveal.serial != revealed,
+                  Date.now.timeIntervalSince(reveal.at) < 2,
+                  let row = owner.entries.firstIndex(of: .paper(reveal.paper)) else { return }
+            revealed = reveal.serial
+            DispatchQueue.main.async { [weak table] in table?.centre(row: row) }
         }
 
         private func applySelection() {
@@ -388,7 +412,7 @@ struct PaperTable: NSViewRepresentable {
     /// so scrolling reuses a handful of them however long the list is.
     final class RowHost: NSTableCellView {
         static let name = NSUserInterfaceItemIdentifier("PaperRowHost")
-        private var host: NSHostingView<AnyView>?
+        private var host: RowDragHost?
 
         override init(frame: NSRect) {
             super.init(frame: frame)
@@ -403,7 +427,7 @@ struct PaperTable: NSViewRepresentable {
                 host.rootView = view
                 return
             }
-            let made = NSHostingView(rootView: view)
+            let made = RowDragHost(rootView: view)
             made.translatesAutoresizingMaskIntoConstraints = false
             addSubview(made)
             NSLayoutConstraint.activate([
@@ -413,6 +437,140 @@ struct PaperTable: NSViewRepresentable {
                 made.bottomAnchor.constraint(equalTo: bottomAnchor),
             ])
             host = made
+        }
+    }
+}
+
+/// The row's SwiftUI, which also starts the drag of its rows.
+///
+/// A table starts dragging rows from its own `mouseDown` — and a row made of
+/// SwiftUI never lets the press down to the table: the hosting view takes it
+/// for the row's taps (`PaperTable` found the same for clicks). So no row of
+/// the list could be dragged at all (2026-11-18, «드래그 앤 드랍이 전혀 안되는데»).
+/// The row's host watches the press move instead and, past a few points,
+/// starts the drag the table would have: the rows chosen (or only the one
+/// pressed, when it is not among them), written by the table's own data
+/// source, so every drop target reads the same `PaperTransfer`.
+final class RowDragHost: NSHostingView<AnyView> {
+    private var pressedAt: NSPoint?
+    private var source: RowDragSource?
+
+    override func mouseDown(with event: NSEvent) {
+        pressedAt = event.locationInWindow
+        super.mouseDown(with: event)
+    }
+
+    override func mouseDragged(with event: NSEvent) {
+        if let start = pressedAt, source == nil,
+           hypot(event.locationInWindow.x - start.x, event.locationInWindow.y - start.y) > 4,
+           beginDrag(with: event) {
+            return
+        }
+        super.mouseDragged(with: event)
+    }
+
+    override func mouseUp(with event: NSEvent) {
+        pressedAt = nil
+        super.mouseUp(with: event)
+    }
+
+    private var table: NSTableView? {
+        var view = superview
+        while let current = view {
+            if let table = current as? NSTableView { return table }
+            view = current.superview
+        }
+        return nil
+    }
+
+    private func beginDrag(with event: NSEvent) -> Bool {
+        guard let table, let data = table.dataSource, let start = pressedAt else { return false }
+        let pressed = table.row(at: table.convert(start, from: nil))
+        guard pressed >= 0 else { return false }
+        let rows = table.selectedRowIndexes.contains(pressed) ? table.selectedRowIndexes : IndexSet(integer: pressed)
+        let writers = rows.compactMap { data.tableView?(table, pasteboardWriterForRow: $0) }
+        guard !writers.isEmpty else { return false }
+        let point = convert(event.locationInWindow, from: nil)
+        let items = writers.enumerated().map { index, writer -> NSDraggingItem in
+            let item = NSDraggingItem(pasteboardWriter: writer)
+            let image = RowDragImage.make(title: (writer as? NSPasteboardItem)?.string(forType: .string), count: writers.count)
+            let offset = CGFloat(min(index, 3)) * 4
+            let origin = NSPoint(x: point.x - 14 + offset, y: point.y - image.size.height / 2 + (isFlipped ? offset : -offset))
+            // Only the first carries the picture; the rest stack under it.
+            item.setDraggingFrame(NSRect(origin: origin, size: image.size), contents: index == 0 ? image : nil)
+            return item
+        }
+        let source = RowDragSource(table: table) { [weak self] in self?.dragEnded(pressedAt: start) }
+        self.source = source
+        let session = beginDraggingSession(with: items, event: event, source: source)
+        session.draggingFormation = NSDraggingFormation.pile
+        session.animatesToStartingPositionsOnCancelOrFail = true
+        return true
+    }
+
+    /// The press the drag began with never ended, as far as the row's
+    /// SwiftUI knows: ended now, so the next click is a click.
+    private func dragEnded(pressedAt start: NSPoint) {
+        source = nil
+        pressedAt = nil
+        guard let up = NSEvent.mouseEvent(
+            with: .leftMouseUp, location: start, modifierFlags: [], timestamp: ProcessInfo.processInfo.systemUptime,
+            windowNumber: window?.windowNumber ?? 0, context: nil, eventNumber: 0, clickCount: 1, pressure: 0
+        ) else { return }
+        super.mouseUp(with: up)
+    }
+}
+
+/// Where a row drag reports back: what may be done with it, and how it ended
+/// — handed to the table's data source as the table's own drag would be.
+final class RowDragSource: NSObject, NSDraggingSource {
+    weak var table: NSTableView?
+    private let ended: () -> Void
+
+    init(table: NSTableView, ended: @escaping () -> Void) {
+        self.table = table
+        self.ended = ended
+    }
+
+    func draggingSession(_ session: NSDraggingSession, sourceOperationMaskFor context: NSDraggingContext) -> NSDragOperation {
+        // Inside the app every target says what it does: a shelf copies the
+        // paper onto itself, a plan's table moves it. Outside, a copy.
+        context == .withinApplication ? [.copy, .move, .generic] : .copy
+    }
+
+    func draggingSession(_ session: NSDraggingSession, endedAt screenPoint: NSPoint, operation: NSDragOperation) {
+        MainActor.assumeIsolated {
+            if let table, let data = table.dataSource {
+                data.tableView?(table, draggingSession: session, endedAt: screenPoint, operation: operation)
+            }
+            ended()
+        }
+    }
+}
+
+/// The picture under the pointer while rows are dragged: the paper's title in
+/// a small rounded card, or how many papers.
+enum RowDragImage {
+    static func make(title: String?, count: Int) -> NSImage {
+        let text = count > 1 ? L("논문 \(count)편", "\(count) papers") : (title?.isEmpty == false ? title! : L("논문", "Paper"))
+        let font = NSFont.systemFont(ofSize: 12.5, weight: .medium)
+        let attributes: [NSAttributedString.Key: Any] = [.font: font, .foregroundColor: NSColor.labelColor]
+        let measured = (text as NSString).size(withAttributes: attributes)
+        let size = NSSize(width: min(320, ceil(measured.width) + 26), height: 28)
+        return NSImage(size: size, flipped: false) { rect in
+            let card = NSBezierPath(roundedRect: rect.insetBy(dx: 0.5, dy: 0.5), xRadius: 8, yRadius: 8)
+            NSColor.windowBackgroundColor.withAlphaComponent(0.96).setFill()
+            card.fill()
+            NSColor.controlAccentColor.withAlphaComponent(0.55).setStroke()
+            card.lineWidth = 1
+            card.stroke()
+            let line = NSRect(x: 13, y: (rect.height - measured.height) / 2, width: rect.width - 26, height: measured.height)
+            let style = NSMutableParagraphStyle()
+            style.lineBreakMode = .byTruncatingTail
+            var drawn = attributes
+            drawn[.paragraphStyle] = style
+            (text as NSString).draw(in: line, withAttributes: drawn)
+            return true
         }
     }
 }

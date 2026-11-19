@@ -48,7 +48,16 @@ import { openAnchorFromSlipBox, openNote, openNoteFromSearch } from './actions/n
 import { openPassage, openSearch } from './actions/search.js'
 import { clearSearchResults, installListSearch, scanListText } from './listSearch.js'
 import { installTheme, openSettings, saveSettings, setInspectorTab } from './settingsController.js'
-import { layoutPanes, revealPane, syncListSlot, togglePane } from './layout.js'
+import {
+  ensureListPane, fitListColumn, inspectorChoices, installPanes, layoutPanes, lendListColumn, openBeside, returnListColumn, revealPane, setPaneNote, syncBoard,
+  syncListSlot, togglePane,
+} from './layout.js'
+import { buildProjects } from './ui/projects.js'
+import { markPaneViews, setPaneViewActions, shelfContent, shelfOfContent, updatePaneViews } from './ui/paneViews.js'
+import { revealNoteInSlipBox } from './actions/notes.js'
+import { buildPlanBoard } from './ui/planBoard.js'
+import { closePlanPop } from './ui/planPopovers.js'
+import { boardVisible, watchTheDay } from './plans.js'
 import { applyUndo, installKeys, pickTool } from './keys.js'
 import { installMainEvents } from './commands.js'
 import { installDockDrop, installFileDrop } from './dockDrop.js'
@@ -59,7 +68,8 @@ import { installSheetModality } from './ui/sheet.js'
 import { installProbeSurface } from './probe.js'
 import { showMoreMenu } from './moreMenu.js'
 import { L } from '../shared/lang.js'
-import { authorShelf, isPinned } from './state.js'
+import { authorShelf, isPinned, isSlipBoxShelf } from './state.js'
+import { closeProjectPops } from './ui/projects.js'
 
 document.body.dataset.platform = platform
 if (solo) document.body.dataset.solo = 'true'
@@ -70,7 +80,9 @@ shell.listSlot = el('div', { class: 'pane-slot' })
 
 // ---------------------------------------------------------------- the panes
 
+/** A shelf shown in the list's pane — which comes, at the left, when the row has none (1.1). */
 const chooseShelf = (shelf: Shelf) => {
+  ensureListPane()
   setShelf(shelf)
   changed('shelf')
 }
@@ -118,6 +130,7 @@ shell.slipBox = buildSlipBox({
   paper: (id) => store.papers.find((entry) => entry.id === id),
   openAnchor: (place) => void openAnchorFromSlipBox(place),
   openNote: (id) => void openNote(id),
+  saveListSettings: (patch) => saveSettings(patch),
 })
 
 shell.inspector = buildInspector({
@@ -178,6 +191,69 @@ shell.setup = buildSetup({
   suggestions: () => call('library:suggestions'),
 })
 
+// --------------------------------------------- pinned panes and the projects
+
+/**
+ * A paper pressed in a pinned pane, or among a project's materials: on the
+ * page, beside the pane it was pressed in (1.1). In the slip-box and the
+ * projects the paper takes the page with the note or the project where the
+ * list was — the way following a passage out of a note puts it.
+ */
+async function openPaperFrom(paneID: string | null, id: string) {
+  if (paneID) store.activePane = paneID
+  const shelf = store.shelf
+  if (isSlipBoxShelf(shelf) || shelf.kind === 'projects') {
+    store.slipBox.paperID = id
+    lendListColumn()
+    revealPane('reader')
+    changed('shelf')
+    if (store.selectedID !== id) await showPaper(id)
+    else {
+      reconcileReaders()
+      changed('reader')
+    }
+    keepPaper(id)
+    return
+  }
+  await showPaper(id)
+  keepPaper(id)
+}
+
+/** Whether a pane of papers stands in the row — a project's materials are dragged from one. */
+const papersPaneOpen = () => store.row.panes.some((pane) => {
+  const shelf = shelfOfContent(pane.content)
+  return Boolean(shelf && shelf.kind !== 'notes' && shelf.kind !== 'knowledge' && shelf.kind !== 'projects')
+})
+
+const projectActions = {
+  // A note the project draws on, in a note pane beside it.
+  openNote: (id: string) => openBeside({ kind: 'note', note: id }),
+  openPlan: (id: string) => chooseShelf({ kind: 'plan', id }),
+  // The papers, in a pane of their own beside the project, to drag from.
+  showPapers: () => openBeside(shelfContent({ kind: 'kind', of: 'paper' })),
+  papersShown: papersPaneOpen,
+  listShown: () => store.settings.panes.paperList,
+}
+
+shell.projects = buildProjects({ ...projectActions, openPaper: (id) => void openPaperFrom(null, id) })
+
+setPaneViewActions({
+  openPaper: (paneID, id) => void openPaperFrom(paneID, id),
+  openNote: (id) => revealNoteInSlipBox(id),
+  setNote: (paneID, id) => setPaneNote(paneID, id),
+  openAnchor: (place) => void openAnchor(place),
+  refresh: () => void reload(),
+  adoptLoose: () => void adoptLoose(),
+  project: projectActions,
+})
+
+shell.inspector.node.classList.add('inspector-panel')
+
+shell.board = buildPlanBoard({
+  refresh: () => void reload(),
+  adoptLoose: () => void adoptLoose(),
+})
+
 shell.rack = buildSketchRack({
   setTool: (tool: SketchTool) => pickTool(tool),
   undo: () => applyUndo(false),
@@ -191,6 +267,8 @@ shell.toolbar = buildToolbar({
   search: () => openSearch(),
   addPapers: () => void addPapers(),
   setInspectorTab: (tab: InspectorTab) => setInspectorTab(tab),
+  // Its other way, a right-click away: docked or floating.
+  inspectorMenu: (anchor) => showMenu(anchor, inspectorChoices()),
   moreMenu: showMoreMenu,
   settings: () => openSettings(),
   minimize: () => void call('window:minimize'),
@@ -252,10 +330,28 @@ function drawingSoon() {
 }
 
 subscribe((keys) => {
-  const onNotesShelf = store.shelf.kind === 'notes' && !solo
+  const onNotesShelf = isSlipBoxShelf(store.shelf) && !solo
   if (keys.has('shelf')) {
+    closePlanPop()
+    closeProjectPops()
+    // The list's pane lent to a paper opened from the slip-box goes back with it.
+    if (store.slipBox.paperID === null) returnListColumn()
     syncListSlot()
+    // The board comes, goes or moves with the shelf's view; it draws itself as it comes.
+    syncBoard()
     reconcileReaders()
+  } else if (keys.has('papers')) {
+    // The first papers arriving put the table where the list's setup was.
+    syncBoard()
+  }
+  if (boardVisible()) {
+    if (keys.has('papers') || keys.has('shelf') || keys.has('notes')) shell.board.update()
+    else if (keys.has('selection')) shell.board.mark()
+  }
+  // On the slip-box the paper chosen is what the pen writes a literature
+  // note on, and another window may have changed the list's order.
+  if (onNotesShelf && (keys.has('selection') || keys.has('settings')) && !keys.has('notes') && !keys.has('slipBox') && !keys.has('papers')) {
+    shell.slipBox.update()
   }
   if (keys.has('notes') || keys.has('slipBox') || keys.has('papers')) {
     if (onNotesShelf) {
@@ -283,6 +379,12 @@ subscribe((keys) => {
     shell.paperList.update()
   }
   if (keys.has('inspector')) shell.inspector.update()
+  // The projects, and the pinned panes beside whatever is in front (1.1).
+  const onProjects = store.shelf.kind === 'projects' && !solo
+  if (keys.has('projects')) shell.sidebar.update()
+  if (onProjects && (keys.has('projects') || keys.has('papers') || keys.has('notes') || keys.has('settings'))) shell.projects.update()
+  if (keys.has('panes') || keys.has('papers') || keys.has('notes') || keys.has('projects') || keys.has('settings')) updatePaneViews()
+  else if (keys.has('selection')) markPaneViews()
   if (keys.has('marks') && store.settings.inspectorTab === 'marks') shell.inspector.update()
   if (keys.has('sketch')) {
     followThePen()
@@ -299,6 +401,7 @@ let menuSaid = ''
 function tellMenu() {
   const state = {
     panes: { ...store.settings.panes },
+    inspectorFloats: store.inspectorPlace.floating,
     focus: store.focus.on,
     hasPaper: Boolean(store.selectedID && focused()),
     layout: store.settings.pageLayout,
@@ -319,6 +422,7 @@ window.addEventListener('focus', () => {
 
 installRejectionNotice()
 installUpdateNotice()
+watchTheDay()
 watchSketchClipboard()
 // A note the disk would not take stays in hand and is written with the next
 // change; said once, in the app's voice (`NotesModel.write`).
@@ -333,12 +437,18 @@ installDockDrop()
 installFileDrop()
 installListSearch()
 installMainEvents()
-window.addEventListener('resize', () => relayoutReadersSoon())
+// The table in the list's column gives way to the page as the window
+// narrows, and has its width back as it widens (`fitListColumn`).
+window.addEventListener('resize', () => {
+  fitListColumn()
+  relayoutReadersSoon()
+})
 // Where each paper was left, written as the window goes.
 window.addEventListener('beforeunload', () => {
   flushInspector()
   void flushPositions()
 })
 installProbeSurface()
+installPanes()
 layoutPanes()
 void start()
