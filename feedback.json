@@ -1,6 +1,15 @@
 {
   "issues": [
     {
+      "number": 7,
+      "title": "maxψ E D g[L CFM(g ⋆t , g ψ (o t , ˆℓ t , m)",
+      "state": "open",
+      "html_url": "https://github.com/Icecoffee2500/paper-time/issues/7",
+      "updated_at": "2026-11-19T05:35:16Z",
+      "milestone": null,
+      "body": "<!-- credit: juhan park -->"
+    },
+    {
       "number": 6,
       "title": "Test",
       "state": "open",
@@ -10,6 +19,11 @@
       "body": "<!-- credit: anonymous -->"
     }
   ],
-  "contributors": [],
+  "contributors": [
+    {
+      "name": "juhan park",
+      "count": 1
+    }
+  ],
   "unnamed": 1
 }

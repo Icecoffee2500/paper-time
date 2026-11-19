@@ -159,10 +159,10 @@
 .ptp .gchips button[aria-pressed="true"] { background:var(--accent-soft); color:var(--accent-ink); font-weight:600 }
 .ptp .scroll { overflow-x:auto; padding-bottom:12px; flex:1 }
 .ptp .table { min-width:650px }
-.ptp .cols-all { min-width:720px }
+.ptp .cols-all { min-width:820px }
 .ptp .thead, .ptp .row { display:grid; align-items:center; column-gap:10px; padding:0 12px; margin:0 8px }
 .ptp .cols-plan .thead, .ptp .cols-plan .row { grid-template-columns:22px minmax(0,1fr) 118px 84px 124px 100px }
-.ptp .cols-all .thead, .ptp .cols-all .row { grid-template-columns:22px minmax(0,1fr) 120px 118px 132px 112px }
+.ptp .cols-all .thead, .ptp .cols-all .row { grid-template-columns:22px minmax(0,1fr) 96px 40px 72px 112px 128px 104px }
 .ptp .cols-week .thead, .ptp .cols-week .row { grid-template-columns:22px minmax(0,1fr) 140px 118px 112px }
 .ptp .thead { height:28px; font-size:11px; color:var(--text-3); font-weight:500; margin-top:6px }
 .ptp .thead span { white-space:nowrap; overflow:hidden; text-overflow:ellipsis }
