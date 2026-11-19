@@ -162,6 +162,74 @@ export function zoneRect(zone: DockZone, size: Size): Rect {
   }
 }
 
+/** A pane's paper replaced: the key `from` becomes `to`, in the same place. */
+export function splitReplace(arrangement: SplitArrangement, from: string, to: string): SplitArrangement {
+  const swap = (column: SplitColumn | undefined) => column && {
+    top: column.top === from ? to : column.top,
+    ...(column.bottom ? { bottom: column.bottom === from ? to : column.bottom } : {}),
+  }
+  return { left: swap(arrangement.left)!, right: swap(arrangement.right) }
+}
+
+/** Two panes trade places — a side-by-side pane dragged by its title onto another (the Mac's `open(_:inPane:moving:)`). */
+export function splitSwap(arrangement: SplitArrangement, a: string, b: string): SplitArrangement {
+  if (a === b || !splitContains(arrangement, a) || !splitContains(arrangement, b)) return arrangement
+  const trade = (key: string) => (key === a ? b : key === b ? a : key)
+  const swap = (column: SplitColumn | undefined) => column && {
+    top: trade(column.top),
+    ...(column.bottom ? { bottom: trade(column.bottom) } : {}),
+  }
+  return { left: swap(arrangement.left)!, right: swap(arrangement.right) }
+}
+
+/**
+ * Where a paper dragged over the page would land (the Mac's
+ * `DockDropDelegate.target`, 2026-11-18): a new pane at an edge, or in place
+ * of a pane's paper — `pane` null is the one reader, when nothing stands
+ * side by side.
+ */
+export type DockTarget = { kind: 'zone'; zone: DockZone } | { kind: 'open'; pane: string | null }
+
+/**
+ * One reader: the outer three tenths on either side make a new pane (a half,
+ * or a quarter at the top or the bottom), the rest opens here, in place of
+ * the paper shown. Side by side: a thin strip at either outer edge adds a
+ * pane while there are fewer than four, and anywhere else is the pane under
+ * the pointer — its paper is replaced. In a gap between panes, the nearest.
+ * `frames` are the side-by-side panes' boxes in the page's own coordinates.
+ */
+export function dockTarget(x: number, y: number, size: Size, arrangement: SplitArrangement | null, frames: Record<string, Rect>): DockTarget | null {
+  if (!(size.width > 0) || !(size.height > 0)) return null
+  if (!arrangement) {
+    const zone = zoneAt(x, y, size)
+    return zone ? { kind: 'zone', zone } : { kind: 'open', pane: null }
+  }
+  const keys = splitPapers(arrangement)
+  const fx = x / size.width
+  const fy = y / size.height
+  if (keys.length < 4 && (fx < 0.1 || fx > 0.9)) {
+    const left = fx < 0.1
+    if (fy < 0.33) return { kind: 'zone', zone: left ? 'topLeft' : 'topRight' }
+    if (fy > 0.67) return { kind: 'zone', zone: left ? 'bottomLeft' : 'bottomRight' }
+    return { kind: 'zone', zone: left ? 'left' : 'right' }
+  }
+  const shown = keys.filter((key) => frames[key]).map((key) => ({ key, rect: frames[key] }))
+  const inside = shown.find(({ rect }) => x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height)
+  if (inside) return { kind: 'open', pane: inside.key }
+  const distance = (rect: Rect) => {
+    const dx = Math.max(rect.x - x, 0, x - (rect.x + rect.width))
+    const dy = Math.max(rect.y - y, 0, y - (rect.y + rect.height))
+    return dx * dx + dy * dy
+  }
+  const nearest = shown.reduce<{ key: string; rect: Rect } | null>((best, one) => (!best || distance(one.rect) < distance(best.rect) ? one : best), null)
+  return { kind: 'open', pane: nearest?.key ?? keys[0] ?? null }
+}
+
+/** The side a dock zone stands on — what its words say. */
+export function zoneSide(zone: DockZone): 'left' | 'right' {
+  return zone === 'left' || zone === 'topLeft' || zone === 'bottomLeft' ? 'left' : 'right'
+}
+
 /** The MIME type a dragged paper travels under, inside the window. */
 export const PAPER_DRAG_TYPE = 'application/x-papertime-paper'
 /** And the reader a drag started from, when it started on a side-by-side reader's title: that reader moves rather than a second one opening. */

@@ -6,7 +6,7 @@ import { shell, solo } from '../shell.js'
 import { focused, reconcileReaders } from '../pageArea.js'
 import { openAnchor, showPaper } from './openPapers.js'
 import { saveSettings, setInspectorTab } from '../settingsController.js'
-import { togglePane } from '../layout.js'
+import { revealPane } from '../layout.js'
 import {
   createArea, createNote, moveNoteToArea, removeArea, renameArea, slipBoxShows, visibleNotes,
 } from '../notesModel.js'
@@ -26,7 +26,8 @@ import { copyText } from '../ui/clipboard.js'
 /** The inspector, open on the Notes tab of the paper in front. */
 export function showNoteTab() {
   setInspectorTab('note')
-  if (!store.settings.panes.inspector) togglePane('inspector')
+  // Where it was left, docked or floating — not the next step of ⌘]'s turn.
+  if (!store.settings.panes.inspector) revealPane('inspector')
   shell.inspector.update()
   shell.toolbar.update()
 }

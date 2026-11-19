@@ -49,8 +49,8 @@ import { openPassage, openSearch } from './actions/search.js'
 import { clearSearchResults, installListSearch, scanListText } from './listSearch.js'
 import { installTheme, openSettings, saveSettings, setInspectorTab } from './settingsController.js'
 import {
-  ensureListPane, fitListColumn, installPanes, layoutPanes, lendListColumn, openBeside, returnListColumn, revealPane, setPaneNote, syncBoard, syncListSlot,
-  togglePane,
+  ensureListPane, fitListColumn, inspectorChoices, installPanes, layoutPanes, lendListColumn, openBeside, returnListColumn, revealPane, setPaneNote, syncBoard,
+  syncListSlot, togglePane,
 } from './layout.js'
 import { buildProjects } from './ui/projects.js'
 import { markPaneViews, setPaneViewActions, shelfContent, shelfOfContent, updatePaneViews } from './ui/paneViews.js'
@@ -267,6 +267,8 @@ shell.toolbar = buildToolbar({
   search: () => openSearch(),
   addPapers: () => void addPapers(),
   setInspectorTab: (tab: InspectorTab) => setInspectorTab(tab),
+  // Its other way, a right-click away: docked or floating.
+  inspectorMenu: (anchor) => showMenu(anchor, inspectorChoices()),
   moreMenu: showMoreMenu,
   settings: () => openSettings(),
   minimize: () => void call('window:minimize'),
@@ -399,6 +401,7 @@ let menuSaid = ''
 function tellMenu() {
   const state = {
     panes: { ...store.settings.panes },
+    inspectorFloats: store.inspectorPlace.floating,
     focus: store.focus.on,
     hasPaper: Boolean(store.selectedID && focused()),
     layout: store.settings.pageLayout,

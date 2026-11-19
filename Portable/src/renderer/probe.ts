@@ -8,7 +8,9 @@
  */
 import type { DockZone } from '../shared/split.js'
 import { latex as mathLatex, structured as mathStructured } from '../shared/mathReader/reader.js'
-import { closeContentPane, inspectorPlaceNow, layoutPanes, reopenClosedPane, setInspectorFloating, showPaneMenu, togglePane } from './layout.js'
+import { closeContentPane, inspectorPlaceNow, layoutPanes, reopenClosedPane, setInspectorFloating, showInspector, showPaneMenu, togglePane } from './layout.js'
+import { dockZoneShown } from './dockDrop.js'
+import { READER_PANE_DRAG_TYPE, writeDraggedPapers } from '../shared/split.js'
 import { editProject, sampleProject, showProject } from './projects.js'
 import { projectReport } from './ui/projects.js'
 import { paneDropShown } from './ui/paneDrop.js'
@@ -20,7 +22,8 @@ import { call, flags } from './bridge.js'
 import { changed, kindsOnShelf, patchPaper, setShelf, shelfPapers, store, subfolders, tableKind } from './state.js'
 import * as plans from './plans.js'
 import { planOrder } from '../shared/readingPlan.js'
-import { findBar, focused } from './pageArea.js'
+import { findBar, focused, pageArea } from './pageArea.js'
+import { shell } from './shell.js'
 import { dockPaper, showPaper } from './actions/openPapers.js'
 import { setKind } from './actions/paper.js'
 import { openNote, openNoteFromSearch } from './actions/notes.js'
@@ -39,6 +42,11 @@ import { sketchEditor, sketchSelectionChanged } from './ui/sketchEditing.js'
 import type { TextHit } from './textSearch.js'
 import type { Settings } from './state.js'
 import { Transaction } from '@codemirror/state'
+
+/** Whether the inspector's form is drawn now — it is not while it cannot be seen. */
+function shellInspectorRendered(): { connected: boolean; drawn: number } {
+  return { connected: shell.inspector.node.isConnected, drawn: shell.inspector.drawnCount() }
+}
 
 export function installProbeSurface() {
   if (!flags.probe) return
@@ -98,6 +106,8 @@ export function installProbeSurface() {
       pinned: () => [...store.pinnedPaperIDs],
       split: () => store.split,
       focusedPane: () => store.focusedPane,
+      /** A paper chosen the way the list or the palette chooses one. */
+      show: (id: string) => showPaper(id),
       /** A paper into a zone — or, with the pane's key, that pane moved. */
       dock: (id: string, zone: DockZone, pane?: string) => dockPaper(id, zone, pane),
       trail: () => ({ trail: [...store.trail], index: store.trailIndex }),
@@ -305,8 +315,53 @@ export function installProbeSurface() {
           ? `${one.dataset.paneKind}:${one.getBoundingClientRect().width.toFixed(0)}`
           : one.className.split(' ')[0]),
         drop: paneDropShown(),
+        page: dockZoneShown(),
+        split: store.split,
+        focusedPane: store.focusedPane,
+        selected: store.selectedID,
+        plus: Boolean(document.querySelector('.panes > .pane-plus')),
+        inspectorShown: store.settings.panes.inspector,
+        inspectorRendered: shellInspectorRendered(),
         toast: document.querySelector('.toast')?.textContent ?? null,
       }),
+      showInspector: (floating: boolean) => showInspector(floating),
+      /**
+       * A paper dragged as the hand drags it: from a row of the table
+       * (`{paper: id}` — the row's own dragstart when it is on screen) or by a
+       * side-by-side pane's title (`{reader: key}`), let go of over the `to`th
+       * pane, the «+» column or the page, at `at` (fractions of its box).
+       * `hold` stops before the drop, so the zones can be photographed.
+       */
+      dragPaper: (from: { paper?: string; reader?: string }, to: number | 'plus' | 'page', at: [number, number] = [0.5, 0.5], hold = false) => {
+        const data = new DataTransfer()
+        let source: HTMLElement | null = null
+        if (from.paper) {
+          source = document.querySelector<HTMLElement>(`.pb-row[data-id="${CSS.escape(from.paper)}"]`)
+          if (source) source.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: data }))
+          if (!data.types.includes(PAPER_DRAG_TYPE)) {
+            writeDraggedPapers(data, [from.paper])
+            data.effectAllowed = 'copyMove'
+          }
+        } else if (from.reader) {
+          const paper = from.reader.split('@')[0]
+          writeDraggedPapers(data, [paper])
+          data.setData(READER_PANE_DRAG_TYPE, from.reader)
+          data.effectAllowed = 'move'
+        }
+        const target = to === 'plus' ? document.querySelector<HTMLElement>('.pane-plus')
+          : to === 'page' ? pageArea
+            : document.querySelector<HTMLElement>(`.panes > [data-pane-id="${CSS.escape(store.row.panes[to]?.id ?? '')}"]`)
+        if (!target) return { landed: false }
+        const box = target.getBoundingClientRect()
+        const point = { clientX: box.left + box.width * at[0], clientY: box.top + box.height * at[1] }
+        const over = (document.elementFromPoint(point.clientX, point.clientY) as HTMLElement | null) ?? target
+        const node = target.contains(over) ? over : target
+        for (const type of ['dragenter', 'dragover']) node.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: data, ...point }))
+        if (hold) return { landed: true, held: { panes: paneDropShown(), page: dockZoneShown() } }
+        node.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: data, ...point }))
+        ;(source ?? window).dispatchEvent(new DragEvent('dragend', { bubbles: true, cancelable: true, dataTransfer: data }))
+        return { landed: true }
+      },
       toggle: (pane: 'sidebar' | 'paperList' | 'reader' | 'inspector') => togglePane(pane),
       close: (index: number) => {
         const pane = store.row.panes[index]

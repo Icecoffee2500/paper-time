@@ -75,6 +75,10 @@ export interface InspectorPanel {
   insertIntoNote: (block: string) => boolean
   /** A mark clicked on the page: its row in the Marks tab comes forward. */
   showMark: (id: string) => void
+  /** Drawn now if a change came while it could not be seen — called as it is laid out. */
+  refreshIfStale: () => void
+  /** How many times it has been drawn (a probe's question). */
+  drawnCount: () => number
 }
 
 export function buildInspector(actions: InspectorActions): InspectorPanel {
@@ -86,10 +90,23 @@ export function buildInspector(actions: InspectorActions): InspectorPanel {
   const tools = buildSketchInspector({ changed: actions.sketchChanged })
   /** Whose record is on screen, so a redraw knows whether it is the same one. */
   let shownPaperID: string | null = null
+  /** A change came while it was put away, or floating out of the window's way. */
+  let stale = false
+  /** How many times it has been drawn — what a probe reads to see it was not drawn for nobody. */
+  let drawn = 0
 
   function update() {
     // A memo half typed is written before the form it is in goes.
     if (shownPaperID !== store.selectedID) flushInspector()
+    // Not drawn while it cannot be seen — closed, or out of focus mode's way:
+    // every change of paper rebuilt its form for nobody (the Mac's
+    // `dockedInspectorShown`, 2026-11-19). It is drawn as it comes back.
+    if (!node.isConnected) {
+      stale = true
+      return
+    }
+    stale = false
+    drawn += 1
     // Nothing chosen is said on every tab, the Tools tab too (`RootView`).
     if (!store.papers.some((entry) => entry.id === store.selectedID)) {
       shownPaperID = store.selectedID
@@ -165,7 +182,7 @@ export function buildInspector(actions: InspectorActions): InspectorPanel {
   }
 
   update()
-  return { node, update, focusNote, insertIntoNote, showMark }
+  return { node, update, focusNote, insertIntoNote, showMark, refreshIfStale: () => { if (stale && node.isConnected) update() }, drawnCount: () => drawn }
 }
 
 function field(label: string, value: Node | string): HTMLElement {

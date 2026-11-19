@@ -1,27 +1,36 @@
 /**
- * Dropping into the row of panes (1.1): a sidebar row, or a pane's head.
+ * Dropping into the row of panes (1.1): a sidebar row, a pane's head, or a
+ * paper.
  *
- * While one is dragged over a pane, three zones stand over it — a new pane
- * on its left, open it here, a new pane on its right — the one under the
- * pointer outlined. Over the «+» column the whole column lights: the pane
- * goes at the end. Papers and notes are not these drags: they keep their own
- * places to go (the sidebar's rows, a plan's order, a project's cards, the
- * page's side-by-side zones), and no zone stands for them.
+ * While a sidebar row or a pane's head is dragged over a pane, three zones
+ * stand over it — a new pane on its left, open it here, a new pane on its
+ * right — the one under the pointer outlined. Over the «+» column the whole
+ * column lights: the pane goes at the end.
+ *
+ * A paper dragged over any pane but the page (the page has zones of its own,
+ * `dockDrop.ts`) opens beside the page's paper: with a page open the whole
+ * pane is one zone, «논문 옆에 나란히 열기»; with none, the three zones say
+ * where a page comes (the Mac's `PaneDropDelegate`, 2026-11-18). Whatever
+ * inside a pane takes papers itself — a plan's table, a project's cards, a
+ * row to attach to — takes them first: it says so by `preventDefault`, and
+ * no zone stands over it.
  */
 import { el, on } from '../dom.js'
 import { L } from '../../shared/lang.js'
-import { CONTENT_PANE_DRAG_TYPE, carriesPaneDrop, draggedShelf } from '../../shared/split.js'
+import { CONTENT_PANE_DRAG_TYPE, READER_PANE_DRAG_TYPE, carriesPaneDrop, carriesPapers, draggedPapers, draggedShelf } from '../../shared/split.js'
 
 import { zoneAcross, type PaneZone } from '../../shared/paneModel.js'
 
 export type { PaneZone } from '../../shared/paneModel.js'
 
-/** What was dropped: a sidebar item, or a pane being moved. */
-export type PaneDrop = { shelf: unknown } | { pane: string }
+/** What was dropped: a sidebar item, a pane being moved, or a paper (and the side-by-side pane it was dragged by). */
+export type PaneDrop = { shelf: unknown } | { pane: string } | { paper: string; moving?: string }
 
 export interface PaneDropActions {
   /** On a pane's zone, or — `target` null — on the «+» column. */
   drop: (target: string | null, zone: PaneZone, what: PaneDrop) => void
+  /** Whether a page pane is open for a dragged paper to stand beside: then a pane is one zone. */
+  besidePage: () => boolean
 }
 
 const overlay = el('div', { class: 'pane-drop', 'data-on': 'false', 'aria-hidden': 'true' })
@@ -32,26 +41,46 @@ const zones: Record<PaneZone, HTMLElement> = {
 }
 overlay.append(zones.left, zones.middle, zones.right)
 
-/** The words go in when the zones first stand — read in the window's language then. */
-function label() {
-  if (zones.left.childElementCount) return
-  zones.left.append(el('span', { text: L('왼쪽에 새 칸', 'New Pane on the Left') }))
-  zones.middle.append(el('span', { text: L('여기에 열기', 'Open Here') }))
-  zones.right.append(el('span', { text: L('오른쪽에 새 칸', 'New Pane on the Right') }))
+/**
+ * What the zones say: a sidebar item or a pane gets a new pane either side;
+ * a paper, a paper pane either side when there is no page, and with a page
+ * one zone across the pane.
+ */
+type Mode = 'pane' | 'paper' | 'beside'
+
+function say(node: HTMLElement, text: string) {
+  const span = node.firstElementChild as HTMLElement | null
+  if (span?.textContent === text) return
+  node.replaceChildren(el('span', { text }))
 }
+
+/** The words, in the window's language as it is now. */
+function label(mode: Mode) {
+  overlay.dataset.mode = mode === 'beside' ? 'one' : 'three'
+  if (mode === 'beside') {
+    say(zones.middle, L('논문 옆에 나란히 열기', 'Open Beside the Paper'))
+    return
+  }
+  const paper = mode === 'paper'
+  say(zones.left, paper ? L('왼쪽에 논문 칸', 'Paper on the Left') : L('왼쪽에 새 칸', 'New Pane on the Left'))
+  say(zones.middle, L('여기에 열기', 'Open Here'))
+  say(zones.right, paper ? L('오른쪽에 논문 칸', 'Paper on the Right') : L('오른쪽에 새 칸', 'New Pane on the Right'))
+}
+
+type Spot = { target: string | null; zone: PaneZone; box: DOMRect | null; mode: Mode }
 
 let lit: { target: string | null; zone: PaneZone } | null = null
 /** The pane a head drag started from: no zones stand over the pane being moved. */
 let movingPane: string | null = null
 
-function light(next: { target: string | null; zone: PaneZone; box: DOMRect | null } | null, panes: HTMLElement) {
+function light(next: Spot | null, panes: HTMLElement) {
   for (const plus of panes.querySelectorAll<HTMLElement>('[data-pane-plus]')) plus.classList.toggle('drop-target', Boolean(next && next.target === null))
   if (!next || next.target === null || !next.box) {
     overlay.dataset.on = 'false'
     lit = next ? { target: next.target, zone: next.zone } : null
     return
   }
-  label()
+  label(next.mode)
   if (!overlay.isConnected) document.body.append(overlay)
   Object.assign(overlay.style, {
     left: `${next.box.left}px`,
@@ -65,14 +94,18 @@ function light(next: { target: string | null; zone: PaneZone; box: DOMRect | nul
 }
 
 /** The pane or the «+» column under the pointer, and the zone. */
-function under(event: DragEvent, panes: HTMLElement): { target: string | null; zone: PaneZone; box: DOMRect | null } | null {
+function under(event: DragEvent, panes: HTMLElement, mode: Mode): Spot | null {
   const node = (event.target as Element | null)?.closest?.<HTMLElement>('[data-pane-id], [data-pane-plus]')
   if (!node || !panes.contains(node)) return null
-  if (node.dataset.panePlus !== undefined) return { target: null, zone: 'right', box: null }
+  if (node.dataset.panePlus !== undefined) return { target: null, zone: 'right', box: null, mode }
   const id = node.dataset.paneId!
-  if (id === movingPane) return null
+  // A paper over the page is the page's own zones' to answer (`dockDrop.ts`).
+  if (mode !== 'pane' && node.dataset.paneKind === 'page') return null
+  if (mode === 'pane' && id === movingPane) return null
   const box = node.getBoundingClientRect()
-  return { target: id, zone: zoneAcross((event.clientX - box.left) / Math.max(box.width, 1)), box }
+  // With a page to stand beside, the whole pane is the one zone.
+  if (mode === 'beside') return { target: id, zone: 'middle', box, mode }
+  return { target: id, zone: zoneAcross((event.clientX - box.left) / Math.max(box.width, 1)), box, mode }
 }
 
 /** What a drop carries, read once it is let go of (the data is not readable before). */
@@ -83,6 +116,19 @@ function carried(data: DataTransfer | null): PaneDrop | null {
   return shelf ? { shelf } : null
 }
 
+/** The paper a paper drag carries — the one it started on leads its list — and the side-by-side pane it was dragged by. */
+function carriedPaper(data: DataTransfer | null): PaneDrop | null {
+  const paper = draggedPapers(data)[0]
+  if (!paper) return null
+  const moving = data?.getData(READER_PANE_DRAG_TYPE) || undefined
+  return { paper, moving }
+}
+
+/** A paper drag, and not a sidebar item's or a pane's (those carry no paper). */
+function paperDrag(data: DataTransfer | null | undefined): boolean {
+  return carriesPapers(data) && !carriesPaneDrop(data)
+}
+
 export function installPaneDrop(panes: HTMLElement, actions: PaneDropActions) {
   // Taken before anything inside a pane sees it: a board's rows, the page's
   // zones and the sidebar's rows answer papers and notes, and these are neither.
@@ -90,7 +136,7 @@ export function installPaneDrop(panes: HTMLElement, actions: PaneDropActions) {
     if (!carriesPaneDrop(event.dataTransfer)) return
     event.preventDefault()
     event.stopPropagation()
-    const spot = under(event, panes)
+    const spot = under(event, panes, 'pane')
     if (event.dataTransfer) event.dataTransfer.dropEffect = spot ? 'move' : 'none'
     light(spot, panes)
   }, { capture: true })
@@ -103,7 +149,7 @@ export function installPaneDrop(panes: HTMLElement, actions: PaneDropActions) {
     if (!carriesPaneDrop(event.dataTransfer)) return
     event.preventDefault()
     event.stopPropagation()
-    const spot = under(event, panes) ?? lit
+    const spot = under(event, panes, 'pane') ?? lit
     const what = carried(event.dataTransfer)
     light(null, panes)
     movingPane = null
@@ -116,14 +162,69 @@ export function installPaneDrop(panes: HTMLElement, actions: PaneDropActions) {
       ? ((event.target as Element).closest<HTMLElement>('[data-pane-id]')?.dataset.paneId ?? null)
       : null
   }, { capture: true })
+  // A paper: answered after whatever inside the pane would take it first.
+  // The dragover a handler inside stopped never reaches here, so a pass that
+  // did not come through says so to the next one, and the zones go.
+  let seen: DragEvent | null = null
+  let through = true
+  const paperMode = (): Mode => (actions.besidePage() ? 'beside' : 'paper')
+  on(panes, 'dragover', (event: DragEvent) => {
+    if (!paperDrag(event.dataTransfer)) return
+    if (!through) light(null, panes)
+    seen = event
+    through = false
+  }, { capture: true })
+  on(panes, 'dragover', (event: DragEvent) => {
+    if (event !== seen) return
+    through = true
+    if (!paperDrag(event.dataTransfer)) return
+    if (event.defaultPrevented) {
+      light(null, panes)
+      return
+    }
+    const spot = under(event, panes, paperMode())
+    light(spot, panes)
+    if (!spot) return
+    event.preventDefault()
+    event.stopPropagation()
+    // One of the drags' own: the list's `copyMove`, a pane title's `move`.
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'
+  })
+  on(panes, 'dragleave', (event: DragEvent) => {
+    if (!paperDrag(event.dataTransfer)) return
+    const into = event.relatedTarget as Node | null
+    if (!into || !panes.contains(into)) light(null, panes)
+  })
+  on(panes, 'drop', (event: DragEvent) => {
+    if (!paperDrag(event.dataTransfer)) return
+    if (event.defaultPrevented) {
+      light(null, panes)
+      return
+    }
+    const spot = under(event, panes, paperMode()) ?? lit
+    const what = carriedPaper(event.dataTransfer)
+    light(null, panes)
+    if (!spot || !what) return
+    event.preventDefault()
+    event.stopPropagation()
+    actions.drop(spot.target, spot.zone, what)
+  })
   // Escape, or a drop outside the row: the zones go with the drag.
   on(window, 'dragend', () => {
     movingPane = null
+    seen = null
+    through = true
     light(null, panes)
   })
 }
 
 /** What the zones say now, for a probe. */
-export function paneDropShown(): { on: boolean; zone: string | null } {
-  return { on: overlay.dataset.on === 'true', zone: Object.entries(zones).find(([, node]) => node.dataset.lit === 'true')?.[0] ?? null }
+export function paneDropShown(): { on: boolean; zone: string | null; mode: string | null; words: string[] } {
+  const one = overlay.dataset.mode === 'one'
+  return {
+    on: overlay.dataset.on === 'true',
+    zone: Object.entries(zones).find(([, node]) => node.dataset.lit === 'true')?.[0] ?? null,
+    mode: overlay.dataset.mode ?? null,
+    words: (one ? [zones.middle] : [zones.left, zones.middle, zones.right]).map((node) => node.textContent ?? ''),
+  }
 }

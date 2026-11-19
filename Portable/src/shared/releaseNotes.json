@@ -7,8 +7,8 @@
     "en": "November 2026"
    },
    "note": {
-    "ko": "읽기 계획이 생겼어요. 한 계열의 논문을 모아 차례와 날짜를 정하고, 발표 자료와 코드를 논문 옆에 붙여 둬요.",
-    "en": "Reading plans are here. Gather a line of papers, give them an order and days, and keep the slides and code beside each one."
+    "ko": "읽기 계획과 프로젝트가 생겼어요. 칸에는 무엇이든 끌어다 띄우고, 슬립박스는 문헌 노트와 지식으로 나뉘어요.",
+    "en": "Reading plans and projects are here. Drag anything into a pane to show it there, and the slip-box splits into literature notes and knowledge."
    },
    "added": [
     {
@@ -123,8 +123,8 @@
       "en": "Put anything in any pane"
      },
      "detail": {
-      "ko": "옆 목록의 계획이나 선반을 칸 위로 끌어 놓으면 그 칸에 떠요. 가장자리에 놓으면 옆에 새 칸이 생겨요(네 칸까지). 닫은 칸은 아래 «다시 열기»나 ⇧⌘T로 돌아오고, 오른쪽 «+»에서도 열어요. 인스펙터는 «띄우기»로 창 위에 띄울 수 있어요.",
-      "en": "Drag a plan or a shelf from the sidebar onto a pane to show it there, or onto a pane’s edge to open it beside (up to four panes). A closed pane comes back with Reopen, ⇧⌘T, or the + at the right. Float the inspector over the window when the panes are full."
+      "ko": "옆 목록의 계획이나 선반을 칸 위로 끌어 놓으면 그 칸에 떠요. 가장자리에 놓으면 옆에 새 칸이 생겨요(네 칸까지). 닫은 칸은 아래 «다시 열기»나 ⇧⌘T로 돌아오고, 오른쪽 «+»에서도 열어요. 논문은 칸 위로 끌면 옆에 나란히 열려요(같은 논문 둘도 돼요). 인스펙터는 «띄우기»나 «+» 메뉴로 창 위에 띄울 수 있어요.",
+      "en": "Drag a plan or a shelf from the sidebar onto a pane to show it there, or onto a pane’s edge to open it beside (up to four panes). A closed pane comes back with Reopen, ⇧⌘T, or the + at the right. Drag a paper onto a pane to open it side by side — the same paper twice if you like. Float the inspector over the window when the panes are full, from its own button or the + menu."
      },
      "devices": [
       "mac"
@@ -172,6 +172,19 @@
    ],
    "removed": [],
    "fixed": [
+    {
+     "title": {
+      "ko": "폴더는 제 PDF만",
+      "en": "A folder shows its own PDFs"
+     },
+     "detail": {
+      "ko": "옆 목록에서 폴더를 고르면 그 폴더에 바로 든 PDF만 나와요. 안쪽 폴더의 PDF는 그 폴더를 고르면 보여요. 폴더 옆 숫자도 같은 수예요.",
+      "en": "Choosing a folder in the sidebar lists only the PDFs directly in it; the ones in a folder inside it show when you choose that folder. The count beside each folder matches."
+     },
+     "devices": [
+      "mac"
+     ]
+    },
     {
      "title": {
       "ko": "찾은 논문으로 목록도 가요",

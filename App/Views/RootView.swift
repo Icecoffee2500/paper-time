@@ -736,7 +736,7 @@ struct LibraryWindow: View {
                 .buttonStyle(.plain)
                 .pressable(cornerRadius: 11)
                 .help(L("창 위에 띄워서 보기 — 칸을 넓게 써요", "Float over the window, and give the panes the room"))
-                PaneCloseButton { app.toggleInspector() }
+                PaneCloseButton { app.hideInspector() }
                     .help(L("정보 패널 숨기기", "Hide the Inspector"))
             }
             .padding(.horizontal, 10)

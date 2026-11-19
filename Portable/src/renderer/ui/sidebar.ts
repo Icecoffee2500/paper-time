@@ -10,7 +10,7 @@ import { hasIcon, iconNode, type IconName } from '../icons.js'
 import { showMenu, type MenuEntry } from './toolbar.js'
 import { clear, el, on } from '../dom.js'
 import {
-  authorCounts, folderAbove, folderTrail, homeShelf, isUnderFolder, sameShelf, searchCount, shelfCounts, store, subfolders,
+  authorCounts, directCount, folderAbove, folderTrail, homeShelf, sameShelf, searchCount, shelfCounts, store, subfolders,
   type Shelf,
 } from '../state.js'
 import { SHELF_KINDS, type ShelfKind } from '../../shared/documentKind.js'
@@ -198,7 +198,8 @@ export function buildSidebar(actions: SidebarActions): { node: HTMLElement; upda
           shelf: { kind: 'folder', root: path },
           icon: path === open ? 'folder.fill' : 'folder',
           label: basename(path),
-          count: store.papers.filter((entry) => !entry.meta.parentID && isUnderFolder(entry, path)).length,
+          // What its shelf shows: the PDFs directly in it (1.1).
+          count: directCount(path),
           indent: step + 1,
           title: path,
         })

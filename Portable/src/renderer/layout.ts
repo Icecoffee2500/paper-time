@@ -12,10 +12,12 @@
 import { clear, el, on } from './dom.js'
 import { changed, setShelf, store, type Pane, type Shelf } from './state.js'
 import {
-  MAX_PANES, PAGE_FLOOR, TABLE_LEAST, closePane, defaultRow, enterFocus, ensureList, ensurePage, fitWidths, flexiblePane, focusedPanes, insertPane, leaveFocus,
-  movePane, paneOf, readPanes, reopenPane, restingPanes, rowOf, sameContent, setContent, showPane, tableAndPageRoom, tableShownWidth, tableWidest, togglePaneKind,
-  togglePaneState, writePanes, type ContentPane, type InspectorPlace, type PaneContent, type PaneRow, type PaneState,
+  MAX_PANES, PAGE_FLOOR, TABLE_LEAST, chooseInspector, closePane, cycleInspector, defaultRow, enterFocus, ensureList, ensurePage, fitWidths, flexiblePane,
+  focusedPanes, insertPane, leaveFocus, movePane, paneOf, paperDropOn, readPanes, reopenPane, restingPanes, rowOf, sameContent, setContent, showPane,
+  showsPlusColumn, tableAndPageRoom, tableShownWidth, tableWidest, togglePaneKind, togglePaneState, writePanes, type ContentPane, type InspectorPlace,
+  type InspectorShowing, type PaneContent, type PaneRow, type PaneState,
 } from '../shared/paneModel.js'
+import { dockPaper, keepPaper, showPaper } from './actions/openPapers.js'
 import { flags } from './bridge.js'
 import { shell, solo } from './shell.js'
 import { holdReaderPlaces, keepingPlaces, pageArea, relayoutReaders, returnReaderPlaces } from './pageArea.js'
@@ -42,6 +44,11 @@ const PANE_MIN = 260
 const PANE_MAX = 960
 /** The «+» column at the row's end. */
 const PLUS_WIDTH = 22
+
+/** Whether the «+» column stands: out of focus, and while the row has room (`showsPlusColumn`). */
+function plusShown(): boolean {
+  return showsPlusColumn(store.row, store.focus.on)
+}
 /** The panes' margin and the gap between two of them — `--margin` and `--gap`. */
 const MARGIN = 8
 const GAP = 10
@@ -92,7 +99,7 @@ function tableRoom(): number {
   const row = laidOut()
   const flex = flexiblePane(row)
   const others = row.filter((pane) => pane.content.kind !== 'list' && pane.id !== flex).map(ownWidth)
-  if (!store.focus.on) others.push(PLUS_WIDTH)
+  if (plusShown()) others.push(PLUS_WIDTH)
   return tableAndPageRoom({
     window: panesWidth(),
     sidebar: store.settings.panes.sidebar && !store.focus.on ? store.settings.columns.sidebar : null,
@@ -128,7 +135,7 @@ function fittedWidths(): Map<string, number> {
   const fixed = row.filter((pane) => pane.id !== flex)
   const focus = store.focus.on
   const sidebar = store.settings.panes.sidebar && !focus
-  const plus = !focus
+  const plus = plusShown()
   const pieces = (sidebar ? 1 : 0) + row.length + (plus ? 1 : 0) + (inspectorDocked() ? 1 : 0)
   const flexPane = row.find((pane) => pane.id === flex)
   const room = panesWidth() - Math.max(pieces - 1, 0) * GAP
@@ -212,7 +219,7 @@ function frame(): InspectorFrame {
     },
     float: () => setInspectorFloating(true),
     dock: () => setInspectorFloating(false),
-    close: () => togglePane('inspector'),
+    close: () => hideInspector(),
     area: () => shell.panes.getBoundingClientRect(),
   })
   return inspectorFrame
@@ -220,10 +227,50 @@ function frame(): InspectorFrame {
 
 /** «띄우기» and «붙이기»: the panes get the docked inspector's room back, or give it again. */
 export function setInspectorFloating(floating: boolean) {
-  if (solo || store.inspectorPlace.floating === floating) return
-  store.inspectorPlace = { ...store.inspectorPlace, floating }
-  if (!store.settings.panes.inspector) applyPaneState(showPane(paneState(), 'inspector'))
-  else relayoutPanes()
+  if (solo) return
+  if (store.inspectorPlace.floating === floating && store.settings.panes.inspector) return
+  applyInspector({ shown: true, floating })
+}
+
+/** Whether the inspector shows now, and how. */
+export function inspectorShowing(): InspectorShowing {
+  return { shown: store.settings.panes.inspector, floating: store.inspectorPlace.floating }
+}
+
+/** The inspector as asked: shown or not, docked or floating — laid out once. */
+function applyInspector(next: InspectorShowing) {
+  if (solo) return
+  store.inspectorPlace = { ...store.inspectorPlace, floating: next.floating }
+  if (next.shown !== store.settings.panes.inspector) {
+    applyPaneState({ ...paneState(), panes: { ...store.settings.panes, inspector: next.shown } })
+  } else {
+    relayoutPanes()
+  }
+}
+
+/** ⌘] and the toolbar's button: floating, docked, gone, and floating again (`cycleInspector`). */
+export function cycleInspectorPane() {
+  applyInspector(cycleInspector(inspectorShowing()))
+}
+
+/** «옆에 붙여 보기» and «띄워 보기»: shown that way — or, already shown that way, put away (`chooseInspector`). */
+export function showInspector(floating: boolean) {
+  applyInspector(chooseInspector(inspectorShowing(), floating))
+}
+
+/** The inspector's ×, docked or floating: put away. */
+export function hideInspector() {
+  if (!store.settings.panes.inspector) return
+  applyInspector({ shown: false, floating: store.inspectorPlace.floating })
+}
+
+/** The menus' two choices for the inspector — the «+» column's, and the toolbar button's right-click. */
+export function inspectorChoices(): MenuEntry[] {
+  const now = inspectorShowing()
+  return [
+    { label: L('옆에 붙여 보기', 'Show Docked'), icon: 'sidebar.right', checked: now.shown && !now.floating, action: () => showInspector(false) },
+    { label: L('띄워 보기', 'Show Floating'), icon: 'macwindow.on.rectangle', checked: now.shown && now.floating, action: () => showInspector(true) },
+  ]
 }
 
 // MARK: - Laying out
@@ -282,7 +329,9 @@ export function layoutPanes() {
       target: pane.content.kind === 'list' ? listColumn() : { pane: pane.id },
     })
   }
-  if (!focus) pieces.push({ key: 'plus', node: plusColumn, width: PLUS_WIDTH })
+  // Not when four panes are open: it could only say «칸은 네 개까지예요», and
+  // the panes take its room.
+  if (plusShown()) pieces.push({ key: 'plus', node: plusColumn, width: PLUS_WIDTH })
   if (inspectorDocked()) {
     shell.inspector.node.style.flex = ''
     pieces.push({ key: 'inspector', node: shell.inspector.node, width: store.settings.columns.inspector, resizes: 'trailing', target: 'inspector' })
@@ -326,6 +375,9 @@ export function layoutPanes() {
   // The inspector floating: over the window, with its room given back.
   if (visible.inspector && store.inspectorPlace.floating && !focus) frame().show()
   else inspectorFrame?.hide()
+  // Drawn only where it can be seen: closed, or out of focus mode's way, it
+  // was rebuilt on every change for nobody (the Mac's `dockedInspectorShown`).
+  shell.inspector.refreshIfStale()
   // Back from the board: the papers where they were being read.
   if (!wide) returnReaderPlaces()
   // The table in the list's pane, drawn once it is in place: which columns
@@ -634,6 +686,7 @@ function chooseShelfHere(shelf: Shelf) {
  */
 export function dropOnPane(target: string | null, zone: PaneZone, what: PaneDrop) {
   if (solo) return
+  if ('paper' in what) return dropPaperOnPane(target, zone, what.paper, what.moving)
   const shelf = 'shelf' in what ? (what.shelf as Shelf) : null
   const moving = 'pane' in what ? what.pane : null
   if (target === null) {
@@ -662,6 +715,37 @@ export function dropOnPane(target: string | null, zone: PaneZone, what: PaneDrop
   if (change.refused === 'full') return sayFull()
   if (change.refused) return
   commitRow(change.row)
+}
+
+/**
+ * A paper let go of over a pane that is not the page — or over the «+»
+ * column (`target` null). Papers stand side by side on the page, so with a
+ * page open it opens beside the page's paper, on the side that faces the
+ * pane it was put on; with none, a page comes where it was put, showing it
+ * (`paperDropOn`, the Mac's `AppModel.dropPaper`). The same paper twice is
+ * one more pane of it. Dragged by a side-by-side pane's title (`moving`),
+ * that pane moves rather than a new one opening.
+ */
+export function dropPaperOnPane(target: string | null, zone: PaneZone, id: string, moving?: string) {
+  if (solo) return
+  const plan = paperDropOn(store.row, target, zone)
+  if (!plan) return
+  if (plan.kind === 'beside') {
+    // Nothing on the page to stand beside: the paper is simply shown there.
+    if (!store.selectedID && !store.split) {
+      void showPaper(id)
+      keepPaper(id)
+      return
+    }
+    dockPaper(id, plan.side, moving)
+    return
+  }
+  const change = insertPane(store.row, { id: freshID(), content: { kind: 'page' } }, plan.at)
+  if (change.refused === 'full') return sayFull()
+  if (change.refused) return
+  commitRow(change.row)
+  void showPaper(id, false, { arrange: false })
+  keepPaper(id)
 }
 
 /**
@@ -758,6 +842,10 @@ export function showPlusMenu(anchor: Element) {
       ? [{ label: L('닫은 칸이 없어요', 'No Closed Panes'), disabled: true }]
       : closed.map(({ entry, index }) => ({ label: paneTitle(entry.pane), icon: paneSymbol(entry.pane), action: () => reopenClosedPane(index) })),
   })
+  // The inspector, docked or floating — wherever it was left, and whether it
+  // shows at all (the Mac's `inspectorItems`, 2026-11-18: «info 창을 한번
+  // 지우면, 그 다음에 floating으로 띄우고 싶으면 어떻게 해야 하지?»).
+  entries.push({ separator: true }, { caption: L('인스펙터', 'Inspector') }, ...inspectorChoices())
   showMenu(anchor, entries, 'right')
 }
 
@@ -794,7 +882,11 @@ export function returnListColumn() {
  */
 export function togglePane(pane: Pane) {
   if (solo) return
-  if (pane === 'sidebar' || pane === 'inspector') {
+  if (pane === 'inspector') {
+    cycleInspectorPane()
+    return
+  }
+  if (pane === 'sidebar') {
     applyPaneState(togglePaneState(paneState(), pane))
     return
   }
@@ -843,7 +935,7 @@ export function installPanes() {
   setPaneChrome({ menu: showPaneMenu, close: closeContentPane })
   // The inspector's «띄우기» and × stand over its corner from the start.
   frame()
-  installPaneDrop(shell.panes, { drop: dropOnPane })
+  installPaneDrop(shell.panes, { drop: dropOnPane, besidePage: () => paneOf(store.row, 'page') !== null })
   // The pane a press lands in is the one in use: a paper chosen there opens beside it.
   on(shell.panes, 'pointerdown', (event: PointerEvent) => {
     const id = paneOfNode(event.target as Element)

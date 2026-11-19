@@ -21,6 +21,8 @@ export interface ToolbarActions {
   search: () => void
   addPapers: () => void
   setInspectorTab: (tab: InspectorTab) => void
+  /** The inspector button's right-click: docked or floating. */
+  inspectorMenu: (anchor: Element) => void
   moreMenu: (anchor: Element) => void
   /** The settings sheet. A button of its own on Windows and Linux, where the
    *  menu bar is behind a key nobody presses and «Ctrl+,» had nothing behind
@@ -91,6 +93,12 @@ export function buildToolbar(actions: ToolbarActions): { node: HTMLElement; upda
   // ------------------------------------------------------------ trailing
   const readerButton = paneButton('reader', 'text.page', L('논문', 'Paper'))
   const inspectorButton = paneButton('inspector', 'sidebar.right', L('정보 패널', 'Inspector'))
+  on(inspectorButton, 'contextmenu', (event: MouseEvent) => {
+    event.preventDefault()
+    actions.inspectorMenu(inspectorButton)
+  })
+  /** Which picture the inspector's button wears: floating or docked. */
+  let inspectorGlyph = 'sidebar.right'
   const moreButton = button('ellipsis', L('맞추기·정렬·쪽 배치·공유', 'Sync, sort, page layout, share'), (event) =>
     actions.moreMenu(event.currentTarget as Element))
   const settingsButton = button('gear', withKey(L('설정', 'Settings'), 'settings', platform), actions.settings)
@@ -152,7 +160,15 @@ export function buildToolbar(actions: ToolbarActions): { node: HTMLElement; upda
     tip(sidebarButton, paneTip('sidebar', L('옆 목록', 'Sidebar')))
     tip(listButton, paneTip('paperList', L('논문 목록', 'Paper List')))
     tip(readerButton, paneTip('reader', L('논문', 'Paper')))
-    tip(inspectorButton, paneTip('inspector', L('정보 패널', 'Inspector')))
+    // ⌘] turns the inspector through floating, docked and gone: the button
+    // says the next step, and wears the way it shows (the Mac's `toggleInspector`).
+    const floating = store.inspectorPlace.floating
+    const glyph = floating ? 'macwindow.on.rectangle' : 'sidebar.right'
+    if (glyph !== inspectorGlyph) {
+      inspectorGlyph = glyph
+      inspectorButton.innerHTML = icon(glyph)
+    }
+    tip(inspectorButton, withKey(inspectorStep(store.settings.panes.inspector, floating), 'inspector', platform))
     // Back walks the paper's own history first — a followed link — and then
     // the papers, as on the Mac.
     backButton.toggleAttribute('disabled', !(canGoBack() || readerState().canGoBack))
@@ -176,6 +192,12 @@ export function buildToolbar(actions: ToolbarActions): { node: HTMLElement; upda
 
   update()
   return { node, update }
+}
+
+/** What ⌘] does next, in words — the toolbar's tooltip and the menu's item say the same. */
+export function inspectorStep(shown: boolean, floating: boolean): string {
+  if (!shown) return L('정보 패널 띄우기', 'Float Inspector')
+  return floating ? L('정보 패널 붙이기', 'Dock Inspector') : L('정보 패널 숨기기', 'Hide Inspector')
 }
 
 export { closeMenu, isMenuOpen, showMenu, showMenuAt, type MenuEntry } from './menu.js'

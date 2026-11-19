@@ -568,6 +568,15 @@ public final class AppModel {
         storePanes()
     }
 
+    /// The inspector put away, whichever way it stood — its ×, docked or
+    /// floating. (The × called the cycle once, which docked a floating
+    /// inspector instead of closing it.)
+    public func hideInspector() {
+        guard showsInspector else { return }
+        movingPanes { showsInspector = false }
+        storePanes()
+    }
+
     /// The filler's width as it stood when the panes began to move, held by
     /// it while they move (`RootView.paneSlot`).
     ///

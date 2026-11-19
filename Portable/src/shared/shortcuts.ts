@@ -59,6 +59,8 @@ export const SHORTCUTS: Shortcut[] = [
   { command: 'paperList', group: 'panes', title: () => L('논문 목록', 'Paper List'), mac: 'CmdOrCtrl+P' },
   { command: 'reader', group: 'panes', title: () => L('논문', 'Paper'), mac: 'CmdOrCtrl+\\' },
   { command: 'inspector', group: 'panes', title: () => L('정보 패널', 'Inspector'), mac: 'CmdOrCtrl+]' },
+  // The inspector floating, or docked again, whatever ⌘] would do next (the Mac's ⌥⇧⌘I).
+  { command: 'floatInspector', group: 'panes', title: () => L('정보 패널 띄워 보기', 'Float Inspector'), mac: 'CmdOrCtrl+Alt+Shift+I' },
   { command: 'focus', group: 'panes', title: () => L('논문에 집중', 'Focus on the Paper'), mac: 'CmdOrCtrl+Shift+F' },
   { command: 'pages', group: 'panes', title: () => L('차례', 'Table of Contents'), mac: 'CmdOrCtrl+Shift+L' },
   { command: 'openPapers', group: 'panes', title: () => L('열린 문서', 'Open Documents'), mac: 'CmdOrCtrl+Shift+O' },

@@ -767,6 +767,14 @@ export function emptyShelf(): { title: string; icon: Parameters<typeof iconNode>
       return { title: L('이 컬렉션은 비어 있어요', 'This Collection Is Empty'), icon: 'folder', note: L('옆 목록의 컬렉션 위로 논문을 끌어다 놓아보세요.', 'Drag papers onto it in the sidebar.') }
     case 'tag':
       return { title: L('이 태그를 단 논문이 없어요', 'Nothing With This Tag'), icon: 'tag', note: L('논문에 이 태그를 달면 여기 나와요.', 'Tag a paper and it appears here.') }
+    case 'folder':
+      // A folder shows what sits in it; what sits in its folders is theirs
+      // (`isDirectlyInFolder`, the Mac's `isDirectlyIn`).
+      return {
+        title: L('이 폴더에 바로 든 PDF가 없어요', 'No PDFs Directly in This Folder'),
+        icon: 'folder',
+        note: L('안쪽 폴더의 PDF는 옆 목록에서 그 폴더를 고르면 보여요.', 'Choose a folder inside it in the sidebar to see its PDFs.'),
+      }
     case 'author':
       return { title: L('이 저자의 논문이 없어요', 'Nothing by This Author'), icon: 'person', note: L('이 이름이 실린 논문이 라이브러리에 없어요.', 'No paper here carries this name.') }
     case 'open':

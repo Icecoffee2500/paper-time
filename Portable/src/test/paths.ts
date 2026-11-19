@@ -62,12 +62,13 @@ export async function pathsSuite(test: Test, suite: (name: string) => void) {
       assert.ok(isUnderFolder(store.papers[0], 'd:\\papers\\2026'))
       assert.ok(!isUnderFolder(store.papers[2], 'D:\\Papers\\2026'))
       store.folders = []
-      assert.deepEqual(subfolders('D:\\Papers').map((one) => [one.name, one.count]), [['2026', 2]])
+      // What each folder's shelf shows: its own PDFs (1.1) — 2026 holds only weeks.
+      assert.deepEqual(subfolders('D:\\Papers').map((one) => [one.name, one.count]), [['2026', 0]])
       assert.deepEqual(subfolders('d:/papers/2026').map((one) => one.name), ['week 1', 'week 2'])
       // The disk's folders join the papers': one just made, holding nothing,
       // and one holding only PDFs not yet taken in, are in the tree too.
       store.folders = ['D:/Papers/2026', 'D:/Papers/2026/week 1', 'D:/Papers/2026/week 3', 'D:/Papers/New', 'D:/Papers/New/Inside']
-      assert.deepEqual(subfolders('D:\\Papers').map((one) => [one.name, one.count]), [['2026', 2], ['New', 0]])
+      assert.deepEqual(subfolders('D:\\Papers').map((one) => [one.name, one.count]), [['2026', 0], ['New', 0]])
       assert.deepEqual(subfolders('d:/papers/2026').map((one) => [one.name, one.count]), [['week 1', 1], ['week 2', 1], ['week 3', 0]])
       assert.deepEqual(subfolders('D:/Papers/New').map((one) => one.name), ['Inside'])
       store.folders = []

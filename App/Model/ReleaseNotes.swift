@@ -233,8 +233,8 @@ enum ReleaseNotes {
             version: "1.1.0",
             date: Text2("2026년 11월", "November 2026"),
             note: Text2(
-                "읽기 계획이 생겼어요. 한 계열의 논문을 모아 차례와 날짜를 정하고, 발표 자료와 코드를 논문 옆에 붙여 둬요.",
-                "Reading plans are here. Gather a line of papers, give them an order and days, and keep the slides and code beside each one."
+                "읽기 계획과 프로젝트가 생겼어요. 칸에는 무엇이든 끌어다 띄우고, 슬립박스는 문헌 노트와 지식으로 나뉘어요.",
+                "Reading plans and projects are here. Drag anything into a pane to show it there, and the slip-box splits into literature notes and knowledge."
             ),
             added: [
                 Entry(

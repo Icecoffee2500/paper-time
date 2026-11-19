@@ -369,6 +369,44 @@ export function zoneAcross(fraction: number): PaneZone {
   return 'middle'
 }
 
+/**
+ * Where a paper dragged over a pane that is not the page would land (the
+ * Mac's `AppModel.dropPaper`, 2026-11-18). Papers stand side by side on the
+ * page — up to four, the same paper twice included — so with a page open
+ * the whole pane is one zone, and the paper opens beside the page's paper
+ * on the side that faces this pane. With no page open, the three zones say
+ * where a page comes: on the pane's left, or to its right (the middle too).
+ */
+export type PaperDrop =
+  | { kind: 'beside'; side: 'left' | 'right' }
+  | { kind: 'page'; at: number }
+
+/** Whether a paper held over this pane shows the one zone (a page to stand beside) or the three. */
+export function paperZoneMode(row: PaneRow): 'one' | 'three' {
+  return paneOf(row, 'page') ? 'one' : 'three'
+}
+
+/** What a paper let go of over a pane (`target`; null is the «+» column) does. Null: the pane is not there. */
+export function paperDropOn(row: PaneRow, target: string | null, zone: PaneZone): PaperDrop | null {
+  const page = paneOf(row, 'page')
+  if (target === null) return page ? { kind: 'beside', side: 'right' } : { kind: 'page', at: row.panes.length }
+  const index = row.panes.findIndex((pane) => pane.id === target)
+  if (index < 0) return null
+  if (!page) return { kind: 'page', at: zone === 'left' ? index : index + 1 }
+  const at = row.panes.indexOf(page)
+  if (index === at) return { kind: 'beside', side: zone === 'left' ? 'left' : 'right' }
+  return { kind: 'beside', side: index < at ? 'left' : 'right' }
+}
+
+/**
+ * Whether the «+» column stands: not in focus, and not when the row is full
+ * — it could only say «칸은 네 개까지예요» (the Mac's `showsPlusColumn`,
+ * 2026-11-19: «이미 4개 다 차면 저 "+"를 없애면 되잖아»). The panes take its room.
+ */
+export function showsPlusColumn(row: PaneRow, focus: boolean): boolean {
+  return !focus && row.panes.length < MAX_PANES
+}
+
 // MARK: - The inspector, docked or floating
 
 /** Where the inspector is: docked at the right, or a panel over the window. */
@@ -379,6 +417,34 @@ export interface InspectorPlace {
   y: number
   width: number
   height: number
+}
+
+/** Whether the inspector shows, and how. */
+export interface InspectorShowing {
+  shown: boolean
+  floating: boolean
+}
+
+/**
+ * ⌘] and the toolbar's button: the inspector in turn — floating, docked at
+ * the right, gone, and floating again (the Mac's `toggleInspector`,
+ * 2026-11-19: «⌘]을 했을 때 floating으로 뜨는 것은 좋은데, 한번 더 누르면
+ * 오른쪽 사이드바로 나오게 해주고, 한번 더 누르면 없어지도록»).
+ */
+export function cycleInspector(now: InspectorShowing): InspectorShowing {
+  if (!now.shown) return { shown: true, floating: true }
+  if (now.floating) return { shown: true, floating: false }
+  return { shown: false, floating: false }
+}
+
+/**
+ * The menus' two choices — «옆에 붙여 보기», «띄워 보기»: the inspector shown
+ * that way, and the one showing already put away (the Mac's
+ * `showInspector(floating:)`).
+ */
+export function chooseInspector(now: InspectorShowing, floating: boolean): InspectorShowing {
+  if (now.shown && now.floating === floating) return { shown: false, floating }
+  return { shown: true, floating }
 }
 
 export const INSPECTOR_PLACE: InspectorPlace = { floating: false, x: -1, y: -1, width: 340, height: 560 }

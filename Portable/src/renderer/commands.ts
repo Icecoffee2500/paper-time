@@ -27,7 +27,7 @@ import { linkSelectionToNote, ultracopySelection, newNote } from './actions/note
 import { openFind, openSearch } from './actions/search.js'
 import { addByAddress, addLibraryFolder, addPapers, libraryOpened, reload } from './library.js'
 import { adoptSettings, applyAccent, applyTheme, openSettings, setLayout } from './settingsController.js'
-import { reopenClosedPane, toggleFocus, togglePane } from './layout.js'
+import { inspectorShowing, reopenClosedPane, showInspector, toggleFocus, togglePane } from './layout.js'
 import { couldNot } from './notices.js'
 import { handleTextEvent } from './textSearch.js'
 import { handleMeaningEvent } from './meaningSearch.js'
@@ -56,6 +56,10 @@ export const COMMANDS = {
   paperList: () => togglePane('paperList'),
   reader: () => togglePane('reader'),
   inspector: () => togglePane('inspector'),
+  floatInspector: () => {
+    const now = inspectorShowing()
+    showInspector(!(now.shown && now.floating))
+  },
   focus: () => toggleFocus(),
   reopenPane: () => reopenClosedPane(),
   back: () => goBack(),

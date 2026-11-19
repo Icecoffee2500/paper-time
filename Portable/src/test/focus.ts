@@ -6,7 +6,8 @@
  */
 import assert from 'node:assert/strict'
 import {
-  CLOSED_KEPT, INSPECTOR_PLACE, MAX_PANES, PAGE_FLOOR, READING_FLOOR, TABLE_LEAST, closePane, defaultRow, enterFocus, ensureList, ensurePage,
+  CLOSED_KEPT, INSPECTOR_PLACE, MAX_PANES, PAGE_FLOOR, READING_FLOOR, TABLE_LEAST, chooseInspector, closePane, cycleInspector, defaultRow, enterFocus,
+  ensureList, ensurePage, paperDropOn, paperZoneMode, showsPlusColumn,
   fitWidths, flexiblePane, focusedPanes, insertPane, leaveFocus, migrateLegacyPanes, movePane, paneOf, paneShelfKey, placeFloat, readPanes, reopenPane,
   restingPanes, rowOf, setContent, showPane, tableAndPageRoom, tableShownWidth, tableWidest, togglePaneKind, togglePaneState, unfocused, writePanes,
   zoneAcross, type ContentPane, type PaneRow, type Panes,
@@ -335,6 +336,66 @@ export async function focusSuite(test: Test, suite: (name: string) => void) {
     const kept = writePanes(rowOf([{ id: 'x', content: { kind: 'page' }, width: null }]), INSPECTOR_PLACE)
     assert.equal((fromFile({ paneRow: kept, workspaceArrangements: arrangements } as never) as unknown as Record<string, unknown>).paneRow, kept)
     assert.equal((fromFile({} as never) as unknown as Record<string, unknown>).paneRow, null)
+  })
+
+  await test('a paper over a pane opens beside the page’s paper, on the side facing that pane', () => {
+    const shelf = { kind: 'shelf' as const, shelf: '{"kind":"week"}' }
+    const row = rowOf([
+      { id: 'list', content: { kind: 'list' }, width: null },
+      { id: 'page', content: { kind: 'page' }, width: null },
+      { id: 'week', content: shelf, width: null },
+    ])
+    assert.equal(paperZoneMode(row), 'one', 'a page to stand beside: the whole pane is one zone')
+    assert.deepEqual(paperDropOn(row, 'list', 'middle'), { kind: 'beside', side: 'left' })
+    assert.deepEqual(paperDropOn(row, 'list', 'right'), { kind: 'beside', side: 'left' }, 'the side is the pane’s, not the pointer’s')
+    assert.deepEqual(paperDropOn(row, 'week', 'left'), { kind: 'beside', side: 'right' })
+    assert.deepEqual(paperDropOn(row, null, 'right'), { kind: 'beside', side: 'right' }, 'the «+» column: beside, on the right')
+    assert.equal(paperDropOn(row, 'gone', 'middle'), null)
+  })
+
+  await test('a paper over a pane with no page open: a page comes where it was put', () => {
+    const row = rowOf([
+      { id: 'list', content: { kind: 'list' }, width: null },
+      { id: 'week', content: { kind: 'shelf', shelf: '{"kind":"week"}' }, width: null },
+    ])
+    assert.equal(paperZoneMode(row), 'three')
+    assert.deepEqual(paperDropOn(row, 'week', 'left'), { kind: 'page', at: 1 })
+    assert.deepEqual(paperDropOn(row, 'week', 'right'), { kind: 'page', at: 2 })
+    assert.deepEqual(paperDropOn(row, 'list', 'middle'), { kind: 'page', at: 1 }, 'the middle: to its right, as the Mac has it')
+    assert.deepEqual(paperDropOn(row, null, 'right'), { kind: 'page', at: 2 }, 'the «+» column: a page at the end')
+  })
+
+  await test('no «+» column with four panes open, nor in focus', () => {
+    const plan = { kind: 'shelf' as const, shelf: '{"kind":"week"}' }
+    let row = defaultRow()
+    assert.equal(showsPlusColumn(row, false), true)
+    assert.equal(showsPlusColumn(row, true), false, 'focus is the page alone')
+    row = insertPane(row, { id: 'a', content: plan }, 2).row
+    assert.equal(showsPlusColumn(row, false), true, 'three: room for one more')
+    row = insertPane(row, { id: 'b', content: { kind: 'note', note: null } }, 3).row
+    assert.equal(row.panes.length, MAX_PANES)
+    assert.equal(showsPlusColumn(row, false), false, 'four: it could only say «칸은 네 개까지예요»')
+    assert.equal(showsPlusColumn(closePane(row, 'b').row, false), true, 'one closed: it is back')
+  })
+
+  await test('⌘] turns the inspector: floating, docked, gone — and floating again', () => {
+    let now = { shown: false, floating: false }
+    now = cycleInspector(now)
+    assert.deepEqual(now, { shown: true, floating: true })
+    now = cycleInspector(now)
+    assert.deepEqual(now, { shown: true, floating: false })
+    now = cycleInspector(now)
+    assert.deepEqual(now, { shown: false, floating: false })
+    assert.deepEqual(cycleInspector(now), { shown: true, floating: true })
+    assert.deepEqual(cycleInspector({ shown: false, floating: true }), { shown: true, floating: true }, 'hidden while floating: floating again')
+  })
+
+  await test('the menus’ two ways of showing it: the one chosen, or — chosen again — put away', () => {
+    assert.deepEqual(chooseInspector({ shown: false, floating: false }, true), { shown: true, floating: true })
+    assert.deepEqual(chooseInspector({ shown: true, floating: false }, true), { shown: true, floating: true }, 'docked to floating')
+    assert.deepEqual(chooseInspector({ shown: true, floating: true }, true), { shown: false, floating: true }, 'the one showing: put away')
+    assert.deepEqual(chooseInspector({ shown: true, floating: false }, false), { shown: false, floating: false })
+    assert.deepEqual(chooseInspector({ shown: false, floating: true }, false), { shown: true, floating: false })
   })
 
   await test('the floating inspector stays inside the window, at a size it can be read at', () => {

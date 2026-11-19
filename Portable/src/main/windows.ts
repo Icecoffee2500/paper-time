@@ -202,8 +202,11 @@ export class Windows {
     made.loadFile(path.join(__dirname, '../renderer/index.html'))
     made.once('ready-to-show', () => {
       if (!probe.isRun) return made.show()
-      // Outside every display, shown without activating anything.
-      const { width, height } = made.getBounds()
+      // Outside every display, shown without activating anything — at the
+      // size a probe asks for (`--papertime-window-size=WxH`, as on the Mac),
+      // or the one the settings remember.
+      const asked = /^(\d{3,4})x(\d{3,4})$/.exec(probe.argument('window-size') ?? '')
+      const { width, height } = asked ? { width: Number(asked[1]), height: Number(asked[2]) } : made.getBounds()
       made.setBounds({ ...offscreen(width), width, height })
       made.showInactive()
     })

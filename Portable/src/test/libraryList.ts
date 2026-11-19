@@ -5,7 +5,7 @@
  */
 import assert from 'node:assert/strict'
 import {
-  authorCounts, authorShelf, closeOtherOpenPapers, draggedFrom, extendRun, folderAbove, folderLabel, folderTrail,
+  authorCounts, authorShelf, closeOtherOpenPapers, directCount, draggedFrom, extendRun, folderAbove, folderLabel, folderTrail, isDirectlyInFolder,
   homeShelf, isPinned, keepOpen, kindsOnShelf, papersByFolder, pickRow, sameShelf, selectedPapers, setShelf, shelfCounts,
   shelfPapers, sorted, store, subfolders, tableKind, type Paper, type Shelf,
 } from '../renderer/state.js'
@@ -128,6 +128,35 @@ export async function libraryListSuite(test: Test, suite: (name: string) => void
     assert.equal(folderAbove(root), null)
     assert.equal(folderAbove('d:\\papers\\'), null, 'a root however it is spelt')
     assert.equal(folderLabel('D:/Papers/2026/Week 2'), 'Papers › 2026 › Week 2')
+    setPathPlatform(process.platform)
+  })
+
+  // 1.1, the Mac's `LibraryModel.isDirectlyIn` (2026-11-19).
+  await test('a folder’s shelf lists only the PDFs directly in it; its row counts the same', () => {
+    setPathPlatform('win32')
+    const root = 'D:\\Papers'
+    library([
+      made({ id: 'top', root, path: 'top.pdf' }),
+      made({ id: 'term', root, path: '2026/syllabus.pdf' }),
+      made({ id: 'w1', root, path: '2026/Week 1/a.pdf' }),
+      made({ id: 'w2', root, path: '2026/Week 2/b.pdf' }),
+      made({ id: 'w2s', root, path: '2026/Week 2/s.pdf', parent: 'w2' }),
+      made({ id: 'deep', root, path: '2027/Week 1/deep.pdf' }),
+    ], [root])
+    assert.ok(isDirectlyInFolder(store.papers[1], 'd:/papers/2026'), 'spelt as Windows spells it')
+    assert.ok(!isDirectlyInFolder(store.papers[2], 'D:/Papers/2026'), 'a week’s PDF is the week’s')
+    setShelf({ kind: 'folder', root: 'D:/Papers/2026' })
+    assert.deepEqual(shelfPapers().map((one) => one.id), ['term'], 'the term’s own syllabus, not every week’s')
+    setShelf({ kind: 'folder', root })
+    assert.deepEqual(shelfPapers().map((one) => one.id), ['top'], 'the library’s shelf: the PDFs at its top')
+    setShelf({ kind: 'folder', root: 'D:/Papers/2027' })
+    assert.deepEqual(shelfPapers(), [], 'nothing directly in it: an empty shelf, which says why')
+    // Each row's number is what its shelf shows.
+    assert.equal(shelfCounts(store.papers.filter((one) => !one.meta.parentID)).folders.get(root), 1)
+    assert.equal(directCount('D:/Papers/2026'), 1)
+    assert.equal(directCount('D:/Papers/2026/Week 2'), 1, 'a supplement is not a paper of the folder')
+    assert.deepEqual(subfolders(root).map((one) => [one.name, one.count]), [['2026', 1], ['2027', 0]], 'deeper papers still put their folders in the tree')
+    assert.deepEqual(subfolders('D:/Papers/2027').map((one) => [one.name, one.count]), [['Week 1', 1]])
     setPathPlatform(process.platform)
   })
 

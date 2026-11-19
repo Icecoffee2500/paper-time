@@ -859,7 +859,7 @@ struct FloatingInspector<Content: View>: View {
                 .controlSize(.small)
                 .help(L("창 오른쪽에 붙이기", "Dock at the window’s right"))
                 Button {
-                    app.toggleInspector()
+                    app.hideInspector()
                 } label: {
                     Image(systemName: "xmark")
                         .font(.system(size: 10, weight: .bold))
@@ -883,7 +883,7 @@ struct FloatingInspector<Content: View>: View {
                 .buttonStyle(.plain)
                 .pressable(cornerRadius: 11)
                 .help(L("창 오른쪽에 붙이기", "Dock at the window’s right"))
-                PaneCloseButton { app.toggleInspector() }
+                PaneCloseButton { app.hideInspector() }
                     .help(L("정보 패널 숨기기", "Hide the Inspector"))
             }
         }

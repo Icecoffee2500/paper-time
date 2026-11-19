@@ -38,6 +38,8 @@ export type KeptReason = 'encrypted' | 'permissions' | 'structure' | 'unconfirme
 /** What the menu bar reflects of the window in front. */
 export interface MenuState {
   panes: { sidebar: boolean; paperList: boolean; reader: boolean; inspector: boolean }
+  /** The inspector floats over the window rather than standing docked — ⌘]'s item says the next step. */
+  inspectorFloats: boolean
   focus: boolean
   hasPaper: boolean
   layout: 'continuous' | 'single' | 'book'

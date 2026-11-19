@@ -414,7 +414,7 @@ export function folderOf(entry: Paper): string | null {
   return [slashed(entry.root), ...parts].join('/')
 }
 
-/** Whether a paper sits at or under a folder — a term shows the term. */
+/** Whether a paper sits at or under a folder. */
 export function isUnderFolder(entry: Paper, folder: string): boolean {
   const here = folderOf(entry)
   if (here === null) return samePath(entry.root ?? '', folder)
@@ -422,8 +422,29 @@ export function isUnderFolder(entry: Paper, folder: string): boolean {
 }
 
 /**
- * The folders one step inside this one, and how many papers each holds
- * counting everything beneath it.
+ * Whether a paper sits directly in a folder — not in a folder inside it.
+ * What a folder's shelf shows (the Mac's `LibraryModel.isDirectlyIn`,
+ * 2026-11-19: «2번째 창에서는 해당 폴더에 있는 pdf만 보이게 하는게 나아 …
+ * 어차피 하위 폴더의 pdf는 사이드바에서 그 하위폴더를 열면 보이니까»): the
+ * shelf had been everything at or under the folder since 0.9.3, and a term's
+ * folder showed every week's PDFs in one run while the weeks stood right
+ * there in the sidebar.
+ */
+export function isDirectlyInFolder(entry: Paper, folder: string): boolean {
+  const here = folderOf(entry)
+  if (here === null) return samePath(entry.root ?? '', folder)
+  return samePath(here, folder)
+}
+
+/** How many papers sit directly in a folder — the count its row shows, which is what its shelf lists. */
+export function directCount(folder: string): number {
+  return store.papers.filter((entry) => !entry.meta.parentID && isDirectlyInFolder(entry, folder)).length
+}
+
+/**
+ * The folders one step inside this one, and how many papers sit directly in
+ * each — what each one's shelf shows (1.1, the Mac's `subfolders(of:)`). A
+ * paper deeper down still puts its folders in the tree.
  *
  * Two sources, because each is wrong alone: the papers say where the
  * library's papers are, and the disk (`store.folders`, from the main
@@ -440,9 +461,11 @@ export function subfolders(folder: string): { path: string; name: string; count:
     const here = folderOf(entry)
     if (here === null || !isInside(here, base)) continue
     // The same number of letters either way: only case is folded.
-    const name = here.slice(base.length + 1).split('/')[0]
+    const parts = here.slice(base.length + 1).split('/')
+    const name = parts[0]
     if (!name) continue
-    counts.set(name, (counts.get(name) ?? 0) + 1)
+    // Counted where it sits, which is what each folder's shelf shows.
+    counts.set(name, (counts.get(name) ?? 0) + (parts.length === 1 ? 1 : 0))
   }
   for (const here of store.folders) {
     if (!isInside(here, base)) continue
@@ -1140,8 +1163,9 @@ function everyKindOnShelf(): Paper[] {
       break
     }
     case 'folder': {
+      // What sits in it; what sits in its folders is theirs (`isDirectlyInFolder`).
       const root = (store.shelf as { kind: 'folder'; root: string }).root
-      filtered = all.filter((entry) => isUnderFolder(entry, root))
+      filtered = all.filter((entry) => isDirectlyInFolder(entry, root))
       break
     }
     case 'open': {
@@ -1280,7 +1304,8 @@ export function shelfCounts(papers: Paper[]): ShelfCounts {
     if (kind === 'paper') counts.papers += 1
     else if (kind === 'book') counts.books += 1
     else counts.documents += 1
-    if (entry.root) bump(counts.folders, entry.root)
+    // A library's row counts what its own shelf shows: the PDFs at its top.
+    if (entry.root && isDirectlyInFolder(entry, entry.root)) bump(counts.folders, entry.root)
     if (entry.state.readingStatus === 'unread') counts.unread += 1
     else if (entry.state.readingStatus === 'reading') counts.reading += 1
     else counts.read += 1

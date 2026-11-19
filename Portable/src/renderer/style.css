@@ -41,6 +41,9 @@
   --radius-bar: 12px;
   --radius-popover: 14px;
   --radius-panel: 22px;
+  /* A sheet of glass floating over the window — the floating inspector — as
+     round as the system's own (the Mac's `FloatingInspector.corner`). */
+  --radius-sheet: 26px;
   /* The window's four panes float on the ground at the panel's radius —
      the Mac's `Corner.panel`. */
   --panel-radius: var(--radius-panel);
@@ -3679,7 +3682,31 @@ textarea:focus-visible {
 }
 
 .dock-zone[data-on='true'] {
-  display: block;
+  display: grid;
+  place-items: center;
+}
+
+/* In place of a pane's paper — or of the one paper — rather than beside it:
+   a dashed ring, the page's middle or the pane under the pointer. */
+.dock-zone[data-kind='open'] {
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+  box-shadow: none;
+  outline: 1.5px dashed color-mix(in srgb, var(--accent) 80%, transparent);
+  outline-offset: -1.5px;
+}
+
+/* What letting go there does, in words (the Mac's `DockZoneOverlay.label`). */
+.dock-zone-words {
+  padding: 5px 10px;
+  border-radius: 99px;
+  /* On a solid capsule, as the row's zones have it: over a page of text a
+     wash of the accent leaves the words unreadable. */
+  background: var(--panel);
+  box-shadow: var(--lift);
+  color: var(--accent-text);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
 }
 
 /* A window for one paper: the toolbar keeps only the window's own buttons,
@@ -5516,6 +5543,9 @@ body[data-solo='true'] .page-area > .panel .reader-header { padding-right: 14px;
   backdrop-filter: blur(6px) saturate(0.8);
 }
 .pane-drop[data-on='true'] { display: grid; }
+/* A paper with a page to stand beside: the whole pane is the one zone. */
+.pane-drop[data-mode='one'] { grid-template-columns: 1fr; }
+.pane-drop[data-mode='one'] .pane-drop-zone:not([data-zone='middle']) { display: none; }
 .pane-drop-zone {
   display: grid; place-items: center; text-align: center;
   border-radius: var(--radius-popover);
@@ -5539,41 +5569,102 @@ body[data-solo='true'] .page-area > .panel .reader-header { padding-right: 14px;
 }
 .pane-drop-zone[data-lit='true'] span { opacity: 1; }
 
-/* The inspector floating: a card over the window, the popover's material
-   and shadow, dragged by its head, resized from its corner. */
+/* The inspector floating: a sheet of glass over the window (the Mac's
+   `FloatingInspector`/`FloatingGlass`, 2026-11-19: the user asked for it to
+   be glass the way iOS 27 is). Translucent, so the page behind it shows
+   through blurred and brighter; a faint light along its top edge and its
+   rim where a hard border would be; a soft, wide shadow — no outline and no
+   rule under its head. Dragged by its head, resized from its corner. */
 .inspector-float {
   position: fixed; z-index: 60;
   display: flex; flex-direction: column; min-width: 0; min-height: 0;
-  border-radius: var(--radius-popover);
-  background: var(--panel);
-  box-shadow: 0 0 0 0.5px var(--separator-strong), 0 12px 36px rgba(0, 0, 0, 0.24);
+  border-radius: var(--radius-sheet);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.34), rgba(255, 255, 255, 0) 140px),
+    color-mix(in srgb, var(--panel) 66%, transparent);
+  -webkit-backdrop-filter: blur(30px) saturate(1.8);
+  backdrop-filter: blur(30px) saturate(1.8);
+  box-shadow:
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.85),
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.4),
+    0 1px 3px rgba(0, 0, 0, 0.06),
+    0 20px 56px -10px rgba(0, 0, 0, 0.24);
   overflow: hidden;
 }
+:root[data-theme='dark'] .inspector-float {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0) 140px),
+    color-mix(in srgb, var(--panel) 74%, transparent);
+  box-shadow:
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.22),
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.1),
+    0 1px 3px rgba(0, 0, 0, 0.3),
+    0 24px 64px -10px rgba(0, 0, 0, 0.62);
+}
 .inspector-float.arriving { animation: pane-in var(--motion-surface) var(--ease); }
-.inspector-float.moving { box-shadow: 0 0 0 0.5px var(--separator-strong), 0 18px 48px rgba(0, 0, 0, 0.3); }
+.inspector-float.moving {
+  box-shadow:
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.85),
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.4),
+    0 2px 6px rgba(0, 0, 0, 0.08),
+    0 28px 72px -10px rgba(0, 0, 0, 0.3);
+}
+:root[data-theme='dark'] .inspector-float.moving {
+  box-shadow:
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.22),
+    inset 0 0 0 0.5px rgba(255, 255, 255, 0.1),
+    0 2px 6px rgba(0, 0, 0, 0.35),
+    0 30px 80px -10px rgba(0, 0, 0, 0.7);
+}
 .inspector-float-head {
   flex: 0 0 auto; display: flex; align-items: center; gap: 8px;
-  padding: 8px 10px 6px 14px; cursor: grab; -webkit-user-select: none; user-select: none;
-  border-bottom: 0.5px solid var(--separator);
+  height: 46px; padding: 6px 12px 0 16px; cursor: grab; -webkit-user-select: none; user-select: none;
 }
 .inspector-float.moving .inspector-float-head { cursor: grabbing; }
-.inspector-float-title { flex: 1 1 auto; min-width: 0; font-size: 12.5px; font-weight: 600; color: var(--text); }
-.inspector-float-dock {
-  display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 9px 0 7px;
-  border-radius: 99px; font-size: 11.5px; color: var(--text-secondary);
-  background: color-mix(in srgb, var(--text) 6%, transparent);
-  transition: background-color var(--motion-tap) var(--ease), color var(--motion-tap) var(--ease);
+.inspector-float-title { flex: 1 1 auto; min-width: 0; font-size: 12.5px; font-weight: 600; color: var(--text-secondary); }
+/* «붙이기» and ×, the way a floating glass sheet wears its buttons: a
+   capsule and a circle of glass. */
+.inspector-float-dock,
+.inspector-float-head .pane-close {
+  background: color-mix(in srgb, var(--panel) 52%, transparent);
+  -webkit-backdrop-filter: blur(12px) saturate(1.6);
+  backdrop-filter: blur(12px) saturate(1.6);
+  box-shadow:
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.9),
+    0 0 0 0.5px rgba(0, 0, 0, 0.06),
+    0 1px 3px rgba(0, 0, 0, 0.1);
+  color: var(--text);
+  transition: background-color var(--motion-tap) var(--ease), color var(--motion-tap) var(--ease), box-shadow var(--motion-tap) var(--ease);
 }
-.inspector-float-dock svg { width: 12px; height: 12px; display: block; }
-.inspector-float-dock:hover { background: var(--pressed); color: var(--text); }
+:root[data-theme='dark'] .inspector-float-dock,
+:root[data-theme='dark'] .inspector-float-head .pane-close {
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow:
+    inset 0 0.5px 0 rgba(255, 255, 255, 0.2),
+    0 0 0 0.5px rgba(255, 255, 255, 0.06),
+    0 1px 3px rgba(0, 0, 0, 0.35);
+}
+.inspector-float-dock {
+  display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 11px 0 9px;
+  border-radius: 99px; font-size: 11.5px; font-weight: 500;
+}
+.inspector-float-head .pane-close { width: 26px; height: 26px; }
+.inspector-float-head .pane-close svg { width: 10px; height: 10px; }
+.inspector-float-dock svg { width: 13px; height: 13px; display: block; }
+.inspector-float-dock:hover,
+.inspector-float-head .pane-close:hover { background: color-mix(in srgb, var(--panel) 80%, transparent); color: var(--text); }
+:root[data-theme='dark'] .inspector-float-dock:hover,
+:root[data-theme='dark'] .inspector-float-head .pane-close:hover { background: rgba(255, 255, 255, 0.14); }
 .inspector-float-body { flex: 1 1 auto; min-height: 0; display: flex; }
-.inspector-float-body > .panel { flex: 1 1 auto; border-radius: 0; box-shadow: none; }
+/* The content sits on the glass, not on a page of its own. */
+.inspector-float-body > .panel { flex: 1 1 auto; border-radius: 0; box-shadow: none; background: transparent; }
+.inspector-float .insp-section { background: color-mix(in srgb, var(--panel) 48%, transparent); }
 .inspector-float .inspector-corner { display: none; }
 .inspector-float-grip {
-  position: absolute; right: 2px; bottom: 2px; width: 16px; height: 16px; cursor: nwse-resize;
+  position: absolute; right: 4px; bottom: 4px; width: 16px; height: 16px; cursor: nwse-resize;
   background:
     linear-gradient(135deg, transparent 0 55%, var(--separator-strong) 55% 62%, transparent 62% 72%, var(--separator-strong) 72% 79%, transparent 79%);
-  border-bottom-right-radius: var(--radius-popover);
+  border-bottom-right-radius: var(--radius-sheet);
 }
 
 /* A pinned list of notes and a note pane: the slip-box's look, smaller. */
