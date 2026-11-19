@@ -18,7 +18,7 @@ public struct Contributor: Sendable, Hashable, Identifiable {
 public enum Contributors {
     /// Everybody who left a name, first sender first.
     public static let all: [Contributor] = [
-        // Nobody yet. The first person to press ⌥⌘/ lands here.
+        Contributor(name: "juhan park", reports: 1),
     ]
 
     /// Reports sent without a name — counted as reports, not people: two of
