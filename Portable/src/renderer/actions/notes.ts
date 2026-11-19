@@ -1,13 +1,19 @@
 /**
  * The ways into a note: from the palette, a search row, a link, ⌘N and ⌘L.
  */
-import { changed, latestNoteForPaper, noteByID, paper as findPaper, setShelf, store } from '../state.js'
+import { changed, isSlipBoxShelf, latestNoteForPaper, noteByID, paper as findPaper, setShelf, slipBoxShelfFor, store } from '../state.js'
 import { shell, solo } from '../shell.js'
 import { focused, reconcileReaders } from '../pageArea.js'
 import { openAnchor, showPaper } from './openPapers.js'
-import { setInspectorTab } from '../settingsController.js'
+import { saveSettings, setInspectorTab } from '../settingsController.js'
 import { togglePane } from '../layout.js'
-import { createNote, visibleNotes } from '../notesModel.js'
+import {
+  createArea, createNote, moveNoteToArea, removeArea, renameArea, slipBoxShows, visibleNotes,
+} from '../notesModel.js'
+import { areaAfterRename, areaName, areaNameProblem, isAreaName } from '../../shared/noteAreas.js'
+import type { AreaRefusal } from '../../shared/api.js'
+import { call, platform } from '../bridge.js'
+import { askForName } from '../ui/ask.js'
 import { openNoteInSlipBox, slipBoxEditor } from '../ui/slipBox.js'
 import { openEditor as openNoteEditor, openNoteInTab } from '../ui/notesTab.js'
 import { toast } from '../ui/toolbar.js'
@@ -26,17 +32,28 @@ export function showNoteTab() {
 }
 
 /**
- * A note in the slip-box, beside the list. The search and the tag narrowing
- * the list are kept, as the Mac keeps them (`SlipBoxDetail`) — unless they
- * hide the very note being opened, which would stand in the editor with no
- * row lit.
+ * A note in the slip-box, beside the list — in the place it belongs to: 문헌
+ * 노트 for a note on a source, 지식 for one of one's own (`slipBoxScope(for:)`).
+ * The place in front is kept when it already holds the note (an area of 지식,
+ * say), and so are the search, the tag and the kind narrowing the list, as
+ * the Mac keeps them (`SlipBoxDetail`) — unless they hide the very note being
+ * opened, which would stand in the editor with no row lit.
  */
 export function revealNoteInSlipBox(id: string) {
-  if (!visibleNotes().some((note) => note.id === id)) {
+  const note = noteByID(id)
+  const shelf = isSlipBoxShelf(store.shelf) && slipBoxShows(store.shelf, note, { narrowed: false })
+    ? store.shelf
+    : slipBoxShelfFor(note)
+  if (!visibleNotes().some((one) => one.id === id)) {
     store.slipBox.query = ''
     store.slipBox.tag = null
   }
-  setShelf({ kind: 'notes' })
+  // The kind chips of 문헌 노트 let it through too.
+  if (shelf.kind === 'notes' && note && !slipBoxShows(shelf, note, { narrowed: true })) {
+    store.settings.literatureNoteKind = ''
+    saveSettings({ literatureNoteKind: '' })
+  }
+  setShelf(shelf)
   changed('shelf')
   openNoteInSlipBox(id)
 }
@@ -53,7 +70,7 @@ export async function openNote(id: string) {
   const paper = note.paperID ? findPaper(note.paperID) : undefined
   // Inside the slip-box a link stays in the slip-box, as on the Mac: the
   // note opens beside the list, whichever paper it is about.
-  if (paper && store.shelf.kind !== 'notes') {
+  if (paper && !isSlipBoxShelf(store.shelf)) {
     if (store.selectedID !== paper.id) await showPaper(paper.id)
     showNoteTab()
     openNoteInTab(id)
@@ -78,15 +95,24 @@ export function openNoteFromSearch(id: string, words?: string) {
 }
 
 /**
- * Command-N: a new note in the slip-box, with the caret in it — about the
- * paper chosen, if one is, so it is filed under that paper (`RootView`'s
- * `.paperTimeNewNote`: `scope = .notes` and a note about `selectedPaperID`).
- * The Notes tab's «New Note» is the way to write one beside the page.
+ * Command-N: a new note in the slip-box, with the caret in it (`RootView`'s
+ * `.paperTimeNewNote`). In 지식, a note of one's own filed in the area shown;
+ * else on the paper chosen, a literature note in 문헌 노트; with none, a
+ * note of one's own in 지식. The Notes tab's «New Note» is the way to write
+ * one beside the page.
  */
 export function newNote() {
   if (solo) return saidInMainWindow()
-  const paperID = store.selectedID && findPaper(store.selectedID) ? store.selectedID : null
-  revealNoteInSlipBox(createNote(paperID).id)
+  const shelf = store.shelf
+  let note
+  if (shelf.kind === 'knowledge') {
+    note = createNote(null, 'note', shelf.area ?? '')
+  } else if (store.selectedID && findPaper(store.selectedID)) {
+    note = createNote(store.selectedID)
+  } else {
+    note = createNote(null)
+  }
+  revealNoteInSlipBox(note.id)
   requestAnimationFrame(() => slipBoxEditor()?.focus())
 }
 
@@ -103,7 +129,7 @@ export async function openQuotation(paperID: string, link: QuoteLink) {
   if (!note) return
   if (solo) return saidInMainWindow()
   const own = note.paperID === null || note.paperID.toUpperCase() === paperID.toUpperCase()
-  if (store.shelf.kind === 'notes' || !own) {
+  if (isSlipBoxShelf(store.shelf) || !own) {
     revealNoteInSlipBox(note.id)
     // The paper stays where it was being read, the note beside it.
     store.slipBox.paperID = paperID
@@ -120,6 +146,78 @@ export async function openQuotation(paperID: string, link: QuoteLink) {
   showNoteTab()
   openNoteInTab(note.id, paperID)
   requestAnimationFrame(() => openNoteEditor()?.revealQuotation(link.passage.url))
+}
+
+// MARK: - Areas of knowledge
+
+/** What to say when an area could not be made, renamed or taken away. */
+function sayRefused(why: AreaRefusal, name: string) {
+  switch (why) {
+    case 'exists': return toast(L(`‘${name}’ 영역이 이미 있어요.`, `There’s already an area called “${name}”.`))
+    case 'name': return toast(L('그 이름은 영역 이름으로 쓸 수 없어요.', 'That name can’t be an area’s.'))
+    case 'missing': return toast(L('그 영역은 이제 없어요.', 'That area isn’t there anymore.'))
+    case 'away': return toast(L('노트 폴더에 닿을 수 없어요. 폴더가 연결돼 있는지 봐주세요.', 'Paper Time can’t reach the notes folder. Check that it’s connected.'))
+  }
+}
+
+/** The name sheet for an area, as the Mac's `AreaNameSheet` asks it. */
+function askAreaName(title: string, confirm: string, initial?: string): Promise<string | null> {
+  return askForName({
+    title,
+    placeholder: L('영역 이름', 'Area Name'),
+    confirm,
+    initial,
+    accepts: (name) => isAreaName(name, platform),
+    problem: (name) => areaNameProblem(name, platform),
+  })
+}
+
+/** «새 영역…» — at the top, or `inside` another area — and the new area shown. */
+export async function askNewArea(inside = '') {
+  const title = inside ? L(`‘${areaName(inside)}’ 안에 새 영역`, `New Area in “${areaName(inside)}”`) : L('새 영역', 'New Area')
+  const name = await askAreaName(title, L('만들기', 'Create'))
+  if (!name) return
+  const made = await createArea(name, inside)
+  if ('error' in made) return sayRefused(made.error, name)
+  setShelf({ kind: 'knowledge', area: made.area })
+  changed('shelf')
+}
+
+/** «이름 바꾸기…» on an area: its folder renamed, and the list in front following it. */
+export async function askRenameArea(area: string) {
+  const name = await askAreaName(L('영역 이름 바꾸기', 'Rename Area'), L('바꾸기', 'Rename'), areaName(area))
+  if (!name) return
+  const renamed = await renameArea(area, name)
+  if ('error' in renamed) return sayRefused(renamed.error, name)
+  const shelf = store.shelf
+  if (shelf.kind === 'knowledge' && shelf.area) {
+    const now = areaAfterRename(shelf.area, area, renamed.area)
+    if (now !== null) {
+      setShelf({ kind: 'knowledge', area: now })
+      changed('shelf')
+    }
+  }
+}
+
+/** «영역 지우기 — 노트는 위로 옮겨요»: the folder goes, its notes go up one level. */
+export async function deleteArea(area: string) {
+  const shelf = store.shelf
+  if (shelf.kind === 'knowledge' && shelf.area && areaAfterRename(shelf.area, area, '') !== null) {
+    setShelf({ kind: 'knowledge', area: null })
+    changed('shelf')
+  }
+  const removed = await removeArea(area)
+  if ('error' in removed) sayRefused(removed.error, areaName(area))
+}
+
+/** The area's folder in the desktop's file manager. */
+export function revealArea(area: string) {
+  void call('notes:revealArea', { area })
+}
+
+/** A note dropped on an area in the sidebar: filed there. */
+export function fileNoteInArea(id: string, area: string) {
+  void moveNoteToArea(id, area)
 }
 
 /** A window for one paper has no slip-box: the note is for the main window. */

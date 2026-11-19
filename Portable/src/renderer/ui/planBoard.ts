@@ -11,11 +11,13 @@
  * The rows are the library's papers, so most of the columns fill
  * themselves; the day, the materials and the order are the reader's.
  */
+import { centreRow, pendingReveal } from './revealRow.js'
 import { clear, el, on } from '../dom.js'
 import { iconNode, type IconName } from '../icons.js'
 import {
-  attachmentsOf, notesForPaper, paper, planByID, planPapers, plansOf, shelfPapers, store, tagByID, type Paper,
+  attachmentsOf, changed, folderLabel, folderOf, kindsOnShelf, notesForPaper, paper, planByID, planPapers, plansOf, readingShelf, shelfPapers, store, tableKind, tagByID, type Paper, type Shelf,
 } from '../state.js'
+import type { ShelfKind } from '../../shared/documentKind.js'
 import { L, prefersKorean } from '../../shared/lang.js'
 import { addDays, materialHost, materialTitle as materialTitleOf, mondayOf, planGroups, venueName, type PaperLink } from '../../shared/readingPlan.js'
 import {
@@ -26,12 +28,12 @@ import {
 import { sortingSurname } from '../../shared/authorKey.js'
 import { carriesPapers, draggedPapers, writeDraggedPapers } from '../../shared/split.js'
 import { showMenu, showMenuAt, type MenuEntry } from './menu.js'
-import { emptyShelf, folderNoticeRows, papersText, shelfTitle, tagColor, type PaperListActions } from './paperList.js'
+import { emptyShelf, folderNoticeRows, shelfTitle, tagColor, type PaperListActions } from './paperList.js'
 import { shelfHeader, shelfSymbol, shelfTone } from './shelfHeader.js'
-import { paperMenuEntries } from '../actions/paper.js'
+import { KIND_NAMES, kindCount, paperMenuEntries } from '../actions/paper.js'
 import { LEGACY } from '../../shared/legacy.js'
 import {
-  ALL_COLUMNS, addFromAddresses, addPapersTo, addSectionTo, addToPlan, boardContext, boardPaper, cycleStatus, editPlan, openFromBoard,
+  ALL_COLUMNS, addFromAddresses, addPapersTo, addSectionTo, addToPlan, boardContext, boardPaper, cycleStatus, editPlan, openFromBoard, rememberView,
   ownAddress, prefs, pullBehind, pushWeek, removeFromPlan, renameSectionOf, savePrefs, selectInBoard, setDay, setDays, setView,
   togglePlanColumns, viewOf, type ColumnID,
 } from '../plans.js'
@@ -184,10 +186,27 @@ function planCell(entry: Paper): HTMLElement {
 
 const text = (value: string, extra = '') => el('div', { class: `pb-text ${extra}`.trim(), text: value || '—', title: value })
 
+/** The folder a paper's PDF sits in, by name — the way down from the library in the tooltip. */
+function folderCell(entry: Paper): HTMLElement {
+  const folder = folderOf(entry) ?? entry.root ?? ''
+  const name = folder.split(/[\\/]/).filter(Boolean).pop() ?? ''
+  return el('div', { class: 'pb-text secondary', text: name || '—', title: folder ? folderLabel(folder) : '' })
+}
+
+/** The column's name over a table of that kind: a book has «지은이», a
+ *  document «쓴 사람», the way the inspector names them. */
+function columnLabel(column: Column, kind: ShelfKind): string {
+  if (column.id !== 'authors' || kind === 'paper') return column.label()
+  return kind === 'book' ? L('지은이', 'Authors') : L('쓴 사람', 'Written By')
+}
+
 const COLUMNS: Record<ColumnID, Column> = {
   authors: { id: 'authors', label: () => L('저자', 'Authors'), width: 116, cell: (entry) => text(authorsOf(entry), 'secondary') },
   year: { id: 'year', label: () => L('해', 'Year'), width: 44, cell: (entry) => text(entry.meta.year ? String(entry.meta.year) : '', 'secondary') },
   venue: { id: 'venue', label: () => L('학회', 'Venue'), width: 92, cell: (entry) => text(venueOf(entry), 'secondary') },
+  publisher: { id: 'publisher', label: () => L('출판사', 'Publisher'), width: 116, cell: (entry) => text(String(entry.meta.csl.publisher ?? ''), 'secondary') },
+  folder: { id: 'folder', label: () => L('폴더', 'Folder'), width: 140, cell: folderCell },
+  pages: { id: 'pages', label: () => L('쪽', 'Pages'), width: 44, cell: (entry) => text(entry.meta.file.pageCount > 0 ? String(entry.meta.file.pageCount) : '', 'secondary') },
   date: { id: 'date', label: () => L('읽을 날', 'Read On'), width: 100, cell: dateChip },
   plan: { id: 'plan', label: () => L('계획', 'Plan'), width: 132, cell: planCell },
   progress: { id: 'progress', label: () => L('진행', 'Progress'), width: 88, cell: progressCell },
@@ -254,6 +273,12 @@ function sortValue(entry: Paper, key: BoardSortKey): string | number | null {
     }
     case 'year': return entry.meta.year ?? null
     case 'venue': return venueOf(entry) || null
+    case 'publisher': return String(entry.meta.csl.publisher ?? '') || null
+    case 'folder': {
+      const folder = folderOf(entry) ?? entry.root
+      return folder ? folderLabel(folder) : null
+    }
+    case 'pages': return entry.meta.file.pageCount > 0 ? entry.meta.file.pageCount : null
     case 'plan': return plansOf(entry.id)[0]?.plan.name ?? null
     case 'date': return entry.schedule ?? null
     case 'progress': return progressOf(entry).fraction
@@ -264,18 +289,25 @@ function sortValue(entry: Paper, key: BoardSortKey): string | number | null {
   }
 }
 
-/** Each plan's sort and the week's, this session; the shelves share the one remembered in the settings. */
+/** Each plan's sort and the week's, this session; the shelves' are remembered in the settings, one a kind. */
 const sessionSorts = new Map<string, BoardSort>()
 
-/** Which sort the board in front stands in. */
+/** Which sort the board in front stands in: a plan's, the week's, or a kind's shelf's. */
 function sortSlot(): string {
   const shelf = store.shelf
-  return shelf.kind === 'plan' ? `plan:${shelf.id}` : shelf.kind === 'week' ? 'week' : 'shelf'
+  if (shelf.kind === 'plan') return `plan:${shelf.id}`
+  if (shelf.kind === 'week') return 'week'
+  const kind = tableKind()
+  return kind === 'paper' ? 'shelf' : `shelf.${kind}`
 }
 
 /** The board's sort, or null for its own order — the shelf's, the plan's reading order, the week's. */
 export function boardSortNow(): BoardSort | null {
   const slot = sortSlot()
+  if (slot === 'shelf.book' || slot === 'shelf.document') {
+    const remembered = prefs().kindSorts[slot === 'shelf.book' ? 'book' : 'document']
+    return remembered ? { key: remembered.key, ascending: remembered.ascending } : null
+  }
   if (slot !== 'shelf') return sessionSorts.get(slot) ?? null
   const remembered = prefs().sort
   return remembered.key ? { key: remembered.key, ascending: remembered.ascending } : null
@@ -283,6 +315,14 @@ export function boardSortNow(): BoardSort | null {
 
 function setBoardSort(next: BoardSort | null) {
   const slot = sortSlot()
+  if (slot === 'shelf.book' || slot === 'shelf.document') {
+    const kind = slot === 'shelf.book' ? 'book' : 'document'
+    savePrefs((prefs) => {
+      if (next) prefs.kindSorts[kind] = { key: next.key, ascending: next.ascending }
+      else delete prefs.kindSorts[kind]
+    })
+    return
+  }
   if (slot !== 'shelf') {
     if (next) sessionSorts.set(slot, next)
     else sessionSorts.delete(slot)
@@ -302,13 +342,34 @@ export interface PlanBoard {
   /** Only the chosen paper moved: the highlight follows, nothing is rebuilt —
    *  a popover anchored to a row's date stays anchored. */
   mark: () => void
+  /** A pinned board let go of: it stops watching its width. */
+  dispose: () => void
 }
 
 /** What the board asks of the library: the folder's notices act through these. */
 export type PlanBoardActions = Pick<PaperListActions, 'refresh' | 'adoptLoose'>
 
-export function buildPlanBoard(actions: PlanBoardActions): PlanBoard {
+/**
+ * A board pinned in a pane of its own (1.1): its shelf, whatever the
+ * sidebar shows, and where a paper pressed in it goes — the page.
+ */
+export interface BoardScope {
+  shelf: () => Shelf
+  open: (id: string) => void
+}
+
+export function buildPlanBoard(actions: PlanBoardActions, scope?: BoardScope): PlanBoard {
   const node = el('div', { class: 'panel plan-board' })
+  const pinned = scope ?? null
+  /** The shelf this board shows: the sidebar's, or its own when pinned in a pane. */
+  const here = (): Shelf => (pinned ? pinned.shelf() : store.shelf)
+  /** The kind a pinned board's mixed shelf shows — chosen by its own chips. */
+  let kindHere: ShelfKind = store.shownKind
+  /** The helpers that read the shelf in front, reading this board's. */
+  const reading = <T>(read: () => T): T => (pinned ? readingShelf(here(), read, kindHere) : read())
+  /** A row pressed: on the sidebar's board the page beside shows it; on a pinned one it opens on the page. */
+  const select = (id: string) => (pinned ? pinned.open(id) : selectInBoard(id))
+  const open = (id: string) => (pinned ? pinned.open(id) : void openFromBoard(id))
   /** The columns drawn last, which is what the geometry is worked out for. */
   let drawnColumns: Column[] = []
   const columnsNow = (): Column[] => {
@@ -373,6 +434,10 @@ export function buildPlanBoard(actions: PlanBoardActions): PlanBoard {
   let shownKey = ''
 
   function update() {
+    reading(draw)
+  }
+
+  function draw() {
     // A field being typed into is not taken out from under the hand.
     const typing = document.activeElement
     const typingIn = typing instanceof HTMLInputElement && node.contains(typing) ? typing : null
@@ -409,6 +474,7 @@ export function buildPlanBoard(actions: PlanBoardActions): PlanBoard {
     if (after) resizes?.observe(after)
     applyGeometry()
     fitActions()
+    goToAsked()
     if (typingIn && typedClass) {
       const again = node.querySelector<HTMLInputElement>(`input.${typedClass.split(' ').join('.')}`)
       if (again) {
@@ -454,7 +520,9 @@ export function buildPlanBoard(actions: PlanBoardActions): PlanBoard {
   // ---------------------------------------------------------------- parts
 
   function head(icon: IconName, title: string, sub: string, trailing: Node[] = [], tone = shelfTone(store.shelf)): HTMLElement {
-    return shelfHeader({ icon, tone, title, subtitle: sub, trailing })
+    // In the list's column the head wears the column's × (1.1).
+    // Every board stands in a pane, and wears the pane's ⌄ and × (1.1).
+    return shelfHeader({ icon, tone, title, subtitle: sub, trailing, closes: true })
   }
 
   function viewSwitch(views: ['list' | 'table' | 'calendar', string, IconName | null][]): HTMLElement {
@@ -493,9 +561,11 @@ export function buildPlanBoard(actions: PlanBoardActions): PlanBoard {
       }, [label + arrow])
     }
     row.append(button(L('제목', 'Title'), 'title'))
+    const kind = tableKind()
     const labels = columns.map((one) => {
       const key = sortKeyOf(one.id)
-      return key ? button(one.label(), key) : el('span', { class: 'pb-label', text: one.label() })
+      const label = columnLabel(one, kind)
+      return key ? button(label, key) : el('span', { class: 'pb-label', text: label })
     })
     const more = L('다른 열 보기 — 트랙패드로 옆으로 밀어도 돼요', 'More columns — or swipe sideways on the trackpad')
     row.append(el('div', { class: 'pb-hcols' }, [
@@ -819,7 +889,7 @@ export function buildPlanBoard(actions: PlanBoardActions): PlanBoard {
 
   function drawShelf() {
     const papers = sortedForTable(shelfPapers())
-    const sub = `${papersText(papers.length)} · ${L('열 머리를 누르면 정렬돼요', 'Click a column to sort')}`
+    const sub = `${kindCount(tableKind(), papers.length)} · ${L('열 머리를 누르면 정렬돼요', 'Click a column to sort')}`
     // «읽을 날·계획»: on a shelf that is not a plan the two columns are «Set
     // Date» and «—» down the page, so they wait until asked for.
     const on = prefs().planColumns
@@ -835,6 +905,23 @@ export function buildPlanBoard(actions: PlanBoardActions): PlanBoard {
     // What the old list said about the folder, said over the table.
     const notices = folderNoticeRows(actions)
     if (notices.length) node.append(el('div', { class: 'pb-notices' }, notices))
+    // A shelf that holds more than one kind — a semester's folder, «안 읽음»
+    // — shows one at a time, each under its own columns: these chips say
+    // which, and how many of each (the Mac's `kindBar`). The choice follows
+    // the kind shelf picked last.
+    const kinds = kindsOnShelf()
+    if (kinds.length > 1) {
+      const shown = tableKind()
+      // A div, not a span: a narrow table hides a viewbar's leading span (its «Group By»).
+      const chips = el('div', { class: 'pb-gchips', role: 'group', 'aria-label': L('종류', 'Kind') })
+      for (const { kind, count } of kinds) {
+        chips.append(el('button', {
+          'data-act': 'kind', 'data-v': kind, 'aria-pressed': String(kind === shown),
+          title: L(`${kindCount(kind, count)} 보기`, `Show ${kindCount(kind, count)}`),
+        }, [KIND_NAMES[kind].shelf(), el('span', { class: 'pb-gcount', text: String(count) })]))
+      }
+      node.append(el('div', { class: 'pb-viewbar pb-kinds' }, [chips]))
+    }
     if (papers.length === 0) {
       // Each shelf is empty for its own reason, and says it (the old list's words).
       const empty = emptyShelf()
@@ -859,28 +946,28 @@ export function buildPlanBoard(actions: PlanBoardActions): PlanBoard {
     const target = (event.target as Element).closest<HTMLElement>('[data-act]')
     if (!target || !node.contains(target)) return
     const id = target.dataset.id ?? idOf(target)
-    const shelf = store.shelf
+    const shelf = here()
     switch (target.dataset.act) {
       case 'select':
-        if (id) selectInBoard(id)
+        if (id) select(id)
         break
       case 'status':
         event.stopPropagation()
         if (id) {
-          selectInBoard(id)
+          if (!pinned) selectInBoard(id)
           cycleStatus(id)
         }
         break
       case 'date':
         event.stopPropagation()
         if (id) {
-          selectInBoard(id)
+          if (!pinned) selectInBoard(id)
           openDatePop(target, id)
         }
         break
       case 'view':
         closePlanPop()
-        setView(target.dataset.v as 'list' | 'table' | 'calendar')
+        changeView(target.dataset.v as 'list' | 'table' | 'calendar')
         break
       case 'group':
         savePrefs((prefs) => { prefs.group = target.dataset.v as 'section' | 'week' | 'status' })
@@ -890,8 +977,17 @@ export function buildPlanBoard(actions: PlanBoardActions): PlanBoard {
         togglePlanColumns()
         update()
         break
+      case 'kind':
+        if (pinned) {
+          kindHere = target.dataset.v as ShelfKind
+          update()
+          break
+        }
+        store.shownKind = target.dataset.v as ShelfKind
+        changed('papers', 'shelf')
+        break
       case 'sort': {
-        setBoardSort(nextSort(boardSortNow(), target.dataset.k as BoardSortKey))
+        reading(() => setBoardSort(nextSort(boardSortNow(), target.dataset.k as BoardSortKey)))
         update()
         break
       }
@@ -899,7 +995,7 @@ export function buildPlanBoard(actions: PlanBoardActions): PlanBoard {
         if (geometry) slideTo(slideStep(slideX, geometry, target.dataset.dir === '-1' ? -1 : 1), true)
         break
       case 'unsort':
-        setBoardSort(null)
+        reading(() => setBoardSort(null))
         update()
         break
       case 'spread':
@@ -910,7 +1006,7 @@ export function buildPlanBoard(actions: PlanBoardActions): PlanBoard {
         break
       case 'view-calendar':
         closePlanPop()
-        setView('calendar')
+        changeView('calendar')
         break
       case 'guide-dismiss':
         if (shelf.kind === 'plan') {
@@ -942,11 +1038,18 @@ export function buildPlanBoard(actions: PlanBoardActions): PlanBoard {
     }
   })
 
+  /** Another view for this board's shelf: a pinned board changes only itself. */
+  function changeView(view: 'list' | 'table' | 'calendar') {
+    if (!pinned) return setView(view)
+    rememberView(here(), view)
+    update()
+  }
+
   on(node, 'dblclick', (event: MouseEvent) => {
     const target = (event.target as Element)
     if (target.closest('button, input')) return
     const id = idOf(target.closest('.pb-row, .pb-pill'))
-    if (id) void openFromBoard(id)
+    if (id) open(id)
   })
 
   on(node, 'keydown', (event: KeyboardEvent) => {
@@ -956,7 +1059,7 @@ export function buildPlanBoard(actions: PlanBoardActions): PlanBoard {
     if (!id || !(target.classList.contains('pb-row') || target.classList.contains('pb-pill'))) return
     if (event.key === 'Enter') {
       event.preventDefault()
-      void openFromBoard(id)
+      open(id)
       return
     }
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -965,7 +1068,7 @@ export function buildPlanBoard(actions: PlanBoardActions): PlanBoard {
       const at = rows.indexOf(target)
       const next = rows[at + (event.key === 'ArrowDown' ? 1 : -1)]
       if (next?.dataset.id) {
-        selectInBoard(next.dataset.id)
+        select(next.dataset.id)
         requestAnimationFrame(() => node.querySelector<HTMLElement>(`.pb-row[data-id="${next.dataset.id}"]`)?.focus())
       }
     }
@@ -976,20 +1079,21 @@ export function buildPlanBoard(actions: PlanBoardActions): PlanBoard {
     const point = { x: event.clientX, y: event.clientY }
     if (target.closest('.pb-thead')) {
       event.preventDefault()
-      showMenuAt(point, columnMenu())
+      showMenuAt(point, reading(columnMenu))
       return
     }
     const section = target.closest<HTMLElement>('[data-section-menu]')
-    if (section && store.shelf.kind === 'plan') {
+    const shelf = here()
+    if (section && shelf.kind === 'plan') {
       event.preventDefault()
-      showMenuAt(point, sectionMenu(store.shelf.id, section.dataset.sectionMenu!))
+      showMenuAt(point, sectionMenu(shelf.id, section.dataset.sectionMenu!))
       return
     }
     const id = idOf(target.closest('.pb-row, .pb-pill'))
     if (id) {
       event.preventDefault()
-      selectInBoard(id)
-      showMenuAt(point, rowMenu(id))
+      if (!pinned) selectInBoard(id)
+      showMenuAt(point, reading(() => rowMenu(id)))
     }
   })
 
@@ -1029,10 +1133,10 @@ export function buildPlanBoard(actions: PlanBoardActions): PlanBoard {
       const cell = target.closest<HTMLElement>('[data-drop-day]')
       return cell ? { kind: 'day', day: cell.dataset.dropDay || null, node: cell } : null
     }
-    if (store.shelf.kind !== 'plan') return null
+    if (here().kind !== 'plan') return null
     // A sorted plan takes no drops: a row put «before» another lands in an
     // order that is not the one shown.
-    if (boardSortNow() !== null) return null
+    if (reading(boardSortNow) !== null) return null
     if (types.includes(ROWS_TYPE) && prefs().group === 'section') {
       const rowNode = target.closest<HTMLElement>('[data-drop-row]')
       if (rowNode) return { kind: 'row', target: rowNode.dataset.dropRow!, node: rowNode }
@@ -1068,7 +1172,7 @@ export function buildPlanBoard(actions: PlanBoardActions): PlanBoard {
     if (!spot || !event.dataTransfer) return
     event.preventDefault()
     event.stopPropagation()
-    const shelf = store.shelf
+    const shelf = here()
     if (spot.kind === 'day') {
       const id = event.dataTransfer.getData(PILL_TYPE) || dragging[0]
       if (id && (paper(id)?.schedule ?? null) !== spot.day) void setDay(id, spot.day, 'moved')
@@ -1094,8 +1198,9 @@ export function buildPlanBoard(actions: PlanBoardActions): PlanBoard {
   function columnMenu(): MenuEntry[] {
     const context = boardContext()
     const shown = prefs().columns[context]
+    const kind = tableKind()
     return ALL_COLUMNS.map((id) => ({
-      label: COLUMNS[id].label(),
+      label: columnLabel(COLUMNS[id], kind),
       checked: shown.includes(id),
       action: () => {
         savePrefs((prefs) => {
@@ -1127,7 +1232,7 @@ export function buildPlanBoard(actions: PlanBoardActions): PlanBoard {
    */
   function rowMenu(id: string): MenuEntry[] {
     const entries: MenuEntry[] = [
-      ...paperMenuEntries(id, { open: () => void openFromBoard(id) }),
+      ...paperMenuEntries(id, { open: () => open(id) }),
       { separator: true },
       { label: L('읽을 날…', 'Read On…'), icon: 'calendar', action: () => {
         const anchor = node.querySelector(`[data-act="date"][data-id="${id}"]`) ?? node.querySelector(`[data-id="${id}"]`)
@@ -1163,9 +1268,23 @@ export function buildPlanBoard(actions: PlanBoardActions): PlanBoard {
     for (const one of node.querySelectorAll<HTMLElement>('.pb-row, .pb-pill:not(.ghost), .pb-dot')) {
       one.classList.toggle('on', one.dataset.id === store.selectedID)
     }
+    goToAsked()
   }
 
-  return { node, update, mark }
+  /** The ask taken last (`revealPaper`). */
+  let revealed = 0
+
+  /** Goes to the row Search Everything chose, once per ask. */
+  function goToAsked() {
+    const ask = pendingReveal(revealed)
+    if (!ask) return
+    const scroll = node.querySelector<HTMLElement>('.pb-scroll')
+    const row = node.querySelector<HTMLElement>(`.pb-row[data-id="${CSS.escape(ask.paper)}"]`)
+    if (!scroll || !row) return
+    if (centreRow(scroll, row)) revealed = ask.serial
+  }
+
+  return { node, update, mark, dispose: () => resizes?.disconnect() }
 }
 
 function weekdayShort(weekday: number): string {

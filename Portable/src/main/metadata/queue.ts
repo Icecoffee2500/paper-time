@@ -22,7 +22,7 @@
  */
 
 import { isoTimestamp, makeUUID } from '../../shared/coding.js'
-import { isLookedUp } from '../../shared/documentKind.js'
+import { lookedUp } from '../../shared/documentKind.js'
 import { makeKey } from '../../shared/citationKey.js'
 import { PaperMeta } from '../../shared/model.js'
 import { publishedRecord, resolve, type Network, type ResolutionResult } from '../../shared/metadata/resolver.js'
@@ -107,7 +107,7 @@ export class MetadataQueue {
     for (const library of this.hooks.libraries.all()) {
       for (const row of (await library.read()).papers) {
         const meta = new PaperMeta(row.meta)
-        if (isLookedUp(meta.effectiveKind) && meta.confidence !== 'manual' && !meta.parentID) ids.push(row.id)
+        if (lookedUp(meta) && meta.confidence !== 'manual' && !meta.parentID) ids.push(row.id)
       }
     }
     for (const id of ids) this.refreshing.set(id, 'always')
@@ -150,7 +150,7 @@ export class MetadataQueue {
       for (const row of (await library.read()).papers) {
         const meta = new PaperMeta(row.meta)
         const last = asked[row.id]
-        if (isLookedUp(meta.effectiveKind) && meta.confidence === 'verified' && !meta.parentID && mayBePreprint(meta)
+        if (lookedUp(meta) && meta.confidence === 'verified' && !meta.parentID && mayBePreprint(meta)
           && (last === undefined || now - last > FORTNIGHT)) due.push({ owner: library, row })
       }
     }
@@ -197,7 +197,7 @@ export class MetadataQueue {
     for (const library of this.hooks.libraries.all()) {
       for (const row of (await library.read()).papers) {
         const meta = new PaperMeta(row.meta)
-        if (isLookedUp(meta.effectiveKind) && (meta.confidence === 'unparsed' || meta.confidence === 'needsReview')) ids.push(row.id)
+        if (lookedUp(meta) && (meta.confidence === 'unparsed' || meta.confidence === 'needsReview')) ids.push(row.id)
       }
     }
     this.push(ids, true)
@@ -268,7 +268,7 @@ export class MetadataQueue {
     const guessed = meta.guessedKind === undefined
     if (guessed) meta.guessedKind = guess.kind
     const network = lookUp ? this.hooks.network() : null
-    if (!isLookedUp(meta.effectiveKind) || !network) {
+    if (!lookedUp(meta) || !network) {
       if (guessed) await this.write(owner, id, meta, { stamp: false })
       this.hooks.log?.(`metadata: ${meta.file.originalName} → ${guess.kind} (${guess.reason})${network ? '' : ', not looked up'}`)
       return

@@ -137,14 +137,24 @@ struct LibraryWindow: View {
     @State private var inspectorTab = InspectorTab(
         rawValue: Boot.setting("PAPERTIME_INSPECTOR_TAB") ?? ""
     ) ?? .details
-    /// How wide the paper was while it was open, so it can be held at that
+    /// How wide each pane was while it showed, so it can be held at that
     /// width on the way out rather than squeezed to nothing.
-    @State private var readerWidth: CGFloat = 600
+    @State private var heldWidths: [UUID: CGFloat] = [:]
+    /// Where each pane is, for the watcher that tells which one a press
+    /// landed in. A box, so writing it redraws nothing.
+    @State private var paneFrames = PaneFrames()
+    /// Whether the launch has settled — a selection it brings back is not
+    /// somebody choosing a paper.
+    @State private var panesSettled = false
+    @Environment(\.undoManager) private var undoManager
     /// How much room the window has, so a column can be dragged as wide as
     /// there is room for rather than as wide as a number written here.
     @State private var windowWidth: CGFloat = 1200
     /// The paper a passage link opened, shown where the notes list was.
     @State private var slipBoxPaperID: UUID?
+    /// The list pane opened only to hold a paper opened from a note or a
+    /// project with no list pane open, and closed again on the way back.
+    @State private var listLent = false
     @State private var isImportingPDFs = false
     @State private var showsExport = false
     @State private var showsMigration = false
@@ -253,7 +263,7 @@ struct LibraryWindow: View {
     private func openQuotation(_ request: NotesModel.PassageRequest) async {
         defer { if model.notes.passageRequest == request { model.notes.passageRequest = nil } }
         guard model.notes.note(request.noteID) != nil else { return }
-        if model.scope == .notes {
+        if model.scope.isSlipBox {
             model.notes.openNoteID = request.noteID
         } else {
             for _ in 0..<20 where model.selectedPaperID != request.paperID {
@@ -266,7 +276,7 @@ struct LibraryWindow: View {
         }
         model.notes.revealPassage = request.url
         if Boot.isSet("PAPERTIME_QUOTE_LINK") {
-            let place = model.scope == .notes ? "the slip-box" : "the inspector on \(inspectorTab)"
+            let place = model.scope.isSlipBox ? "the slip-box" : "the inspector on \(inspectorTab)"
             FileHandle.standardError.write(Data("quote link: opened \(request.noteID) in \(place)\n".utf8))
         }
     }
@@ -347,7 +357,7 @@ struct LibraryWindow: View {
                 // The same three details the Mac has: the note, the graph,
                 // the paper.
                 switch model.scope {
-                case .notes:
+                case .notes, .knowledge:
                     SlipBoxDetail(model: model, link: link) { paperID in
                         withAnimation(Motion.move) { slipBoxPaperID = paperID }
                     }
@@ -411,73 +421,342 @@ struct LibraryWindow: View {
     #endif
 
     #if os(macOS)
-    /// How wide a column may be dragged.
-    ///
-    /// It used to be a number — 360 for the shelves, 560 for the list, 520
-    /// for the inspector — and a number is a guess about somebody else's
-    /// window. Reading beside a note means giving the note half the screen,
-    /// and half of a 32-inch screen is not 520 points. So the limit is the
-    /// room there actually is: everything the window has, less what the
-    /// other open columns are holding and a page's worth for the paper.
-    /// `mine` is what this column itself already takes, which would
-    /// otherwise be counted against it.
-    private func widest(_ floor: CGFloat) -> CGFloat {
-        var taken: CGFloat = Pane.pageFloor
-        if app.isSidebarVisible { taken += app.sidebarWidth }
-        if app.showsPaperList { taken += listWidth }
-        if app.showsInspector { taken += app.inspectorWidth }
-        return max(floor, windowWidth - taken + currentWidth(floor))
+    // MARK: - The panes (`Workspace.swift`)
+
+    /// The panes showing: the window's own, less the list while a plan's
+    /// calendar stands where the list and the page were.
+    private var shownPanes: [ContentPane] {
+        var shown = app.displayedPanes
+        if model.showsBoard, shown.contains(where: { $0.content == .page }) {
+            shown.removeAll { $0.content == .list }
+        }
+        return shown
     }
 
-    /// The width the column being asked about is holding right now, told
-    /// apart by its own minimum — the one number each column has of its own.
-    private func currentWidth(_ floor: CGFloat) -> CGFloat {
-        switch floor {
-        case 200: app.isSidebarVisible ? app.sidebarWidth : 0
-        case 240: app.showsPaperList ? listWidth : 0
-        default: app.showsInspector ? app.inspectorWidth : 0
+    /// Every pane the row holds: those showing, then those held out of sight
+    /// at no width — the list and the page always among them, so the reader
+    /// and the table are never torn down to be hidden. Building a `PDFView`
+    /// is most of what opening a paper costs, and tearing it down and back
+    /// up is what made the toggles crawl.
+    private func rowPanes(_ shown: [ContentPane]) -> [ContentPane] {
+        var row = shown
+        for pane in app.panes where !row.contains(where: { $0.id == pane.id }) { row.append(pane) }
+        if !row.contains(where: { $0.id == ContentPane.listID }) { row.append(.list) }
+        if !row.contains(where: { $0.id == ContentPane.pageID }) { row.append(.page) }
+        return row
+    }
+
+    private var dockedInspectorShown: Bool { app.showsInspector && !app.inspectorFloats && !app.isFocusMode }
+    private var floatingInspectorShown: Bool { app.showsInspector && app.inspectorFloats && !app.isFocusMode }
+
+    /// The inspector's width as laid out: what it was given, held to what
+    /// leaves the panes a page's floor — in a window too narrow for both,
+    /// the inspector gives way rather than the window growing past the
+    /// screen.
+    private var inspectorShownWidth: CGFloat {
+        var others = Pane.pageFloor + (showsPlusColumn ? PlusColumn.width + Column.gap : 0)
+        if app.isSidebarVisible { others += app.sidebarWidth + Column.gap }
+        return min(app.inspectorWidth, max(240, windowWidth - others - Column.gap))
+    }
+
+    /// Whether the «+» column stands: not in focus, and not when the row
+    /// is full — it could only say «칸은 네 개까지예요» (2026-11-19, «이미 4개
+    /// 다 차면 저 "+"를 없애면 되잖아»).
+    private var showsPlusColumn: Bool {
+        !app.isFocusMode && shownPanes.count < AppModel.mostPanes
+    }
+
+    /// The room the content panes share, the gaps between them included.
+    private var paneRoom: CGFloat {
+        var room = windowWidth
+        if app.isSidebarVisible { room -= app.sidebarWidth + Column.gap }
+        if showsPlusColumn { room -= PlusColumn.width + Column.gap }
+        if dockedInspectorShown { room -= inspectorShownWidth + Column.gap }
+        return max(room, 0)
+    }
+
+    /// What a pane would like, before the room has its say.
+    private func wantedWidth(_ pane: ContentPane) -> CGFloat {
+        switch pane.content {
+        // The list's width is the table's while it holds the table, the
+        // list's otherwise — kept apart so the notes keep their own.
+        case .list: model.boardInListColumn ? app.tableWidth : app.paperListWidth
+        case .page: pane.width ?? 600
+        case let .shelf(key): pane.width ?? Self.defaultWidth(forShelf: key)
+        case .note: pane.width ?? 360
         }
     }
 
-    /// The list column's width: the table's own while it holds the table,
-    /// the list's otherwise.
-    private var listWidth: Double { model.boardInListColumn ? tableShown : app.paperListWidth }
-
-    /// The room the table and the page share: the window less the sidebar,
-    /// the inspector and the gaps between them.
-    private var tableAndPage: Double {
-        var room = Double(windowWidth) - Column.gap
-        if app.isSidebarVisible { room -= app.sidebarWidth + Column.gap }
-        if app.showsInspector { room -= app.inspectorWidth + Column.gap }
-        return room
+    private static func defaultWidth(forShelf key: String) -> CGFloat {
+        switch LibraryModel.Scope(paneKey: key) {
+        case .notes, .knowledge: 320
+        case .projects(nil): 300
+        case .projects: 620
+        default: 560
+        }
     }
 
-    /// The widest the table may be: up to where the page would go under a
-    /// reading width, unless that leaves the table less than a title's room.
-    private var tableWidest: Double {
-        max(tableAndPage - Pane.readingFloor, Pane.tableLeast)
+    /// The width a pane is not squeezed below while anything else can give.
+    private static let paneLeast: CGFloat = 200
+
+    private struct PaneLayout {
+        /// Every showing pane's width but the filler's.
+        var widths: [UUID: CGFloat]
+        /// The pane that takes what is left: the page, else the list, else
+        /// the last.
+        var filler: UUID?
+        /// How far the table may go before the page loses its reading width.
+        var tableCap: CGFloat?
+        /// How much wider the panes could be before the filler reaches its floor.
+        var slack: CGFloat
     }
 
-    /// The table's width as laid out. What it was given, until the page
-    /// would lose its reading width — then the table gives way, folding its
-    /// authors, year and venue under the titles, and it has its width back
-    /// when the room comes back. Opening the inspector takes its room from
-    /// the table, not from the paper.
-    private var tableShown: Double {
-        let width = min(app.tableWidth, tableWidest)
-        // Never so wide that the page goes under its floor, which is what
-        // made the window grow past the screen.
-        return max(min(width, tableAndPage - Pane.pageFloor), 200)
+    /// The widths, worked out from the room there is.
+    ///
+    /// What each pane was given, until the filler would go under its floor —
+    /// then they give way together, and have their widths back when the room
+    /// comes back. The table yields first, so the page keeps a reading width
+    /// (2026-11-16: with the inspector open, the table took the room and left
+    /// the paper 270 points). And nothing is ever laid out wider than the
+    /// room: widths that added up past the window made SwiftUI widen the
+    /// window past the screen, and a zoom then fought it until AppKit gave up.
+    private func layout(_ shown: [ContentPane]) -> PaneLayout {
+        let filler = (shown.first { $0.content == .page } ?? shown.first { $0.content == .list } ?? shown.last)?.id
+        let fillerIsPage = shown.first { $0.id == filler }?.content == .page
+        let room = paneRoom - Column.gap * CGFloat(max(shown.count - 1, 0))
+        var widths: [UUID: CGFloat] = [:]
+        for pane in shown where pane.id != filler { widths[pane.id] = wantedWidth(pane) }
+        var tableCap: CGFloat?
+        if let list = shown.first(where: { $0.content == .list }), list.id != filler, model.boardInListColumn, fillerIsPage {
+            let others = widths.filter { $0.key != list.id }.values.reduce(0, +)
+            let cap = max(room - Pane.readingFloor - others, Pane.tableLeast)
+            tableCap = cap
+            widths[list.id] = min(widths[list.id] ?? 0, cap)
+        }
+        let floor: CGFloat = fillerIsPage ? Pane.pageFloor : Self.paneLeast
+        var available = max(room - floor, 0)
+        let slack = max(available - widths.values.reduce(0, +), 0)
+        if widths.values.reduce(0, +) > available {
+            // Too little room: the panes give way toward a width that still
+            // shows a column of titles; then the page gives way down to the
+            // same; and only then does everybody shrink together. A pane
+            // squeezed evenly to nothing is no pane — the list came out
+            // seventy points wide beside a page that kept all of its floor.
+            let least = widths.mapValues { min($0, Self.paneLeast) }
+            if least.values.reduce(0, +) > available {
+                available = max(room - min(floor, Self.paneLeast), 0)
+            }
+            let spare = widths.values.reduce(0, +) - least.values.reduce(0, +)
+            let over = widths.values.reduce(0, +) - available
+            if over <= spare, spare > 0 {
+                for (id, width) in widths {
+                    let give = (width - least[id]!) / spare * over
+                    widths[id] = (width - give).rounded(.down)
+                }
+            } else {
+                let total = least.values.reduce(0, +)
+                let factor = total > 0 ? available / total : 0
+                for (id, width) in least { widths[id] = (width * factor).rounded(.down) }
+            }
+        }
+        return PaneLayout(widths: widths, filler: filler, tableCap: tableCap, slack: slack)
     }
 
-    private var listWidthBinding: Binding<Double> {
-        model.boardInListColumn
-            ? Binding(get: { tableShown }, set: { app.tableWidth = $0 })
-            : Binding(get: { app.paperListWidth }, set: { app.paperListWidth = $0 })
+    /// The gap before a pane, which resizes the pane beside it that has a
+    /// width of its own — the one on the left, unless that is the filler.
+    @ViewBuilder
+    private func divider(before index: Int, in shown: [ContentPane], layout: PaneLayout) -> some View {
+        let left = shown[index - 1], right = shown[index]
+        let resized = left.id == layout.filler ? right : left
+        let current = layout.widths[resized.id] ?? wantedWidth(resized)
+        // The table's floor is higher than the list's, and a narrow window
+        // can leave less room than that: the top of the range is held at or
+        // above its floor, or `400...300` traps.
+        let floor: CGFloat = resized.content == .list ? (model.boardInListColumn ? Pane.tableLeast : 240) : 200
+        let top: CGFloat = {
+            let room = current + layout.slack
+            if resized.content == .list, let cap = layout.tableCap { return min(room, cap) }
+            return room
+        }()
+        ColumnDivider(
+            width: widthBinding(resized, shown: current),
+            range: Double(floor)...Double(max(floor, top)),
+            resizes: left.id == layout.filler ? .trailing : .leading
+        )
+    }
+
+    private func widthBinding(_ pane: ContentPane, shown: CGFloat) -> Binding<Double> {
+        switch pane.content {
+        case .list:
+            model.boardInListColumn
+                ? Binding(get: { Double(shown) }, set: { app.tableWidth = $0 })
+                : Binding(get: { Double(shown) }, set: { app.paperListWidth = $0 })
+        default:
+            Binding(get: { Double(shown) }, set: { app.setPaneWidth(pane.id, $0) })
+        }
+    }
+
+    /// What a pane's head says and does.
+    private func head(for pane: ContentPane) -> PaneHead {
+        let title = app.title(of: pane, model: model)
+        return PaneHead(
+            id: pane.id,
+            title: title,
+            symbol: app.symbol(of: pane, model: model),
+            canClose: app.panes.count > 1 && !app.isFocusMode,
+            close: { [app, undoManager] in app.closePane(pane.id, title: title, undo: undoManager) },
+            choose: { [app, model] in app.show($0, inPane: pane.id, model: model) }
+        )
+    }
+
+    /// One pane in the row: its gap, its content, its panel — or, held out
+    /// of sight, the same at no width.
+    @ViewBuilder
+    private func paneSlot(_ pane: ContentPane, shown: [ContentPane], layout: PaneLayout) -> some View {
+        let index = shown.firstIndex { $0.id == pane.id }
+        let displayed = index != nil
+        let isFiller = displayed && pane.id == layout.filler
+        let fixed = layout.widths[pane.id] ?? wantedWidth(pane)
+        // Held at the width it had, and revealed — for the reason the lists
+        // always were: a column closing by width drags its content's width
+        // with it, and a `PDFView` with no width draws nothing, which for a
+        // frame was a pane of glass the colour of paper. That was the white
+        // flash.
+        let held = heldWidths[pane.id] ?? fixed
+        HStack(spacing: 0) {
+            if let index, index > 0 { divider(before: index, in: shown, layout: layout) }
+            paneBody(pane)
+                .environment(\.paneHead, head(for: pane))
+                // Content that will not go narrower is cut at its far edge,
+                // so the start of every row is what stays. The filler is held
+                // at its width while the panes move (`heldFillerWidth`).
+                .frame(width: isFiller ? app.heldFillerWidth : (displayed ? fixed : held), alignment: .leading)
+                .frame(width: isFiller ? nil : (displayed ? fixed : 0), alignment: .leading)
+                // The filler takes the room it is given and never more: what
+                // it would like is not counted towards the window's minimum.
+                // The others are rigid — a pane that could be squeezed was
+                // squeezed, the row splitting what was left evenly.
+                .frame(minWidth: isFiller ? 0 : nil, maxWidth: isFiller ? .infinity : nil, alignment: .leading)
+                .modifier(PaneDropZones(paneID: pane.id, enabled: displayed, model: model))
+                .columnPanel()
+                .opacity(displayed ? 1 : 0)
+                .clipped()
+                .allowsHitTesting(displayed)
+                .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame in
+                    // Only while it shows: reading it back while it is held
+                    // would be reading our own answer.
+                    paneFrames.frames[pane.id] = displayed ? frame : nil
+                    // The filler's width for the next motion to hold — read
+                    // only while nothing is moving.
+                    if isFiller, displayed, app.heldFillerWidth == nil, frame.width > 1 { app.fillerWidth = frame.width }
+                    // Not while the panes move: this is state, and written on
+                    // every frame of the motion it laid the whole window out
+                    // again on every frame (`movingPanes`).
+                    if displayed, app.heldFillerWidth == nil, frame.width > 1,
+                       abs((heldWidths[pane.id] ?? 0) - frame.width) > 0.5 {
+                        heldWidths[pane.id] = frame.width
+                    }
+                }
+        }
+        .frame(minWidth: isFiller ? 0 : nil, maxWidth: isFiller ? .infinity : nil, alignment: .leading)
+        .transition(.opacity)
+    }
+
+    @ViewBuilder
+    private func paneBody(_ pane: ContentPane) -> some View {
+        switch pane.content {
+        case .list:
+            listColumn
+        case .page:
+            pageColumn
+        case let .shelf(key):
+            PinnedShelf(model: model, link: link, paneID: pane.id, key: key) { id in
+                openFromPinned(id, pane: pane.id)
+            }
+        case let .note(id):
+            NotePane(model: model, link: link, paneID: pane.id, noteID: id)
+        }
+    }
+
+    /// The page pane: the paper, or the note, the project, the graph — what
+    /// the sidebar's place puts there, or what a pinned pane did.
+    @ViewBuilder
+    private var pageColumn: some View {
+        switch app.pageShowing(model: model) {
+        case let .project(id):
+            VStack(spacing: 0) {
+                PaneHeadBar(symbol: "flag", title: app.title(of: .page, model: model))
+                ProjectPage(model: model, openPaper: openInListPane, pinnedID: id)
+            }
+        case .note:
+            VStack(spacing: 0) {
+                PaneHeadBar(symbol: "note.text", title: app.title(of: .page, model: model))
+                SlipBoxDetail(model: model, link: link) { paperID in openInListPane(paperID) }
+            }
+        case .graph:
+            VStack(spacing: 0) {
+                PaneHeadBar(symbol: "point.3.connected.trianglepath.dotted", title: L("그래프", "Graph"))
+                PaperGraphView(model: model, graph: model.graph)
+            }
+        case .paper:
+            // The page, with the board where a plan's calendar takes it.
+            PaperDetailColumn(
+                model: model, configuration: configuration,
+                link: link, inspectorTab: $inspectorTab
+            )
+        }
+    }
+
+    /// A paper pressed in a pinned pane: on the page — one comes in to the
+    /// pane's right when none is open — and the page shows the paper even
+    /// where the sidebar's place would put a note there.
+    private func openFromPinned(_ id: UUID, pane: UUID) {
+        model.selection = [id]
+        model.keepOpen(id)
+        app.showOnPage(.paper, model: model)
+        app.ensurePagePane(after: pane)
+    }
+
+    /// The inspector, standing at the right of the panes.
+    private var dockedInspector: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 6) {
+                Spacer(minLength: 0)
+                Button {
+                    app.setInspectorFloats(true)
+                } label: {
+                    Label(L("띄우기", "Float"), systemImage: "macwindow.on.rectangle")
+                        .font(.system(size: 11.5, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .padding(.horizontal, 9)
+                        .frame(height: 22)
+                        .background(Capsule().fill(Color.primary.opacity(0.06)))
+                        .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .pressable(cornerRadius: 11)
+                .help(L("창 위에 띄워서 보기 — 칸을 넓게 써요", "Float over the window, and give the panes the room"))
+                PaneCloseButton { app.toggleInspector() }
+                    .help(L("정보 패널 숨기기", "Hide the Inspector"))
+            }
+            .padding(.horizontal, 10)
+            .padding(.top, 8)
+            .padding(.bottom, 2)
+            // Not drawn while it is closed or floating: held in the row at
+            // no width, it was still laid out — its form measured whole —
+            // every time the paper changed, for nobody (`--papertime-perf`).
+            if dockedInspectorShown {
+                InspectorView(model: model, configuration: configuration, link: link, inspectorTab: $inspectorTab)
+            } else {
+                Color.clear
+            }
+        }
     }
 
     private var macColumns: some View {
         @Bindable var app = app
+        let shown = shownPanes
+        let layout = layout(shown)
 
         return HStack(spacing: 0) {
             // Two frames, and the inner one never moves. A column closing by
@@ -488,9 +767,7 @@ struct LibraryWindow: View {
             // lays out once.
             // On the ground, not on a panel — the way the Settings window's
             // sidebar sits beside its page. The list of places is chrome;
-            // the panels are for the things you read. Kept rounded so the
-            // reveal still comes in as a shape, and clipped for the same
-            // reason as before.
+            // the panels are for the things you read.
             sidebarColumn
                 .frame(width: app.sidebarWidth)
                 .frame(width: app.isSidebarVisible ? app.sidebarWidth : 0, alignment: .leading)
@@ -499,88 +776,39 @@ struct LibraryWindow: View {
                 .clipped()
 
             if app.isSidebarVisible {
-                ColumnDivider(width: $app.sidebarWidth, range: 200...widest(200))
+                ColumnDivider(width: $app.sidebarWidth, range: 200...max(200, app.sidebarWidth + Double(layout.slack)))
             }
 
-            // A shelf shown as a board — a table, a calendar — puts the
-            // board where the list and the page were: the list steps aside
-            // and the page's column holds the board, with the inspector
-            // still beside it.
-            let board = model.showsBoard
-            let showsList = app.showsPaperList && !board
-            let showsDetail = app.showsReader || board
-            // With the paper closed the list is the only thing left to look
-            // at, so it takes the room rather than leaving the window half
-            // empty. Its own width comes back when the paper does.
-            let listFills = showsList && !showsDetail
-            let columnWidth: CGFloat? = if !showsList {
-                0
-            } else if listFills {
-                nil
-            } else {
-                listWidth
+            // The content panes, one to four, and the ones held out of sight.
+            ForEach(rowPanes(shown)) { pane in
+                paneSlot(pane, shown: shown, layout: layout)
             }
-            // The same, except when the list is the only thing left, where it
-            // is meant to take the room and so has to be laid out for it.
-            listColumn
-                .frame(width: listFills ? nil : listWidth)
-                .frame(width: columnWidth, alignment: .leading)
-                .frame(maxWidth: listFills ? .infinity : nil)
+
+            // At the end of the row while there is room for another pane: a
+            // pane closed is never a pane lost.
+            if showsPlusColumn {
+                Color.clear.frame(width: Column.gap)
+                PlusColumn(model: model)
+                    .transition(.opacity)
+            }
+
+            if dockedInspectorShown {
+                ColumnDivider(
+                    width: $app.inspectorWidth,
+                    range: 280...max(280, Double(inspectorShownWidth + layout.slack)),
+                    resizes: .trailing
+                )
+            }
+            // Closed by width, so it slides rather than blinking in and out —
+            // and revealed rather than squeezed: narrowing the column narrowed
+            // the form inside it, which re-wrapped every label on every frame.
+            dockedInspector
+                .frame(width: inspectorShownWidth)
+                .frame(width: dockedInspectorShown ? inspectorShownWidth : 0, alignment: .trailing)
                 .columnPanel()
-                .opacity(showsList ? 1 : 0)
+                .opacity(dockedInspectorShown ? 1 : 0)
                 .clipped()
-
-            // Nothing to drag against when there is no paper beside it.
-            if showsList, showsDetail {
-                // The table's floor is higher than the list's, and a narrow
-                // window can leave less room than that: the top of the range
-                // is held at or above its floor, or `400...300` traps.
-                // The table is dragged no wider than leaves the page a
-                // reading width — the same limit it gives way to.
-                let floor: Double = model.boardInListColumn ? Pane.tableLeast : 240
-                let top = model.boardInListColumn ? min(tableWidest, widest(240)) : widest(240)
-                ColumnDivider(width: listWidthBinding, range: floor...max(floor, top))
-            }
-
-            Group {
-                switch model.scope {
-                case .notes:
-                    SlipBoxDetail(model: model, link: link) { paperID in
-                        withAnimation(Motion.move) { slipBoxPaperID = paperID }
-                    }
-                    .columnPanel()
-                case .graph:
-                    PaperGraphView(model: model, graph: model.graph).columnPanel()
-                default:
-                    // Panels its own two halves: the page and the inspector are
-                    // each a panel, with the ground between them.
-                    PaperDetailColumn(
-                        model: model, configuration: configuration,
-                        link: link, inspectorTab: $inspectorTab
-                    )
-                }
-            }
-            // Held at the width it had, and revealed, for the same reason
-            // the lists are. Collapsing the column to nothing handed the page
-            // a width of zero, and a `PDFView` with no width draws nothing —
-            // so for a frame the panel was there with nothing in it, which is
-            // a pane of glass the colour of paper. That was the white flash.
-            .frame(width: showsDetail ? nil : readerWidth, alignment: .leading)
-            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
-                // Only while it is open: reading it back while it is being
-                // held would be reading our own answer.
-                if showsDetail, width > 0 { readerWidth = width }
-            }
-            // Closed by width rather than by taking it out of the tree: the
-            // reader is expensive to build, and tearing the PDF view down and
-            // back up is what made the other column toggles crawl.
-            //
-            // And never wider than the room it is given: what it would like
-            // to be counted towards the window's minimum, and a minimum past
-            // the screen is what grew the window and then crashed the zoom.
-            .frame(minWidth: 0, maxWidth: showsDetail ? .infinity : 0, alignment: .leading)
-            .opacity(showsDetail ? 1 : 0)
-            .clipped()
+                .allowsHitTesting(dockedInspectorShown)
         }
         // The width the window offers, not the width the columns ask for:
         // measured on a frame that takes the offer, so a column that asks
@@ -588,27 +816,82 @@ struct LibraryWindow: View {
         .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
         // Rounded, and that is the point: a drag on the window's edge reports
         // a new width sixty times a second, and every one of them was a
-        // change of state that rebuilt the whole column stack. The only thing
-        // this number decides is how far a divider may be dragged, which does
-        // not need to know about single points. Rounded down: the columns
-        // are now laid out against it, and rounding up promised them room
-        // the window does not have.
+        // change of state that rebuilt the whole column stack. Rounded down:
+        // the columns are laid out against it, and rounding up promised them
+        // room the window does not have.
         .onGeometryChange(for: CGFloat.self) { ($0.size.width / 24).rounded(.down) * 24 } action: {
             windowWidth = $0
         }
+        // The inspector, floating: over the panes, which have its room back —
+        // so with four panes it is still one press away.
+        .overlay(alignment: .topLeading) {
+            if floatingInspectorShown {
+                GeometryReader { proxy in
+                    FloatingInspector(container: proxy.size, inspectorTab: $inspectorTab, hasPaper: model.selectedPaper != nil) {
+                        InspectorView(model: model, configuration: configuration, link: link, inspectorTab: $inspectorTab)
+                    }
+                }
+                .transition(.opacity)
+            }
+        }
         // The panels float clear of the window's edges and of the toolbar, so
         // every boundary in the window is a curve and a gap rather than a
-        // straight line drawn where two flat backgrounds happen to meet. The
-        // gap between two of them is the drag strip that resizes them.
+        // straight line drawn where two flat backgrounds happen to meet.
         .padding(.horizontal, Column.margin)
         .padding(.bottom, Column.margin)
         // Nothing between the controls and the panels but the gap they
         // already keep from each other; the band's own slack is the margin.
         .padding(.top, max(toolbarBand - Column.underToolbar, 0))
         .background { Column.ground }
+        // A pane closed, or a fifth refused.
+        .overlay(alignment: .bottom) { PaneNoticeCapsule() }
+        // Which pane a press lands in — a paper chosen with no page open
+        // opens one to that pane's right.
+        .background(PanePressWatcher(frames: paneFrames) { [app] id in app.lastPressedPane = id })
         // What the window may shrink to, said once, here — not the sum of
         // whatever the columns happen to hold (`Pane.windowFloor`).
         .frame(minWidth: Pane.windowFloor.width, minHeight: Pane.windowFloor.height)
+        .task {
+            // A selection the launch brings back is not somebody choosing.
+            try? await Task.sleep(for: .seconds(1.5))
+            panesSettled = true
+        }
+        .onChange(of: model.scope) { _, scope in
+            if listLent {
+                app.returnLentListPane()
+                listLent = false
+            }
+            // The page goes back to what the sidebar's place puts there.
+            app.pageShows = nil
+            // A project chosen shows its page.
+            if panesSettled, case .projects(_?) = scope { app.ensurePagePane(after: app.lastPressedPane) }
+        }
+        .onChange(of: model.selectedPaperID) { old, new in
+            // Side by side, the paper chosen goes to the pane in focus.
+            app.followSelection(new, model: model)
+            guard panesSettled, let new, new != old else { return }
+            let from = app.lastPressedPane
+            // Pressed in a pinned shelf of papers: the page shows the paper,
+            // even where the sidebar's place would put a note there.
+            if let from, let key = app.pane(from)?.shelfKey,
+               LibraryModel.Scope(paneKey: key)?.holdsPapers == true {
+                app.showOnPage(.paper, model: model)
+            }
+            app.ensurePagePane(after: from)
+        }
+        .onChange(of: model.notes.openNoteID) { old, new in
+            guard panesSettled, new != nil, new != old else { return }
+            // A note pressed in the list of notes: the page goes back to
+            // notes, if a pinned pane had put a paper there.
+            if model.scope.isSlipBox, app.lastPressedPane == ContentPane.listID { app.pageShows = nil }
+            guard app.pageShowing(model: model) == .note else { return }
+            app.ensurePagePane(after: app.lastPressedPane)
+        }
+        .onChange(of: slipBoxPaperID) { _, paper in
+            guard paper == nil, listLent else { return }
+            listLent = false
+            app.returnLentListPane()
+        }
         // No `.animation(value:)` here. The toggles already declare the motion
         // with `withAnimation`, and declaring it a second time with a
         // different duration meant every pane change was interpolated twice —
@@ -624,7 +907,7 @@ struct LibraryWindow: View {
                 Button {
                     withAnimation(Motion.move) { slipBoxPaperID = nil }
                 } label: {
-                    Label(L("노트", "Notes"), systemImage: "chevron.left")
+                    Label(model.scope.paneKey?.hasPrefix("project") == true ? L("프로젝트", "Project") : L("노트", "Notes"), systemImage: "chevron.left")
                         .font(.subheadline)
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
@@ -640,6 +923,9 @@ struct LibraryWindow: View {
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
+                #if os(macOS)
+                PaneHeadControls()
+                #endif
             }
             .padding(.horizontal, 10)
             .padding(.top, 8)
@@ -768,8 +1054,7 @@ struct LibraryWindow: View {
             if app.isFocusMode || model.selectedPaper != nil { link.isFinding = true }
         }
         .onReceive(NotificationCenter.default.publisher(for: .paperTimeNewNote)) { _ in
-            model.scope = .notes
-            model.notes.openNoteID = model.notes.create(paperID: model.selectedPaperID).id
+            openNewNote()
         }
         .onReceive(NotificationCenter.default.publisher(for: .paperTimeNextPaper)) { _ in
             step(by: 1)
@@ -820,7 +1105,15 @@ struct LibraryWindow: View {
     @ViewBuilder
     private var shelfColumn: some View {
         switch model.scope {
-        case .notes:
+        #if os(macOS)
+        case .projects:
+            if let id = slipBoxPaperID, let paper = model.paper(id) {
+                slipBoxPaper(paper)
+            } else {
+                ProjectList(model: model)
+            }
+        #endif
+        case .notes, .knowledge:
             // Following a passage out of a note puts the paper where the list
             // of notes was. The note stays open beside it — which is the
             // whole point of following the link — so the paper takes the only
@@ -915,7 +1208,12 @@ struct LibraryWindow: View {
                 .toolbarHover()
                 Divider().frame(height: 14).padding(.horizontal, 4)
                 paneButton(.reader, symbol: "text.page", on: app.showsReader && !app.isFocusMode) { app.toggleReader() }
-                paneButton(.inspector, symbol: "sidebar.right", on: app.showsInspector) { app.toggleInspector() }
+                paneButton(.inspector, symbol: app.inspectorFloats ? "macwindow.on.rectangle" : "sidebar.right", on: app.showsInspector) { app.toggleInspector() }
+                    // Its other way, a right-click away: docked or floating.
+                    .contextMenu {
+                        Button(L("옆에 붙여 보기", "Show Docked"), systemImage: "sidebar.right") { app.showInspector(floating: false) }
+                        Button(L("띄워 보기", "Show Floating"), systemImage: "macwindow.on.rectangle") { app.showInspector(floating: true) }
+                    }
                 Divider().frame(height: 14).padding(.horizontal, 4)
                 Menu {
                     Button(action: syncNow) { Label(L("지금 맞추기", "Sync Now"), systemImage: "arrow.clockwise") }
@@ -943,8 +1241,9 @@ struct LibraryWindow: View {
                     if let paper = model.selectedPaper {
                         Divider()
                         Picker(L("종류", "Kind"), selection: kindBinding(for: paper)) {
-                            Label(L("논문", "Paper"), systemImage: "text.document").tag(DocumentKind.paper)
-                            Label(L("일반 문서", "Document"), systemImage: "doc").tag(DocumentKind.document)
+                            ForEach(ShelfKind.allCases, id: \.self) { kind in
+                                Label(kind.answer, systemImage: kind.symbolName).tag(kind)
+                            }
                         }
                         // Only when another program has written the file
                         // out again: the text under the marks may then not
@@ -1081,6 +1380,46 @@ struct LibraryWindow: View {
         }
     }
 
+    /// ⌘N: on the paper chosen, a literature note; with none — or in 지식 —
+    /// a note of one's own, in the area shown.
+    private func openNewNote() {
+        if case let .knowledge(area) = model.scope {
+            model.notes.openNoteID = model.notes.create(paperID: nil, area: area ?? "").id
+        } else if let paperID = model.selectedPaperID {
+            model.scope = .notes
+            model.notes.openNoteID = model.notes.create(paperID: paperID).id
+        } else {
+            model.scope = .knowledge(nil)
+            model.notes.openNoteID = model.notes.create(paperID: nil).id
+        }
+    }
+
+    #if os(macOS)
+    /// A paper pressed in a project or followed out of a note.
+    ///
+    /// In the slip-box the paper stands where the list stands, beside the
+    /// note or the project it came from — a list pane is lent for it when
+    /// none is open. Elsewhere it is the page's.
+    private func openInListPane(_ id: UUID) {
+        if model.scope.isSlipBox {
+            withAnimation(Motion.move) {
+                if !app.showsPaperList, app.lendListPane() { listLent = true }
+                if app.showsPaperList {
+                    slipBoxPaperID = id
+                } else {
+                    model.selection = [id]
+                    app.showOnPage(.paper, model: model)
+                }
+            }
+        } else {
+            model.selectedPaperID = id
+            model.keepOpen(id)
+            app.showOnPage(.paper, model: model)
+            app.ensurePagePane(after: nil)
+        }
+    }
+    #endif
+
     private func paneButton(_ pane: ShortcutAction, symbol: String, on: Bool, toggle: @escaping () -> Void) -> some View {
         Button(action: toggle) {
             Label(pane.title, systemImage: symbol)
@@ -1186,7 +1525,8 @@ struct LibraryWindow: View {
         // which read as the buttons having been taken away. A segmented picker
         // is also what a Mac uses for this, where the column had a bespoke one.
         ToolbarItem(id: "inspector-tab", placement: .primaryAction) {
-            if app.showsInspector, model.selectedPaper != nil {
+            // Docked; floating, the picker is in the panel's own head.
+            if app.showsInspector, !app.inspectorFloats, model.selectedPaper != nil {
                 Picker(L("정보 패널", "Inspector"), selection: $inspectorTab) {
                     ForEach(InspectorTab.allCases) { tab in
                         Text(tab.label).tag(tab)
@@ -1265,9 +1605,9 @@ struct LibraryWindow: View {
         #endif
     }
 
-    private func kindBinding(for paper: LoadedPaper) -> Binding<DocumentKind> {
+    private func kindBinding(for paper: LoadedPaper) -> Binding<ShelfKind> {
         Binding(
-            get: { paper.meta.effectiveKind },
+            get: { paper.meta.shelfKind },
             set: { kind in Task { await model.setKind(kind, for: paper.id) } }
         )
     }
@@ -1276,10 +1616,13 @@ struct LibraryWindow: View {
         switch model.scope {
         case .all: L("모두", "All")
         case .papers: L("논문", "Papers")
+        case .books: L("책", "Books")
         case .documents: L("문서", "Documents")
         case let .folder(root): root.lastPathComponent
         case .open: L("열린 문서", "Open Documents")
-        case .notes: L("노트", "Notes")
+        case .notes: L("문헌 노트", "Literature Notes")
+        case let .knowledge(area): KnowledgeArea.title(area)
+        case let .projects(id): id.flatMap { model.project($0)?.name } ?? L("프로젝트", "Projects")
         case .graph: L("그래프", "Graph")
         case .searchResults: L("찾은 것", "Search Results")
         case .unread: L("안 읽음", "Unread")
@@ -1332,7 +1675,8 @@ struct PaperDetailColumn: View {
     /// The room the page and the inspector share.
     @State private var columnWidth: CGFloat = 800
     /// Where a paper being dragged over the page would land, while it is.
-    @State private var dockZone: DockZone?
+    /// Where a dragged paper would land on the page (`DockTarget`).
+    @State private var dockTarget: DockTarget?
     @State private var pageSize: CGSize = .zero
 
     /// The handle the inspector reads: the window's own, which the pane in
@@ -1483,64 +1827,22 @@ struct PaperDetailColumn: View {
         @Bindable var app = app
 
         #if os(macOS)
-        return HStack(spacing: 0) {
-            // The board stands where the page was; the page stays in the
-            // tree underneath, unseen, so going back to it is instant.
-            ZStack {
-                page
-                    .opacity(model.showsBoard ? 0 : 1)
-                    .allowsHitTesting(!model.showsBoard)
-                if model.showsBoard {
-                    PlanBoard(model: model)
-                        .transition(.opacity)
-                }
+        // The board stands where the page was; the page stays in the tree
+        // underneath, unseen, so going back to it is instant. The inspector
+        // is the window's now, docked or floating (`Workspace.swift`), and
+        // the panel is the pane's.
+        return ZStack {
+            page
+                .opacity(model.showsBoard ? 0 : 1)
+                .allowsHitTesting(!model.showsBoard)
+            if model.showsBoard {
+                PlanBoard(model: model)
+                    .transition(.opacity)
             }
-            // The page takes what is left and no more: a reader that would
-            // like more is cut at its own edge, not pushing the inspector off
-            // the window's.
-            .frame(minWidth: 0, maxWidth: .infinity)
-            .columnPanel()
-
-            // Nothing to drag against when the inspector is closed.
-            if app.showsInspector {
-                ColumnDivider(
-                    width: $app.inspectorWidth,
-                    range: 280...max(280, columnWidth - Pane.pageFloor),
-                    resizes: .trailing
-                )
-            }
-
-            // Closed by width, the same as the other columns, so it slides
-            // rather than blinking in and out — and revealed rather than
-            // squeezed, for the same reason the lists are. Narrowing the
-            // column narrowed the form inside it, which re-wrapped every
-            // label on every frame: the paper's title went from two lines to
-            // three and back on the way past.
-            //
-            // Held to what leaves the page its floor: in a window too narrow
-            // for both, the inspector gives way rather than the window
-            // growing past the screen.
-            let inspectorShown = min(app.inspectorWidth, max(240, Double(columnWidth) - Column.gap - Pane.pageFloor))
-            inspector
-                .frame(width: inspectorShown)
-                .frame(
-                    width: app.showsInspector ? inspectorShown : 0,
-                    alignment: .trailing
-                )
-                .columnPanel()
-                .opacity(app.showsInspector ? 1 : 0)
-                .clipped()
         }
-        // The room offered, not the room asked for — the same reason the
-        // window's width is measured that way.
-        .frame(minWidth: 0, maxWidth: .infinity, alignment: .leading)
-        // How much there is to share between the page and the inspector,
-        // which is what says how far the inspector may be dragged. Rounded,
-        // for the reason the window's own width is.
-        .onGeometryChange(for: CGFloat.self) { ($0.size.width / 24).rounded(.down) * 24 } action: {
-            columnWidth = $0
-        }
-        // Likewise: `toggleInspector` opens the transaction.
+        // The page takes what is left and no more: a reader that would like
+        // more is cut at its own edge.
+        .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity)
         #else
         // The inspector floats in from the right, over the page, and goes
         // the same way: the screen is too narrow to give it a column, and a
@@ -1553,7 +1855,7 @@ struct PaperDetailColumn: View {
                     // column two words wide — which is fine for a list of
                     // marks and no way to write in.
                     if horizontalSizeClass == .regular { grip }
-                    inspector
+                    InspectorView(model: model, configuration: configuration, link: link, inspectorTab: $inspectorTab)
                 }
                     .frame(width: horizontalSizeClass == .regular ? app.inspectorWidth : 360)
                     .frame(maxHeight: .infinity)
@@ -1601,10 +1903,13 @@ struct PaperDetailColumn: View {
 
     private var page: some View {
         pageBody
+            // The space the side-by-side panes report their frames in, and the
+            // drop reads its location in.
+            .coordinateSpace(.named(DockDropDelegate.space))
             // A paper dragged here from the list, or from another pane's title,
             // is put where it was dropped: a half of the page area, or a
             // quarter of it — the way a window tiles when dragged to an edge.
-            .overlay { DockZoneOverlay(zone: dockZone, size: pageSize) }
+            .overlay { DockZoneOverlay(target: dockTarget, frames: app.splitPaneFrames) }
             .onGeometryChange(for: CGSize.self) { $0.size } action: { pageSize = $0 }
             // The open papers, the way the contents come: a key brings the
             // list up over the page, a choice or Escape puts it away.
@@ -1624,22 +1929,25 @@ struct PaperDetailColumn: View {
             }.frame(width: 0, height: 0))
             .onDrop(of: [.paperTimePaper], delegate: DockDropDelegate(
                 size: { pageSize },
-                zone: $dockZone,
-                drop: { transfer, zone in app.dock(transfer.id, at: zone, in: model, movingPane: transfer.pane) }
+                arrangement: { app.split },
+                frames: { app.splitPaneFrames },
+                target: $dockTarget,
+                drop: { transfer, zone in app.dock(transfer.id, at: zone, in: model, movingPane: transfer.pane) },
+                open: { transfer, pane in app.open(transfer.id, inPane: pane, moving: transfer.pane, model: model) }
             ))
             // The zone stays lit only while a drag is really going on. A
             // drag let go outside the window, or cancelled with Escape, never
             // sends `dropExited`, and the half of the page stayed blue.
-            .onChange(of: dockZone) { _, zone in
-                guard zone != nil else { return }
+            .onChange(of: dockTarget != nil) { _, lit in
+                guard lit else { return }
                 Task { @MainActor in
-                    while dockZone != nil {
+                    while dockTarget != nil {
                         try? await Task.sleep(for: .milliseconds(250))
-                        if NSEvent.pressedMouseButtons == 0 { dockZone = nil }
+                        if NSEvent.pressedMouseButtons == 0 { dockTarget = nil }
                     }
                 }
             }
-            .onChange(of: app.split) { _, _ in dockZone = nil }
+            .onChange(of: app.split) { _, _ in dockTarget = nil }
             // Clicking into the paper is using it: it stays on the open shelf.
             .onAppear { armKeepOpen() }
             .onChange(of: app.split) { _, split in if split == nil { armKeepOpen() } }
@@ -1652,7 +1960,15 @@ struct PaperDetailColumn: View {
     private var pageBody: some View {
         Group {
             if let split = app.split {
-                SplitReaderView(model: model, configuration: configuration, link: link, arrangement: split)
+                VStack(spacing: 0) {
+                    #if os(macOS)
+                    // The pane's own head over the papers side by side, each
+                    // of which keeps its strip.
+                    PaneHeadBar(symbol: "rectangle.split.2x1",
+                                title: L("논문 \(split.panes.count)편 나란히", "\(split.panes.count) Papers Side by Side"))
+                    #endif
+                    SplitReaderView(model: model, configuration: configuration, link: link, arrangement: split)
+                }
             } else if let paper = model.selectedPaper {
                 // Deliberately not `.id(paper.id)`: giving each paper its own
                 // identity threw away the PDF view and built another one for
@@ -1670,6 +1986,8 @@ struct PaperDetailColumn: View {
                             .font(.headline)
                             .lineLimit(1)
                             .truncationMode(.tail)
+                            // The title is the pane's handle.
+                            .paneDragHandle()
                         Spacer(minLength: 0)
                         // The pencil, at the end of the paper's own strip:
                         // the paper is drawn on, and the tool that does it
@@ -1698,6 +2016,9 @@ struct PaperDetailColumn: View {
                         .tint(configuration.mode == .lasso ? Color.accentColor : .primary)
                         .toolbarHover()
                         .help(L("수식 올가미 (\(app.shortcut(for: .lasso).display))", "Formula lasso (\(app.shortcut(for: .lasso).display))"))
+                        // The pane's ⌄ and ×, at the end of the paper's strip.
+                        PaneHeadControls()
+                            .padding(.leading, 4)
                     }
                     .padding(.horizontal, 16)
                     .padding(.top, 10)
@@ -1826,18 +2147,32 @@ struct PaperDetailColumn: View {
                 }
                 #endif
             } else {
-                ContentUnavailableView(
-                    L("고른 논문이 없어요", "No Paper Selected"),
-                    systemImage: "doc.text",
-                    description: Text(L("읽을 논문을 하나 골라보세요.", "Choose a paper to start reading."))
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                VStack(spacing: 0) {
+                    #if os(macOS)
+                    PaneHeadBar(symbol: "text.page", title: ShortcutAction.reader.title)
+                    #endif
+                    ContentUnavailableView(
+                        L("고른 논문이 없어요", "No Paper Selected"),
+                        systemImage: "doc.text",
+                        description: Text(L("읽을 논문을 하나 골라보세요.", "Choose a paper to start reading."))
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
             }
         }
     }
 
-    @ViewBuilder
-    private var inspector: some View {
+}
+
+/// What the inspector shows: the paper in focus, in one of four tabs —
+/// docked at the window's right, floating over it, or (iOS) over the page.
+struct InspectorView: View {
+    let model: LibraryModel
+    let configuration: ReaderConfiguration
+    let link: ReaderLink
+    @Binding var inspectorTab: InspectorTab
+
+    var body: some View {
         // Everything is pinned to the top and told to fill the column. Without
         // it SwiftUI centres the whole stack, which left the contents floating
         // halfway down an empty inspector.
@@ -2124,3 +2459,4 @@ private struct ColumnDivider: View {
     }
 }
 #endif
+

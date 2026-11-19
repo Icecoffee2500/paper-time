@@ -308,16 +308,37 @@ export function planGuidance(papers: BoardPaper[]): Guidance {
 
 // MARK: - The columns
 
-export type ColumnID = 'authors' | 'year' | 'venue' | 'date' | 'plan' | 'progress' | 'materials' | 'tags' | 'rating' | 'notes' | 'added' | 'opened'
-export type BoardContext = 'plan' | 'week' | 'other'
+export type ColumnID = 'authors' | 'year' | 'venue' | 'publisher' | 'folder' | 'pages' | 'date' | 'plan' | 'progress' | 'materials' | 'tags' | 'rating' | 'notes' | 'added' | 'opened'
+/**
+ * Which table the columns are remembered for: a plan, the week, or a shelf
+ * of one kind — `other` is the papers' (the key it had before books and
+ * documents had tables of their own), `book` and `document` the others' (the
+ * Mac's `BoardKind.key`: shelf, shelf.book, shelf.document).
+ */
+export type BoardContext = 'plan' | 'week' | 'other' | 'book' | 'document'
+export const BOARD_CONTEXTS: readonly BoardContext[] = ['plan', 'week', 'other', 'book', 'document']
 
 /** Every column, in the order the column menu lists them. */
-export const ALL_COLUMNS: ColumnID[] = ['authors', 'year', 'venue', 'date', 'plan', 'progress', 'materials', 'tags', 'rating', 'notes', 'added', 'opened']
+export const ALL_COLUMNS: ColumnID[] = ['authors', 'year', 'venue', 'publisher', 'folder', 'pages', 'date', 'plan', 'progress', 'materials', 'tags', 'rating', 'notes', 'added', 'opened']
 
+/**
+ * The columns each table starts with (2026-11-18, the user's ask: each kind
+ * its own columns). A paper is placed by who, when and where; a book by who,
+ * when and who published it — and how far through it you are, since a book
+ * is read over weeks; a document has no authors or venue worth a column, and
+ * is found by the folder it was put in, its length and when it arrived.
+ */
 export const DEFAULT_COLUMNS: Record<BoardContext, ColumnID[]> = {
   plan: ['authors', 'year', 'venue', 'date', 'progress', 'materials'],
   week: ['plan', 'date', 'materials'],
   other: ['authors', 'year', 'venue', 'date', 'plan', 'materials'],
+  book: ['authors', 'year', 'publisher', 'date', 'plan', 'progress'],
+  document: ['folder', 'pages', 'date', 'plan', 'added'],
+}
+
+/** A shelf's table for a kind — `other` for papers, as it always was. */
+export function shelfContext(kind: 'paper' | 'book' | 'document'): BoardContext {
+  return kind === 'paper' ? 'other' : kind
 }
 
 /**
@@ -395,9 +416,9 @@ export function wheelSlide(event: { deltaX: number; deltaY: number; deltaMode: n
  * What a table sorts by: the title, and every column with one value a
  * paper either has or has not. The materials and the tags have no order.
  */
-export type BoardSortKey = 'title' | 'authors' | 'year' | 'venue' | 'plan' | 'date' | 'progress' | 'rating' | 'notes' | 'added' | 'opened'
+export type BoardSortKey = 'title' | 'authors' | 'year' | 'venue' | 'publisher' | 'folder' | 'pages' | 'plan' | 'date' | 'progress' | 'rating' | 'notes' | 'added' | 'opened'
 
-export const BOARD_SORT_KEYS: readonly BoardSortKey[] = ['title', 'authors', 'year', 'venue', 'plan', 'date', 'progress', 'rating', 'notes', 'added', 'opened']
+export const BOARD_SORT_KEYS: readonly BoardSortKey[] = ['title', 'authors', 'year', 'venue', 'publisher', 'folder', 'pages', 'plan', 'date', 'progress', 'rating', 'notes', 'added', 'opened']
 
 export interface BoardSort {
   key: BoardSortKey
@@ -456,7 +477,7 @@ export function sortRows<T>(items: readonly T[], sort: BoardSort | null, value: 
  * of «Set Date» and «—» (2026-11-16, the user's ask).
  */
 export function withPlanColumns(columns: ColumnID[], context: BoardContext, shown: boolean): ColumnID[] {
-  if (context !== 'other' || shown) return columns
+  if (context === 'plan' || context === 'week' || shown) return columns
   return columns.filter((id) => id !== 'date' && id !== 'plan')
 }
 
@@ -466,7 +487,7 @@ export function withPlanColumns(columns: ColumnID[], context: BoardContext, show
  * with it back, the choices are the ones the List | Table switch made.
  */
 export function viewFor(kind: string, kept: 'list' | 'table' | 'calendar' | undefined, legacyList: boolean): 'list' | 'table' | 'calendar' {
-  if (kind === 'notes') return 'list'
+  if (kind === 'notes' || kind === 'knowledge' || kind === 'projects') return 'list'
   if (!legacyList) {
     if (kind === 'plan') return kept === 'calendar' ? 'calendar' : 'table'
     return 'table'
@@ -484,7 +505,8 @@ export function viewFor(kind: string, kept: 'list' | 'table' | 'calendar' | unde
  * library with nothing in it yet (its setup); `none` is the old list.
  */
 export function boardPlace(kind: string, view: 'list' | 'table' | 'calendar', hasPapers: boolean, legacyList: boolean): 'wide' | 'list' | 'none' {
-  if (kind === 'notes') return 'none'
+  // The slip-box's places — the notes and the projects — are not papers' tables.
+  if (kind === 'notes' || kind === 'knowledge' || kind === 'projects') return 'none'
   if (legacyList) return view === 'list' ? 'none' : 'wide'
   if (kind === 'plan' && view === 'calendar') return 'wide'
   if (kind === 'search' || !hasPapers) return 'none'

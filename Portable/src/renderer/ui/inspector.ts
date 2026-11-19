@@ -14,7 +14,7 @@ import { store, type Paper } from '../state.js'
 import { cslFullTitle, cslYear, fullName, type CSLItem, type CSLName } from '../../shared/model.js'
 import { L, prefersKorean } from '../../shared/lang.js'
 import { buildAuthorEditor } from './authorEditor.js'
-import { type DocumentKind } from '../../shared/documentKind.js'
+import { type ShelfKind } from '../../shared/documentKind.js'
 import { buildSketchInspector } from './sketchInspector.js'
 import { openEditor as openNoteEditor, renderNotesTab } from './notesTab.js'
 import { quotationInsertion } from '../../shared/noteQuote.js'
@@ -32,7 +32,7 @@ export interface InspectorActions {
   copyKey: (id: string) => void
   openAuthor: (name: CSLName) => void
   /** The answer to "paper or document?", which decides the rest of this form. */
-  setKind: (id: string, kind: DocumentKind) => void
+  setKind: (id: string, kind: ShelfKind) => void
   /** The default drawing style changed; the rack and the page should follow. */
   sketchChanged: () => void
   /** Another paper, shown — a supplement's parent, or one of its supplements. */
@@ -374,13 +374,14 @@ function kindQuestion(paper: Paper, actions: InspectorActions): HTMLElement {
     ? L('논문 같아요 — 안에 DOI나 참고문헌이 보여요. 맞으면 그대로 눌러주세요.',
         'It looks like a paper — there is a DOI or a reference list in it. Press it again to agree.')
     : guess === 'document'
-      ? L('논문은 아닌 것 같아요. 일반 문서면 학술지 같은 칸은 숨길게요.',
-          "It doesn't look like a paper. As a document, the journal fields go away.")
+      ? L('논문은 아닌 것 같아요. 책이나 일반 문서면 학술지 같은 칸은 숨길게요.',
+          "It doesn't look like a paper. As a book or a document, the journal fields go away.")
       : L('고르면 이 칸들이 그에 맞게 바뀌어요.', 'The fields below follow your answer.')
 
   const choices = el('div', { class: 'choices kind-choices' })
   for (const [value, label] of [
     ['paper', L('논문', 'A paper')],
+    ['book', L('책', 'A book')],
     ['document', L('일반 문서', 'A document')],
   ] as const) {
     // The chosen one is marked, and the other one is the way back: an answer
@@ -388,7 +389,7 @@ function kindQuestion(paper: Paper, actions: InspectorActions): HTMLElement {
     const button = el('button', {
       text: label,
       title: label,
-      'aria-pressed': String(paper.meta.effectiveKind === value),
+      'aria-pressed': String(paper.meta.shelfKind === value),
     })
     on(button, 'click', () => actions.setKind(paper.id, value))
     choices.append(button)
@@ -404,7 +405,7 @@ function kindQuestion(paper: Paper, actions: InspectorActions): HTMLElement {
  *  it was unsure of, each one press from being the record. */
 function candidatesSection(paper: Paper, actions: InspectorActions): HTMLElement | null {
   const candidates = (paper.meta.raw.candidates ?? []) as Candidate[]
-  if (paper.meta.effectiveKind !== 'paper' || paper.meta.confidence !== 'needsReview' || candidates.length === 0) return null
+  if (paper.meta.shelfKind !== 'paper' || paper.meta.confidence !== 'needsReview' || candidates.length === 0) return null
   const list = el('div', { class: 'candidate-list' })
   for (const candidate of candidates) {
     const csl = (candidate.csl ?? {}) as CSLItem
@@ -512,7 +513,7 @@ const provenanceAsked = new Map<string, string>()
 
 function details(body: HTMLElement, paper: Paper, actions: InspectorActions, redraw: () => void) {
   const meta = paper.meta
-  const kind = meta.effectiveKind
+  const kind = meta.shelfKind
   const isPaper = kind === 'paper'
   const csl = draftFor(paper)
 
@@ -571,6 +572,19 @@ function details(body: HTMLElement, paper: Paper, actions: InspectorActions, red
       text('URL', 'URL'),
       draftType(paper, L('종류', 'Type'), PAPER_TYPES, dirtied),
     ))
+  } else if (kind === 'book') {
+    // A book: who published it, where, which edition, its ISBN — the
+    // fields `@book` carries, and none of a journal's.
+    body.append(section(L('책 정보', 'Details'),
+      title,
+      text(L('부제', 'Subtitle'), 'subtitle'),
+      draftYear(paper, dirtied),
+      text(L('출판사', 'Publisher'), 'publisher'),
+      el('div', { class: 'field-row' }, [text(L('펴낸 곳', 'Place'), 'publisher-place'), text(L('판', 'Edition'), 'edition')]),
+      text('ISBN', 'ISBN'),
+      text('DOI', 'DOI'),
+      text('URL', 'URL'),
+    ))
   } else {
     // A document has a source and a year and nothing a journal would recognise.
     body.append(section(L('문서 정보', 'Details'),
@@ -579,11 +593,13 @@ function details(body: HTMLElement, paper: Paper, actions: InspectorActions, red
       text(L('펴낸 곳', 'From'), 'publisher'),
       draftYear(paper, dirtied),
       text('URL', 'URL'),
-      draftType(paper, L('종류', 'Kind'), DOCUMENT_TYPES, dirtied),
+      // «Book» is a shelf of its own since 1.1; a document that already
+      // says it keeps the word so the picker shows it.
+      draftType(paper, L('종류', 'Kind'), DOCUMENT_TYPES.filter((type) => type !== 'book' || csl.type === 'book'), dirtied),
     ))
   }
 
-  const authorTitle = isPaper ? L('저자', 'Authors') : L('쓴 사람', 'Written by')
+  const authorTitle = isPaper ? L('저자', 'Authors') : kind === 'book' ? L('지은이', 'Written by') : L('쓴 사람', 'Written by')
   body.append(buildAuthorEditor({
     title: authorTitle,
     authors: (csl.author ?? []) as CSLName[],
@@ -664,7 +680,7 @@ function details(body: HTMLElement, paper: Paper, actions: InspectorActions, red
     note,
   ))
 
-  if (isPaper) {
+  if (kind !== 'document') {
     const ids = (meta.raw.identifiers ?? {}) as Record<string, string | undefined>
     const rows = [
       identifierRow('DOI', ids.doi, actions),

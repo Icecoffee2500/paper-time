@@ -19,6 +19,16 @@ enum BoardEntry: Hashable {
 /// screen, heights that are numbers. One SwiftUI view per row, drawn like
 /// the demo's grid; the table only scrolls, selects and carries drags.
 struct BoardTable: NSViewRepresentable {
+    /// The size it is given, without asking AppKit. Left to itself SwiftUI
+    /// asks an AppKit view for its layout traits on every pass of the
+    /// window's layout, and AppKit answers by updating the constraints of
+    /// the view's whole subtree — for a table, every row on screen, each
+    /// row's SwiftUI body with it. That was most of what a pane opening or
+    /// closing cost (2026-11-19, `--papertime-perf`).
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSViewType, context: Context) -> CGSize? {
+        CGSize(width: proposal.width ?? 0, height: proposal.height ?? 0)
+    }
+
     let entries: [BoardEntry]
     /// Bumped when what a row says changes without the rows changing.
     let revision: Int
@@ -33,6 +43,10 @@ struct BoardTable: NSViewRepresentable {
     /// Papers dropped above the row at the index.
     let drop: ([UUID], Int) -> Bool
     let open: (UUID) -> Void
+    /// For a drag that ends unaccepted over the sidebar (`SidebarDrops`).
+    var model: LibraryModel? = nil
+    /// The paper the list was last asked to go to (`LibraryModel.reveal`).
+    var reveal: LibraryModel.RevealRequest? = nil
 
     static let paperHeight: CGFloat = 36
     static let groupHeight: CGFloat = 36
@@ -54,7 +68,10 @@ struct BoardTable: NSViewRepresentable {
         table.intercellSpacing = NSSize(width: 0, height: 0)
         table.setDraggingSourceOperationMask([.copy, .move], forLocal: false)
         table.setDraggingSourceOperationMask(.move, forLocal: true)
-        table.registerForDraggedTypes([.init(UTType.paperTimePaper.identifier)])
+        // Papers only where a drop means something — a plan's order. A
+        // table that took every paper drag and refused it stood between the
+        // drag and the pane's zones underneath (`PaneDropZones`).
+        if reorders { table.registerForDraggedTypes([.init(UTType.paperTimePaper.identifier)]) }
         table.draggingDestinationFeedbackStyle = .gap
         let column = NSTableColumn(identifier: .init("row"))
         column.resizingMask = .autoresizingMask
@@ -78,6 +95,12 @@ struct BoardTable: NSViewRepresentable {
     }
 
     func updateNSView(_ scroll: NSScrollView, context: Context) {
+        if let table = scroll.documentView as? NSTableView {
+            let type = NSPasteboard.PasteboardType(UTType.paperTimePaper.identifier)
+            let takes = table.registeredDraggedTypes.contains(type)
+            if reorders, !takes { table.registerForDraggedTypes([type]) }
+            if !reorders, takes { table.unregisterDraggedTypes() }
+        }
         context.coordinator.apply(self)
     }
 
@@ -143,6 +166,21 @@ struct BoardTable: NSViewRepresentable {
                 }
             }
             applySelection()
+            applyReveal()
+        }
+
+        private var revealed = 0
+
+        /// Goes to the row asked for, once per request — and not for a
+        /// request older than a moment, which a table made later (another
+        /// shelf's) would otherwise act on.
+        private func applyReveal() {
+            guard let table, let reveal = owner.reveal, reveal.serial != revealed,
+                  Date.now.timeIntervalSince(reveal.at) < 2 else { return }
+            guard let row = owner.entries.firstIndex(where: { if case let .paper(id) = $0 { id == reveal.paper } else { false } })
+            else { return }
+            revealed = reveal.serial
+            DispatchQueue.main.async { [weak table] in table?.centre(row: row) }
         }
 
         private func applySelection() {
@@ -245,17 +283,35 @@ struct BoardTable: NSViewRepresentable {
         func tableView(_ tableView: NSTableView, pasteboardWriterForRow row: Int) -> (any NSPasteboardWriting)? {
             guard row < owner.entries.count, case let .paper(id) = owner.entries[row] else { return nil }
             let item = NSPasteboardItem()
-            if let json = try? JSONEncoder().encode(PaperTransfer(id: id, title: "")) {
+            let paper = owner.model?.paper(id)
+            if let json = try? JSONEncoder().encode(PaperTransfer(id: id, title: paper?.meta.displayTitle ?? "")) {
                 item.setData(json, forType: .init(UTType.paperTimePaper.identifier))
             }
+            // The file and the title go alongside, as the list's did: for the
+            // Finder, for other apps, and for the picture under the pointer.
+            if let paper {
+                item.setString(paper.documentURL.absoluteString, forType: .fileURL)
+                item.setString(paper.meta.displayTitle, forType: .string)
+            }
             return item
+        }
+
+        /// A drag that nobody took, ended over a sidebar row: the row takes
+        /// it — `SidebarDrops`, for a drop AppKit routed nowhere.
+        func tableView(_ tableView: NSTableView, draggingSession session: NSDraggingSession,
+                       endedAt screenPoint: NSPoint, operation: NSDragOperation) {
+            guard operation.isEmpty, let model = owner.model else { return }
+            SidebarDrops.deliver(session.draggingPasteboard, atScreen: screenPoint, model: model)
         }
 
         func tableView(_ tableView: NSTableView, validateDrop info: any NSDraggingInfo,
                        proposedRow row: Int, proposedDropOperation operation: NSTableView.DropOperation) -> NSDragOperation {
             guard owner.reorders else { return [] }
             if operation == .on { tableView.setDropRow(row, dropOperation: .above) }
-            return info.draggingSource as? NSTableView === tableView ? .move : .copy
+            // A row of this table, dragged by its row (`RowDragHost`), moves.
+            let own = info.draggingSource as? NSTableView === tableView
+                || (info.draggingSource as? RowDragSource)?.table === tableView
+            return own ? .move : .copy
         }
 
         func tableView(_ tableView: NSTableView, acceptDrop info: any NSDraggingInfo,
@@ -279,3 +335,31 @@ struct BoardTable: NSViewRepresentable {
     }
 }
 #endif
+
+extension NSTableView {
+    /// Brings a row to the middle of the view — unless it is in full view
+    /// already, where moving the list would only lose the reader's place.
+    func centre(row: Int) {
+        guard row >= 0, row < numberOfRows else { return }
+        guard let scroll = enclosingScrollView else { scrollRowToVisible(row); return }
+        layoutSubtreeIfNeeded()
+        let clip = scroll.contentView
+        let rect = rect(ofRow: row)
+        if clip.documentVisibleRect.insetBy(dx: 0, dy: 4).contains(rect) { return }
+        let height = clip.bounds.height
+        let bottom = max(0, bounds.height + scroll.contentInsets.bottom - height)
+        let target = NSPoint(x: clip.bounds.origin.x, y: min(max(0, rect.midY - height / 2), bottom))
+        if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            clip.setBoundsOrigin(target)
+            scroll.reflectScrolledClipView(clip)
+            return
+        }
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.32
+            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            clip.animator().setBoundsOrigin(target)
+        } completionHandler: {
+            scroll.reflectScrolledClipView(clip)
+        }
+    }
+}

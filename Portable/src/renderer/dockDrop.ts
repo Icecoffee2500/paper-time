@@ -11,7 +11,7 @@ import { store } from './state.js'
 import { closeOpenPapers } from './ui/openPapers.js'
 import { toast } from './ui/toolbar.js'
 import { L } from '../shared/lang.js'
-import { PANE_DRAG_TYPE, carriesPapers, draggedPapers, zoneAt, zoneRect, type DockZone } from '../shared/split.js'
+import { READER_PANE_DRAG_TYPE, carriesPapers, draggedPapers, zoneAt, zoneRect, type DockZone } from '../shared/split.js'
 
 /**
  * A paper dragged over the page area — a row of the list, a pane's title, a
@@ -65,7 +65,7 @@ export function installDockDrop() {
     // Begun on a pane's title, the drag moves that pane; begun anywhere else
     // it opens one more — a second pane of the same paper, when the paper
     // is in one already.
-    const pane = event.dataTransfer?.getData(PANE_DRAG_TYPE) || undefined
+    const pane = event.dataTransfer?.getData(READER_PANE_DRAG_TYPE) || undefined
     const zone = zoneUnder(event)
     lightZone(null)
     if (!id || !zone) return

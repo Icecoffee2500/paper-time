@@ -73,6 +73,16 @@ private struct WindowToolbarBandMeasure: ViewModifier {
 /// AppKit holds the number and nothing in SwiftUI does: `contentLayoutRect` is
 /// the part of the content view they leave alone.
 private struct WindowToolbarBandReader: NSViewRepresentable {
+    /// The size it is given, without asking AppKit. Left to itself SwiftUI
+    /// asks an AppKit view for its layout traits on every pass of the
+    /// window's layout, and AppKit answers by updating the constraints of
+    /// the view's whole subtree — for a table, every row on screen, each
+    /// row's SwiftUI body with it. That was most of what a pane opening or
+    /// closing cost (2026-11-19, `--papertime-perf`).
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSViewType, context: Context) -> CGSize? {
+        CGSize(width: proposal.width ?? 0, height: proposal.height ?? 0)
+    }
+
     /// Changes when the window's geometry does, so the band gets measured
     /// again: resizing and entering full screen both change it.
     var revision: CGFloat

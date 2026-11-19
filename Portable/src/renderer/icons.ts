@@ -92,6 +92,21 @@ const SHAPES = {
   tray: `
     <path d="M2 9.6h2.8l1 1.7h4.4l1-1.7H14"/>
     <path d="M2 9.6V12a1.6 1.6 0 0 0 1.6 1.6h8.8A1.6 1.6 0 0 0 14 12V9.6l-1.9-5.3a1.4 1.4 0 0 0-1.3-.9H5.2a1.4 1.4 0 0 0-1.3.9Z"/>`,
+  // The slip-box's projects: a flag on its pole — something to reach (1.1).
+  flag: `
+    <path d="M3.6 14.2V2.4"/>
+    <path d="M3.6 2.9c1.6-.8 3.1-.8 4.6 0s3 .8 4.6 0v6.2c-1.6.8-3.1.8-4.6 0s-3-.8-4.6 0"/>`,
+  // A project under way: a ring of dots, not yet closed.
+  'circle.dotted': `
+    <path d="M8 1.8v.1M11.1 2.6l-.05.08M13.4 4.9l-.08.05M14.2 8h-.1M13.4 11.1l-.08-.05M11.1 13.4l-.05-.08M8 14.2v-.1M4.9 13.4l.05-.08M2.6 11.1l.08-.05M1.8 8h.1M2.6 4.9l.08.05M4.9 2.6l.05.08" stroke-width="1.7"/>`,
+  // A project set aside: two bars in a ring.
+  'pause.circle': `
+    <circle cx="8" cy="8" r="6.2"/>
+    <path d="M6.5 5.7v4.6M9.5 5.7v4.6"/>`,
+  // The slip-box's 지식: a bulb — what was written in one's own words.
+  lightbulb: `
+    <path d="M8 2.2a4.3 4.3 0 0 0-2.6 7.7c.6.5.9 1.1.9 1.8v.3h3.4v-.3c0-.7.3-1.3.9-1.8A4.3 4.3 0 0 0 8 2.2Z"/>
+    <path d="M6.5 13.9h3"/>`,
   // ------------------------------------------------------- reading plans
   // A month with its two rings and the line under the days' names.
   calendar: `
@@ -321,6 +336,11 @@ const SHAPES = {
   'rectangle.split.2x1': `
     <rect x="1.8" y="3.2" width="12.4" height="9.6" rx="1.8"/>
     <path d="M8 3.2v9.6"/>`,
+  // A window lifted off the one behind it: the inspector floating (1.1).
+  'macwindow.on.rectangle': `
+    <rect x="4.2" y="1.8" width="10" height="8.4" rx="1.6"/>
+    <path d="M4.2 4.6h10"/>
+    <path d="M2 6v6.4a1.6 1.6 0 0 0 1.6 1.6H10"/>`,
   // A window with a plus in its corner: one of its own.
   'macwindow.badge.plus': `
     <path d="M9 13.2H3.6a1.8 1.8 0 0 1-1.8-1.8V4.6a1.8 1.8 0 0 1 1.8-1.8h8.8a1.8 1.8 0 0 1 1.8 1.8V8"/>

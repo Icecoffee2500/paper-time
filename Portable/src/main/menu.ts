@@ -142,6 +142,7 @@ export function buildMenu({ send, chooseLibrary }: MenuActions, state: MenuState
         item('focus', state.focus ? L('집중 끝내기', 'Exit Focus') : undefined),
         item('pages'),
         item('openPapers'),
+        item('reopenPane', L('닫은 칸 다시 열기', 'Reopen Closed Pane')),
         separator,
         layout('layoutContinuous', 'continuous', L('이어서 보기', 'Continuous')),
         layout('layoutSinglePage', 'single', L('한 쪽씩 보기', 'Single Page')),

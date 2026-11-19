@@ -42,11 +42,12 @@ extension LibraryModel {
     /// The key a shelf's view is kept under.
     static func shelfKey(_ scope: Scope) -> String? {
         switch scope {
-        case .notes, .graph: nil
+        case .notes, .knowledge, .projects, .graph: nil
         case .all: "all"
         case .open: "open"
         case .searchResults: "search"
         case .papers: "papers"
+        case .books: "books"
         case .documents: "documents"
         case let .folder(url): "folder:" + url.path(percentEncoded: false)
         case .unread: "unread"
@@ -144,6 +145,7 @@ extension LibraryModel {
         }
         if sorted != plans { plans = sorted }
         if case let .plan(id) = scope, plan(id) == nil { scope = .thisWeek }
+        await loadProjects()
     }
 
     /// Plan files and the per-paper files that something else changed.
@@ -155,7 +157,7 @@ extension LibraryModel {
             guard let root = roots.map(LibraryStore.normalizedPath).first(where: { path.hasPrefix($0 + "/") }) else { continue }
             let parts = path.dropFirst(root.count + 1).split(separator: "/").map(String.init)
             guard parts.count >= 2, parts[0] == support else { continue }
-            if parts[1] == LibraryLayout.plansDirectoryName {
+            if parts[1] == LibraryLayout.plansDirectoryName || parts[1] == LibraryLayout.projectsDirectoryName {
                 plans = true
             } else if parts[1] == LibraryLayout.papersDirectoryName, parts.count == 4,
                       parts[3] == LibraryLayout.scheduleFileName || parts[3] == LibraryLayout.linksFileName,

@@ -218,3 +218,84 @@ struct LooseNotesTests {
         #expect(here.isReachable)
     }
 }
+
+/// The areas of knowledge are folders under the notes folder (1.1): the
+/// filing Finder and any other Markdown app would see.
+@Suite("Areas of knowledge")
+struct NoteAreaTests {
+    static func makeDirectory() throws -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appending(path: "papertime-areas-\(UUID().uuidString)", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+
+    @Test("A note in a folder is read with that folder as its area")
+    func readsAreas() async throws {
+        let directory = try Self.makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let box = LooseNotes(directory: directory)
+        #expect(try await box.createArea(named: "통계") == "통계")
+        #expect(try await box.createArea(named: "추정", inside: "통계") == "통계/추정")
+        _ = try await box.createArea(named: "빈 영역")
+        try await box.saveNote(Zettel(id: "a", title: "Top", area: ""))
+        try await box.saveNote(Zettel(id: "b", title: "Deep", area: "통계/추정"))
+        let read = await box.loadNotes()
+        #expect(Dictionary(uniqueKeysWithValues: read.map { ($0.id, $0.area) }) == ["a": "", "b": "통계/추정"])
+        #expect(FileManager.default.fileExists(atPath: directory.appending(path: "통계/추정/b.md").path))
+        // Empty areas are areas too: they are where the next note goes.
+        #expect(await box.areas() == ["빈 영역", "통계", "통계/추정"])
+        #expect(!LooseNotes.isAreaName("a/b") && !LooseNotes.isAreaName(".hidden") && !LooseNotes.isAreaName("  "))
+    }
+
+    @Test("Filing a note elsewhere moves its file, and leaves no copy")
+    func movesBetweenAreas() async throws {
+        let directory = try Self.makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let box = LooseNotes(directory: directory)
+        _ = try await box.createArea(named: "언러닝")
+        var note = Zettel(id: "n1", title: "Saliency")
+        try await box.saveNote(note)
+        note.area = "언러닝"
+        try await box.saveNote(note)
+        #expect(!FileManager.default.fileExists(atPath: directory.appending(path: "n1.md").path))
+        #expect(FileManager.default.fileExists(atPath: directory.appending(path: "언러닝/n1.md").path))
+        try await box.deleteNote("n1")
+        #expect(await box.loadNotes().isEmpty)
+    }
+
+    @Test("Taking an area away keeps its notes, one level up")
+    func removingKeepsNotes() async throws {
+        let directory = try Self.makeDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let box = LooseNotes(directory: directory)
+        _ = try await box.createArea(named: "A")
+        _ = try await box.createArea(named: "B", inside: "A")
+        try await box.saveNote(Zettel(id: "x", title: "In B", area: "A/B"))
+        #expect(try await box.removeArea("A/B") == 1)
+        #expect(await box.loadNotes().first?.area == "A")
+        #expect(await box.areas() == ["A"])
+        let renamed = try await box.renameArea("A", to: "C")
+        #expect(renamed == "C")
+        #expect(await box.loadNotes().first?.area == "C")
+    }
+
+    @Test("Moving the notes folder carries the areas")
+    func movingCarriesAreas() async throws {
+        let from = try Self.makeDirectory()
+        let to = try Self.makeDirectory()
+        defer {
+            try? FileManager.default.removeItem(at: from)
+            try? FileManager.default.removeItem(at: to)
+        }
+        let old = LooseNotes(directory: from)
+        _ = try await old.createArea(named: "Empty")
+        try await old.saveNote(Zettel(id: "p", title: "Filed", area: "Stats"))
+        try await old.saveNote(Zettel(id: "q", title: "Loose"))
+        let result = await old.move(into: LooseNotes(directory: to))
+        #expect(result.moved == 2 && result.kept == 0)
+        let moved = await LooseNotes(directory: to).loadNotes()
+        #expect(Set(moved.map { "\($0.id)@\($0.area)" }) == ["p@Stats", "q@"])
+        #expect(await LooseNotes(directory: to).areas() == ["Empty", "Stats"])
+    }
+}

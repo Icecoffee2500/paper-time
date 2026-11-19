@@ -78,6 +78,60 @@
     },
     {
      "title": {
+      "ko": "논문 · 책 · 문서",
+      "en": "Papers, Books, Documents"
+     },
+     "detail": {
+      "ko": "«모두» 대신 세 선반에서 시작해요. 종류마다 열이 달라요. 책은 지은이·출판사·진행, 문서는 폴더·쪽·더한 날이에요. 여러 종류가 섞인 선반은 위의 칩으로 하나씩 봐요. 옆 목록의 종류 위로 끌어다 놓으면 종류가 바뀌어요.",
+      "en": "The library starts on three shelves instead of All, each with its own columns: books show authors, publisher and progress; documents show folder, pages and the day they were added. A shelf with more than one kind shows one at a time, picked with the chips above it. Drag something onto a kind in the sidebar to change what it is."
+     },
+     "devices": [
+      "mac"
+     ]
+    },
+    {
+     "title": {
+      "ko": "프로젝트",
+      "en": "Projects"
+     },
+     "detail": {
+      "ko": "슬립박스의 «새 프로젝트…»로 투고나 시험처럼 마감이 있는 일을 계획해요. 마감까지 며칠 남았는지, 이정표, 할 일 보드와 타임라인이 한 쪽에 서요. 옆 칸에 논문 목록을 띄워 두고 끌어다 할 일이나 자료에 놓아요.",
+      "en": "Plan work with a deadline — a submission, an exam — from New Project… in the slip-box. The days left, the milestones, and the steps as a board or a timeline share one page. Keep a paper list in the pane beside it and drag papers onto a step or into the materials."
+     },
+     "demo": "projectBoard",
+     "featured": true,
+     "devices": [
+      "mac"
+     ]
+    },
+    {
+     "title": {
+      "ko": "문헌 노트와 지식",
+      "en": "Literature notes and knowledge"
+     },
+     "detail": {
+      "ko": "슬립박스가 둘로 나뉘어요. 문헌 노트에는 논문·책·문서에 붙은 노트만, 지식에는 직접 쓴 노트가 서요. 지식은 영역으로 나눠 두고, 노트를 영역 위로 끌어다 놓아 옮겨요.",
+      "en": "The slip-box splits in two: literature notes holds the notes attached to a paper, book or document, and knowledge holds the notes you write yourself. Sort knowledge into areas, and drag a note onto an area to move it there."
+     },
+     "devices": [
+      "mac"
+     ]
+    },
+    {
+     "title": {
+      "ko": "칸에 무엇이든 띄워요",
+      "en": "Put anything in any pane"
+     },
+     "detail": {
+      "ko": "옆 목록의 계획이나 선반을 칸 위로 끌어 놓으면 그 칸에 떠요. 가장자리에 놓으면 옆에 새 칸이 생겨요(네 칸까지). 닫은 칸은 아래 «다시 열기»나 ⇧⌘T로 돌아오고, 오른쪽 «+»에서도 열어요. 인스펙터는 «띄우기»로 창 위에 띄울 수 있어요.",
+      "en": "Drag a plan or a shelf from the sidebar onto a pane to show it there, or onto a pane’s edge to open it beside (up to four panes). A closed pane comes back with Reopen, ⇧⌘T, or the + at the right. Float the inspector over the window when the panes are full."
+     },
+     "devices": [
+      "mac"
+     ]
+    },
+    {
+     "title": {
       "ko": "실린 곳으로 서지를",
       "en": "Filed where it was published"
      },
@@ -118,6 +172,32 @@
    ],
    "removed": [],
    "fixed": [
+    {
+     "title": {
+      "ko": "찾은 논문으로 목록도 가요",
+      "en": "The list goes to what you found"
+     },
+     "detail": {
+      "ko": "전부 찾기(⌘K)에서 논문을 고르면 논문만 열리고 목록은 제자리에 있던 것을 고쳤어요. 이제 목록도 그 논문의 줄로 가고, 지금 선반에 없으면 그 종류의 선반으로 바뀌어요.",
+      "en": "Choosing a paper in Search Everything (⌘K) opened it but left the list where it was. The list now goes to its row too, switching to the paper’s own shelf when it isn’t on the one you’re looking at."
+     },
+     "devices": [
+      "mac"
+     ]
+    },
+    {
+     "title": {
+      "ko": "옆 목록에 끌어다 놓기",
+      "en": "Dropping on the sidebar"
+     },
+     "detail": {
+      "ko": "목록의 줄을 끌 수 없던 것과, 끌어도 옆 목록의 종류·읽기 상태·즐겨찾기·계획에 놓이지 않던 것을 고쳤어요. 여러 편을 골라 한 번에 끌어도 돼요.",
+      "en": "Rows in the list could not be dragged, and a drag that did start would not drop on a kind, a reading status, Favorites or a plan in the sidebar. Both work now, and several papers can be dragged at once."
+     },
+     "devices": [
+      "mac"
+     ]
+    },
     {
      "title": {
       "ko": "창이 화면을 넘던 것",

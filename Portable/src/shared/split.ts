@@ -164,8 +164,42 @@ export function zoneRect(zone: DockZone, size: Size): Rect {
 
 /** The MIME type a dragged paper travels under, inside the window. */
 export const PAPER_DRAG_TYPE = 'application/x-papertime-paper'
-/** And the pane a drag started from, when it started on a pane's title: that pane moves rather than a second one opening. */
-export const PANE_DRAG_TYPE = 'application/x-papertime-pane'
+/** And the reader a drag started from, when it started on a side-by-side reader's title: that reader moves rather than a second one opening. */
+export const READER_PANE_DRAG_TYPE = 'application/x-papertime-reader-pane'
+
+/**
+ * A sidebar row dragged into the row of panes (1.1): `{"shelf": <shelf>}`,
+ * the build's own shelf — it never leaves the window.
+ */
+export const SHELF_DRAG_TYPE = 'application/x-papertime-shelf'
+/** A pane's head dragged: the pane's id, and the pane moves. */
+export const CONTENT_PANE_DRAG_TYPE = 'application/x-papertime-pane'
+
+export function writeDraggedShelf(data: DataTransfer, shelf: unknown) {
+  data.setData(SHELF_DRAG_TYPE, JSON.stringify({ shelf }))
+}
+
+export function draggedShelf(data: DataTransfer | null | undefined): unknown | null {
+  const raw = data?.getData(SHELF_DRAG_TYPE) ?? ''
+  if (!raw) return null
+  try {
+    const value = JSON.parse(raw) as { shelf?: unknown }
+    return value && typeof value === 'object' && value.shelf && typeof value.shelf === 'object' ? value.shelf : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Whether a drag is a shelf's or a pane's — the drags the row of panes takes,
+ * with their three zones. Papers and notes keep their own places to go.
+ */
+export function carriesPaneDrop(data: DataTransfer | null | undefined): boolean {
+  if (!data) return false
+  const types = [...data.types]
+  if (types.includes(PAPER_DRAG_TYPE) || types.includes('application/x-papertime-note')) return false
+  return types.includes(SHELF_DRAG_TYPE) || types.includes(CONTENT_PANE_DRAG_TYPE)
+}
 
 /**
  * The papers a drag carries. A drag that starts on one of several chosen
@@ -186,4 +220,21 @@ export function draggedPapers(data: DataTransfer | null | undefined): string[] {
 /** Whether a drag is carrying papers — all a drop target can know before the drop. */
 export function carriesPapers(data: DataTransfer | null | undefined): boolean {
   return Boolean(data && [...data.types].includes(PAPER_DRAG_TYPE))
+}
+
+/** A note, dragged from the slip-box's list: onto an area in the sidebar to file it there (the Mac's `NoteTransfer`). */
+export const NOTE_DRAG_TYPE = 'application/x-papertime-note'
+
+export function writeDraggedNote(data: DataTransfer, id: string) {
+  data.setData(NOTE_DRAG_TYPE, id)
+}
+
+export function draggedNote(data: DataTransfer | null | undefined): string | null {
+  const id = (data?.getData(NOTE_DRAG_TYPE) ?? '').trim()
+  return id || null
+}
+
+/** Whether a drag is carrying a note. */
+export function carriesNote(data: DataTransfer | null | undefined): boolean {
+  return Boolean(data && [...data.types].includes(NOTE_DRAG_TYPE))
 }

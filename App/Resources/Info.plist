@@ -92,6 +92,54 @@
 			<key>UTTypeTagSpecification</key>
 			<dict/>
 		</dict>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Paper Time Note</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.imtaeheon.PaperTime.note</string>
+			<key>UTTypeTagSpecification</key>
+			<dict/>
+		</dict>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Paper Time Project Step</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.imtaeheon.PaperTime.todo</string>
+			<key>UTTypeTagSpecification</key>
+			<dict/>
+		</dict>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Paper Time Shelf</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.imtaeheon.PaperTime.shelf</string>
+			<key>UTTypeTagSpecification</key>
+			<dict/>
+		</dict>
+		<dict>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeDescription</key>
+			<string>Paper Time Pane</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.imtaeheon.PaperTime.pane</string>
+			<key>UTTypeTagSpecification</key>
+			<dict/>
+		</dict>
 	</array>
 </dict>
 </plist>

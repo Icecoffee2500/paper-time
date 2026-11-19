@@ -192,6 +192,8 @@ export class Windows {
           ...(this.options.chromeOverride ? [`--papertime-chrome=${this.options.chromeOverride}`] : []),
           `--papertime-lang=${this.options.korean() ? 'ko' : 'en'}`,
           ...(probe.isRun ? ['--papertime-probe-run=1'] : []),
+          // A sample project, only in a probe that opened a library of its own.
+          ...(probe.hasLibrary && probe.argument('project-sample') === '1' ? ['--papertime-project-sample=1'] : []),
           ...extraArguments,
         ],
       },

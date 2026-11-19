@@ -71,6 +71,7 @@ import { readerSuite } from './reader.js'
 import { sketchGeometrySuite } from './sketchGeometry.js'
 import { sketchCommandsSuite } from './sketchCommands.js'
 import { focusSuite } from './focus.js'
+import { projectsSuite } from './projects.js'
 import { voiceSuite } from './voice.js'
 import { tokensSuite } from './tokens.js'
 import { libraryListSuite } from './libraryList.js'
@@ -468,6 +469,7 @@ async function main() {
   await sketchGeometrySuite(test, suite)
   await sketchCommandsSuite(test, suite)
   await focusSuite(test, suite)
+  await projectsSuite(test, suite)
   await libraryListSuite(test, suite)
   await marksSuite(test, suite)
   await librarySuite(test, suite)

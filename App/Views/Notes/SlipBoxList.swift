@@ -1,26 +1,85 @@
 import PaperCore
 import SwiftUI
 
-/// The whole slip-box: every note in the library, whichever paper it came from.
+/// One of the slip-box's places, as a list (1.1): 문헌 노트 — the notes
+/// written against a paper, a book or a document, filtered by the source's
+/// kind — or 지식, the notes of no paper, in one area or all of them.
 ///
-/// Search across the box and the tags written in the notes are the two ways in;
-/// the links between notes are the third, and they live in the notes themselves.
+/// Search across the place and the tags written in the notes are the two
+/// ways in; the links between notes are the third, and they live in the
+/// notes themselves.
 struct SlipBoxList: View {
     let model: LibraryModel
+    /// The place this list shows when it is pinned in a pane of its own
+    /// rather than following the sidebar (`Workspace`).
+    var pinnedScope: LibraryModel.Scope? = nil
+    /// What pressing a note does besides opening it — a pinned list puts it
+    /// on the page.
+    var onOpenNote: ((String) -> Void)? = nil
+    /// How the notes are ordered: the last edited first, the last written
+    /// first, or by name. Kept between launches; a probe changes nothing.
+    @AppStorage("slipBoxNoteOrder") private var orderRaw = NoteOrder.edited.rawValue
+    /// Which sources' notes 문헌 노트 shows — "" for all of them.
+    @AppStorage("literatureNoteKind") private var kindRaw = ""
 
     private var notes: NotesModel { model.notes }
+    private var order: NoteOrder { NoteOrder(rawValue: orderRaw) ?? .edited }
+    private var kindFilter: ShelfKind? { ShelfKind(rawValue: kindRaw) }
+
+    /// The area shown, when this is 지식 — `.some(nil)` for all of it.
+    private var knowledgeArea: String?? {
+        if case let .knowledge(area) = pinnedScope ?? model.scope { return .some(area) }
+        return nil
+    }
+    private var isLiterature: Bool { knowledgeArea == nil }
+
+    /// The kind of source a literature note was written against; a paper
+    /// this library no longer has counts as a paper.
+    private func kind(of note: Zettel) -> ShelfKind {
+        note.paperID.flatMap { model.paper($0) }?.meta.shelfKind ?? .paper
+    }
+
+    /// Every note of this place, before the search and the chips.
+    private var placeNotes: [Zettel] {
+        if let area = knowledgeArea { return notes.knowledge(in: area) }
+        return notes.literature
+    }
+
+    /// What the list shows: this place's notes, narrowed by the search and the
+    /// tag, and — in 문헌 노트 — by the source's kind, in the chosen order.
+    private var shown: [Zettel] {
+        let narrowed = Set(notes.visible.map(\.id))
+        var result = placeNotes.filter { narrowed.contains($0.id) }
+        if isLiterature, let kindFilter { result = result.filter { kind(of: $0) == kindFilter } }
+        return order.sorted(result)
+    }
+
+    private var title: String {
+        if let area = knowledgeArea { return KnowledgeArea.title(area) }
+        return L("문헌 노트", "Literature Notes")
+    }
+
+    private var symbol: String {
+        if let area = knowledgeArea { return area.map { $0.isEmpty ? "tray" : "folder" } ?? "lightbulb" }
+        return "text.quote"
+    }
 
     var body: some View {
         @Bindable var notes = model.notes
+        let shown = shown
+        let count = placeNotes.count
 
         VStack(spacing: 0) {
             // The same head every left column wears (`ShelfHeader`): the
-            // tile, the name, how many, and the pen; the search under it,
-            // full width, the way a table's columns sit under a shelf's head.
+            // tile, the name, how many, the order and the pen; the search under
+            // it, full width, the way a table's columns sit under a shelf's head.
             #if os(macOS)
-            ShelfHeader(symbol: "note.text", title: L("노트", "Notes"),
-                        subtitle: L("노트 \(notes.notes.count)개", notes.notes.count == 1 ? "1 note" : "\(notes.notes.count) notes")) {
-                newNoteMenu
+            ShelfHeader(symbol: symbol, title: title,
+                        subtitle: L("노트 \(count)개", count == 1 ? "1 note" : "\(count) notes")) {
+                HStack(spacing: 10) {
+                    orderMenu
+                    newNoteButton
+                }
             }
             .padding(.horizontal, 20)
             .padding(.top, 18)
@@ -30,15 +89,18 @@ struct SlipBoxList: View {
                 .padding(.bottom, 10)
             #else
             HStack(spacing: 10) {
-                Text(L("노트", "Notes"))
+                Text(title)
                     .font(.headline)
                 searchField
-                newNoteMenu
+                orderMenu
+                newNoteButton
             }
             .padding(.horizontal, 16)
             .padding(.top, 10)
             .padding(.bottom, 8)
             #endif
+
+            if isLiterature { kindChips }
 
             if !notes.tags.isEmpty {
                 ScrollView(.horizontal) {
@@ -55,57 +117,36 @@ struct SlipBoxList: View {
 
             // The squeeze: notes with no home that hang together. One line,
             // and a map is one press — Milo's moment, noticed for you.
-            if Legacy.slipBoxStructures, notes.query.isEmpty, notes.selectedTag == nil, let squeeze = notes.suggestions.first {
+            if Legacy.slipBoxStructures, !isLiterature, notes.query.isEmpty, notes.selectedTag == nil, let squeeze = notes.suggestions.first {
                 squeezeBanner(squeeze)
             }
 
-            if notes.visible.isEmpty {
+            if shown.isEmpty {
                 ContentUnavailableView {
-                    Label(notes.notes.isEmpty ? L("아직 노트가 없어요", "No Notes Yet") : L("맞는 노트가 없어요", "Nothing Matches"),
-                          systemImage: "tray")
+                    Label(emptyTitle(nothingAtAll: count == 0), systemImage: count == 0 ? symbol : "magnifyingglass")
                 } description: {
-                    Text(notes.notes.isEmpty
-                         ? L("읽으면서 쓴 노트가 여기 모여요. 그 노트를 쓰게 만든 구절에 이어진 채로요.", "Notes you write while reading collect here, linked to the passage that prompted them.")
-                         : L("찾는 말에 맞는 노트가 없어요.", "No note matches that search."))
+                    Text(emptyNote(nothingAtAll: count == 0))
                 }
                 .frame(maxHeight: .infinity)
             } else {
-                // Grouped by the paper they were written against, each group
-                // in the order its notes were written, and the groups in the
-                // order their first note was — so a note stays where it is.
-                List(selection: $notes.openNoteID) {
-                    ForEach(groups, id: \.id) { group in
-                        Section {
-                            ForEach(group.notes) { note in
-                                NoteRow(note: note)
-                                    .pressable(inset: 6)
-                                    .tag(note.id)
-                                    // A view, so its body is built when the
-                                    // menu opens rather than when the row is:
-                                    // the filing menu asks the box for every
-                                    // map and every draft it holds, and it
-                                    // was asking once per note in the list.
-                                    .contextMenu { NoteMenu(note: note, model: model) }
-                            }
-                        } header: {
-                            // The paper as a chip, the same shape the library
-                            // folder wears in the source list: a group of
-                            // notes is named, not ruled off. A line over
-                            // every group and under every note made the box
-                            // read as a table.
-                            Text(group.title)
-                                .font(.caption.weight(.medium))
-                                .foregroundStyle(group.id == "-" ? AnyShapeStyle(.secondary) : AnyShapeStyle(.tint))
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 2)
-                                .background(
-                                    RoundedRectangle(cornerRadius: Corner.control - 2, style: .continuous)
-                                        .fill(Color.accentColor.opacity(group.id == "-" ? 0 : 0.12))
-                                )
-                                .padding(.bottom, 2)
-                        }
+                List(selection: Binding(
+                    get: { notes.openNoteID },
+                    set: { id in
+                        notes.openNoteID = id
+                        if let id { onOpenNote?(id) }
+                    }
+                )) {
+                    ForEach(shown) { note in
+                        SlipNoteRow(note: note, model: model, kind: isLiterature ? kind(of: note) : nil,
+                                    showsArea: knowledgeArea == .some(nil) || (knowledgeArea.flatMap { $0 }.map { note.area != $0 } ?? false),
+                                    date: order == .created ? note.created : note.modified)
+                            .pressable(inset: 6)
+                            .tag(note.id)
+                            // Onto an area in the sidebar, to file it there.
+                            .draggable(NoteTransfer(id: note.id))
+                            // A view, so its body is built when the menu opens
+                            // rather than when the row is.
+                            .contextMenu { SlipNoteMenu(note: note, model: model) }
                     }
                 }
                 // The source list's style: rounded selection, and no rule
@@ -119,6 +160,114 @@ struct SlipBoxList: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    private func emptyTitle(nothingAtAll: Bool) -> String {
+        guard nothingAtAll else { return L("맞는 노트가 없어요", "Nothing Matches") }
+        if isLiterature { return L("아직 문헌 노트가 없어요", "No Literature Notes Yet") }
+        if case .some(.some(let area)) = knowledgeArea, !area.isEmpty { return L("이 영역에 노트가 없어요", "Nothing in This Area") }
+        return L("아직 지식 노트가 없어요", "No Knowledge Notes Yet")
+    }
+
+    private func emptyNote(nothingAtAll: Bool) -> String {
+        guard nothingAtAll else {
+            return L("찾는 말이나 고른 종류에 맞는 노트가 없어요.", "No note matches the search or the kind chosen.")
+        }
+        if isLiterature {
+            return L("논문을 읽으면서 노트 탭에 쓴 노트가 여기 모여요. 그 노트를 쓰게 만든 구절에 이어진 채로요.",
+                     "Notes you write in a paper’s Notes tab collect here, linked to the passage that prompted them.")
+        }
+        if case .some(.some(let area)) = knowledgeArea, !area.isEmpty {
+            return L("옆 목록의 이 영역으로 노트를 끌어다 놓거나, 연필을 눌러 여기서 새로 써요.",
+                     "Drag notes onto this area in the sidebar, or press the pencil to write one here.")
+        }
+        return L("내 말로 정리한 노트를 여기 써요. 오른쪽 위 연필로 시작해요.",
+                 "Write what you’ve learned in your own words here. Start with the pencil.")
+    }
+
+    /// 논문 · 책 · 문서 — the kinds of source this place's notes were written
+    /// against, with how many of each; a press keeps only those.
+    @ViewBuilder
+    private var kindChips: some View {
+        let counted = Dictionary(grouping: placeNotes, by: kind(of:)).mapValues(\.count)
+        if counted.count > 1 || kindFilter != nil {
+            HStack(spacing: 4) {
+                kindChip(nil, count: placeNotes.count)
+                ForEach(ShelfKind.allCases.filter { counted[$0] != nil || $0 == kindFilter }, id: \.self) { kind in
+                    kindChip(kind, count: counted[kind] ?? 0)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 10)
+        }
+    }
+
+    private func kindChip(_ kind: ShelfKind?, count: Int) -> some View {
+        let on = kindFilter == kind
+        return Button {
+            withAnimation(Motion.tap) { kindRaw = kind?.rawValue ?? "" }
+        } label: {
+            HStack(spacing: 5) {
+                Text(kind?.label ?? L("모두", "All"))
+                Text("\(count)").monospacedDigit().opacity(0.7)
+            }
+            .font(.system(size: 11.5, weight: on ? .semibold : .regular))
+            .foregroundStyle(on ? Color.accentColor : .secondary)
+            .padding(.horizontal, 9)
+            .frame(height: 22)
+            .background(Capsule().fill(on ? Color.accentColor.opacity(0.13) : .clear))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var orderMenu: some View {
+        Menu {
+            Picker(L("정렬", "Sort By"), selection: $orderRaw) {
+                ForEach(NoteOrder.allCases) { order in
+                    Text(order.label).tag(order.rawValue)
+                }
+            }
+            .pickerStyle(.inline)
+        } label: {
+            Image(systemName: "arrow.up.arrow.down")
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help(L("정렬: \(order.label)", "Sort: \(order.label)"))
+    }
+
+    /// A new note here: in 지식, filed in the area shown; in 문헌 노트, on
+    /// the paper chosen in the library — a literature note needs a source.
+    @ViewBuilder
+    private var newNoteButton: some View {
+        if let area = knowledgeArea {
+            Button {
+                let made = model.notes.create(paperID: nil, area: area ?? "").id
+                model.notes.openNoteID = made
+                onOpenNote?(made)
+            } label: {
+                Image(systemName: "square.and.pencil")
+            }
+            .buttonStyle(.borderless)
+            .help(L("새 노트", "New Note"))
+        } else {
+            let paper = model.selectedPaper
+            Button {
+                guard let paper else { return }
+                let made = model.notes.create(paperID: paper.id).id
+                model.notes.openNoteID = made
+                onOpenNote?(made)
+            } label: {
+                Image(systemName: "square.and.pencil")
+            }
+            .buttonStyle(.borderless)
+            .disabled(paper == nil)
+            .help(paper.map { L("‘\($0.meta.displayTitle)’에 노트 쓰기", "Write a Note on “\($0.meta.displayTitle)”") }
+                  ?? L("문헌 노트는 논문을 고르고 써요", "Choose a paper to write a literature note"))
+        }
     }
 
     private var searchField: some View {
@@ -148,27 +297,6 @@ struct SlipBoxList: View {
         .background(Capsule().fill(Color.primary.opacity(0.05)))
     }
 
-    private var newNoteMenu: some View {
-        Menu {
-            Button {
-                model.notes.openNoteID = model.notes.create(paperID: nil).id
-            } label: { Label(L("새 노트", "New Note"), systemImage: "note.text") }
-            if Legacy.slipBoxStructures {
-                Button {
-                    model.notes.openNoteID = model.notes.create(paperID: nil, kind: .map).id
-                } label: { Label(L("새 지도", "New Map"), systemImage: "map") }
-                Button {
-                    model.notes.openNoteID = model.notes.create(paperID: nil, kind: .draft).id
-                } label: { Label(L("새 초안", "New Draft"), systemImage: "doc.text") }
-            }
-        } label: {
-            Image(systemName: "square.and.pencil")
-        }
-        .menuStyle(.borderlessButton)
-        .fixedSize()
-        .help(Legacy.slipBoxStructures ? L("노트·지도·초안 쓰기", "Write a note, a map, or a draft") : L("새 노트", "New Note"))
-    }
-
     private func tagChip(_ tag: String, count: Int) -> some View {
         let isOn = notes.selectedTag == tag
         return Button {
@@ -192,16 +320,6 @@ struct SlipBoxList: View {
         }
         .buttonStyle(.plain)
     }
-
-    private struct NoteGroup {
-        let id: String
-        let title: String
-        var notes: [Zettel]
-    }
-
-    /// Where a note can go: onto a map, or into a draft.
-    @ViewBuilder
-
 
     /// "These notes hang together; make them a map?"
     private func squeezeBanner(_ squeeze: Atlas.Suggestion) -> some View {
@@ -234,31 +352,6 @@ struct SlipBoxList: View {
         .padding(.bottom, 8)
     }
 
-    /// The visible notes by paper, notes of no paper last — and the maps
-    /// first of all, since a map is where the others live.
-    private var groups: [NoteGroup] {
-        var found: [NoteGroup] = []
-        var index: [String: Int] = [:]
-        let maps = notes.visible.filter { $0.kind == .map }
-        if !maps.isEmpty { found.append(NoteGroup(id: "maps", title: L("지도", "Maps"), notes: maps)); index["maps"] = found.count - 1 }
-        let drafts = notes.visible.filter { $0.kind == .draft }
-        if !drafts.isEmpty { found.append(NoteGroup(id: "drafts", title: L("초안", "Drafts"), notes: drafts)); index["drafts"] = found.count - 1 }
-        for note in notes.visible where note.kind == .note {
-            // A paper this library no longer has is no group of its own:
-            // three chips all saying "Notes of my own" said nothing.
-            let paper = note.paperID.flatMap { model.paper($0) }
-            let key = paper.map { $0.id.uuidString } ?? "-"
-            if let at = index[key] {
-                found[at].notes.append(note)
-            } else {
-                let title = paper?.meta.csl.fullTitle ?? paper?.meta.displayTitle ?? L("따로 쓴 노트", "Notes of my own")
-                index[key] = found.count
-                found.append(NoteGroup(id: key, title: title, notes: [note]))
-            }
-        }
-        let special = ["maps", "drafts"]
-        return found.filter { special.contains($0.id) } + found.filter { $0.id != "-" && !special.contains($0.id) } + found.filter { $0.id == "-" }
-    }
 }
 
 /// The slip-box's detail pane: the note that is open, or an invitation.
@@ -321,11 +414,35 @@ struct SlipBoxDetail: View {
 ///
 /// Its own view for the reason `PaperMenu` is one — the body of a view is
 /// built when it is shown, and a `@ViewBuilder` closure is built with the row.
-private struct NoteMenu: View {
+struct SlipNoteMenu: View {
     let note: Zettel
     let model: LibraryModel
 
     var body: some View {
+        Button(L("열기", "Open")) { model.notes.openNoteID = note.id }
+        if note.paperID != nil {
+            // A literature note turned into knowledge: a new note of one's
+            // own that starts with the way back to its source.
+            Button {
+                rewriteAsKnowledge()
+            } label: {
+                Label(L("지식으로 옮겨 쓰기", "Rewrite as Knowledge"), systemImage: "lightbulb")
+            }
+        } else {
+            Menu {
+                Button(L("분류 안 함", "Unfiled")) { Task { await model.notes.move(note.id, toArea: "") } }
+                    .disabled(note.area.isEmpty)
+                if !model.notes.areas.isEmpty { Divider() }
+                ForEach(model.notes.areas, id: \.self) { area in
+                    Button(String(repeating: "  ", count: KnowledgeArea.depth(area) - 1) + KnowledgeArea.name(area)) {
+                        Task { await model.notes.move(note.id, toArea: area) }
+                    }
+                    .disabled(note.area == area)
+                }
+            } label: {
+                Label(L("영역으로 옮기기", "Move to Area"), systemImage: "folder")
+            }
+        }
         if Legacy.slipBoxStructures, note.kind == .note {
             let maps = model.notes.maps
             let drafts = model.notes.drafts
@@ -344,8 +461,91 @@ private struct NoteMenu: View {
                 }
             }
         }
+        Divider()
         Button(role: .destructive) { model.notes.delete(note.id) } label: {
             Label(L("지우기", "Delete"), systemImage: "trash")
         }
+    }
+
+    private func rewriteAsKnowledge() {
+        var fresh = model.notes.create(paperID: nil)
+        let label = note.displayTitle.replacingOccurrences(of: "]", with: "").replacingOccurrences(of: "|", with: " ")
+        fresh.body = L("출처: [[\(note.id)|\(label)]]\n\n", "From: [[\(note.id)|\(label)]]\n\n")
+        model.notes.update(fresh)
+        model.scope = .knowledge(nil)
+        model.notes.openNoteID = fresh.id
+    }
+}
+
+/// One note in a slip-box list: its title, where it came from — the
+/// source's kind and title, or the area it is filed in — and when.
+struct SlipNoteRow: View {
+    let note: Zettel
+    let model: LibraryModel
+    /// The kind of source, for a literature note.
+    let kind: ShelfKind?
+    /// Whether to say the area — when the list holds more than one.
+    let showsArea: Bool
+    let date: Date
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(note.displayTitle)
+                    .font(.system(size: 13, weight: .medium))
+                    .lineLimit(1)
+                if let line = secondLine {
+                    line
+                }
+            }
+            Spacer(minLength: 6)
+            Text(Self.when(date))
+                .font(.system(size: 11.5))
+                .monospacedDigit()
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.vertical, 3)
+    }
+
+    private var secondLine: AnyView? {
+        if let kind {
+            let source = note.paperID.flatMap { model.paper($0) }
+            return AnyView(HStack(spacing: 6) {
+                Text(kind.chip)
+                    .font(.system(size: 10.5, weight: .semibold))
+                    .foregroundStyle(kind.tint)
+                    .padding(.horizontal, 6)
+                    .frame(height: 17)
+                    .background(Capsule().fill(kind.tint.opacity(0.12)))
+                Text(source?.meta.displayTitle ?? L("라이브러리에 없는 논문", "A paper no longer here"))
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            })
+        }
+        if showsArea {
+            return AnyView(Label(KnowledgeArea.title(note.area), systemImage: note.area.isEmpty ? "tray" : "folder")
+                .font(.system(size: 11.5))
+                .foregroundStyle(.secondary)
+                .labelStyle(.titleAndIcon))
+        }
+        let preview = note.body.split(separator: "\n").first { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+        return preview.map { line in
+            AnyView(Text(String(line).trimmingCharacters(in: .whitespaces))
+                .font(.system(size: 11.5))
+                .foregroundStyle(.secondary)
+                .lineLimit(1))
+        }
+    }
+
+    /// «14:20» today, «11월 18일» this year, the full date before that.
+    static func when(_ date: Date) -> String {
+        let calendar = Calendar.current
+        if calendar.isDateInToday(date) { return date.formatted(date: .omitted, time: .shortened) }
+        if calendar.isDate(date, equalTo: .now, toGranularity: .year) {
+            return date.formatted(.dateTime.month(.abbreviated).day())
+        }
+        return date.formatted(date: .numeric, time: .omitted)
     }
 }

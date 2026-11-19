@@ -28,6 +28,7 @@ import {
   type PickMode,
 } from '../state.js'
 import { solo } from '../shell.js'
+import { ensurePagePane } from '../layout.js'
 import { focused, pageArea, readerOf, reconcileReaders } from '../pageArea.js'
 import { saveSettings } from '../settingsController.js'
 import { toggleOpenPapers } from '../ui/openPapers.js'
@@ -39,8 +40,10 @@ import { freshPaneKey, paperOfPane, splitContainsPaper, splitPanesOf, type DockZ
  * Shows a paper. With papers side by side, the paper takes the place of the
  * pane in focus, so the arrangement keeps its shape.
  */
-export async function showPaper(id: string, keepSelection = false) {
+export async function showPaper(id: string, keepSelection = false, options: { arrange?: boolean } = {}) {
   if (!findPaper(id)) return
+  // Chosen with no page in the row: one comes, beside the pane it was chosen in (1.1).
+  if (options.arrange !== false) ensurePagePane()
   // Shown by any other way than the list's own rows — the palette, Back, a
   // supplement — a paper is the one row chosen (the Mac's `selectedPaperID`).
   if (!keepSelection && (store.selection.length !== 1 || store.selection[0] !== id)) {

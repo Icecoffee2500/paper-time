@@ -33,7 +33,7 @@ export function saveSettings(patch: Partial<Settings>, options: { soon?: boolean
   // A window for one paper has no library columns and is not the window the
   // app reopens: what it shows is its own, not the settings'.
   if (solo) {
-    const { selectedPaperID: _paper, panes: _panes, columns: _columns, inspectorTab: _tab, ...rest } = patch
+    const { selectedPaperID: _paper, panes: _panes, columns: _columns, inspectorTab: _tab, paneRow: _row, ...rest } = patch
     patch = rest
     if (Object.keys(patch).length === 0) return
   }
@@ -80,7 +80,7 @@ export function setSettings(patch: Partial<Settings>, options: { live?: boolean 
 
 /** What another window chose, followed here without writing it again. The
  *  columns, the paper showing and the tab are each window's own. */
-const SHARED = new Set<string>(['appearance', 'language', 'pageTint', 'pageTintColor', 'pageLayout', 'latexShortcuts', 'semanticSearch', 'resolveMetadataOnImport', 'metadataContactEmail', 'listSubtitle', 'bibtexProtectCase', 'bibtexPreprintStyle', 'bibtexIncludeUnverified', 'sort', 'sketchStyle', 'inkPresets', 'shortcuts', 'checkForUpdates'])
+const SHARED = new Set<string>(['appearance', 'language', 'pageTint', 'pageTintColor', 'pageLayout', 'latexShortcuts', 'semanticSearch', 'resolveMetadataOnImport', 'metadataContactEmail', 'listSubtitle', 'bibtexProtectCase', 'bibtexPreprintStyle', 'bibtexIncludeUnverified', 'sort', 'sketchStyle', 'inkPresets', 'shortcuts', 'checkForUpdates', 'slipBoxNoteOrder', 'literatureNoteKind'])
 
 export function adoptSettings(patch: Record<string, unknown>) {
   const taken: Record<string, unknown> = {}

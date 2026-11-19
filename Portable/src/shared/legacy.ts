@@ -5,6 +5,9 @@
 export const LEGACY = {
   /** What the empty search palette offers (continue, revisit, new this week). */
   emptySearchSuggestions: false,
+  /** The slip-box's maps and drafts from a note's menu — «Put on Map», «Add to Draft» (the Mac's `slipBoxStructures`).
+   *  The files still open; the ways of making them wait for 2.0. */
+  slipBoxStructures: false,
   /** Settings → Library → «Notes Without a Paper»: choosing their folder. The notes stay; the control waits for 2.0. */
   looseNotesFolder: false,
   /** The list beside the page as it was before 1.1 (`ui/paperList.ts`), and

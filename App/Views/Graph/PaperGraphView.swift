@@ -343,7 +343,7 @@ struct PaperGraphView: View {
     }
 
     private func open(_ id: UUID) {
-        model.scope = .all
+        model.scope = model.homeScope
         model.selectedPaperID = id
     }
 

@@ -25,6 +25,15 @@ typealias PlatformViewRepresentable = NSViewRepresentable
 /// the layout changes. `PKCanvasView` does not exist on macOS, so the Mac shows
 /// the ink that is stored in the PDF itself and offers text markup instead.
 struct PDFReaderRepresentable: PlatformViewRepresentable {
+    #if os(macOS)
+    /// The size it is given — see `BoardTable.sizeThatFits`: without it each
+    /// pass of the window's layout asked the PDF view's whole subtree for
+    /// its constraints.
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: PDFView, context: Context) -> CGSize? {
+        CGSize(width: proposal.width ?? 0, height: proposal.height ?? 0)
+    }
+    #endif
+
     let session: DocumentSession
     let configuration: ReaderConfiguration
     let link: ReaderLink

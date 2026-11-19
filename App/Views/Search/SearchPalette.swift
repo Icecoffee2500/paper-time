@@ -452,13 +452,13 @@ struct SearchPalette: View {
         case let .showAll(query):
             model.showSearchResults(for: query)
         case let .paper(id):
-            model.selectedPaperID = id
+            model.reveal(id)
         case let .passage(passage), let .meaning(passage):
-            openPassage(passage, in: model, link: link)
+            openPassage(passage, in: model, link: link, reveals: true)
         case let .meaningNote(place):
             openNotePassage(place, words: result.title, in: model)
         case let .note(id):
-            model.scope = .notes
+            model.scope = model.slipBoxScope(for: id)
             model.notes.openNoteID = id
         case let .collection(id):
             model.scope = .collection(id)

@@ -896,6 +896,47 @@ public actor LibraryStore {
         try FileManager.default.removeItem(at: url)
     }
 
+    // MARK: - Projects
+
+    /// The projects in this folder (1.1) — read the way the plans are, dot
+    /// files left out by name rather than by the hidden flag iCloud sets.
+    public func loadProjects() -> [Project] {
+        let directory = LibraryLayout.projectsDirectoryURL(inLibrary: root)
+        guard let files = try? FileManager.default.contentsOfDirectory(
+            at: directory, includingPropertiesForKeys: nil
+        ) else { return [] }
+        return files
+            .filter { $0.pathExtension == "json" && !$0.lastPathComponent.hasPrefix(".") }
+            .compactMap { try? FileOperations.decode(Project.self, at: $0) }
+            .sorted { $0.createdAt < $1.createdAt }
+    }
+
+    public func saveProject(_ project: Project) throws {
+        try FileOperations.ensureDirectory(at: LibraryLayout.projectsDirectoryURL(inLibrary: root))
+        try FileOperations.encodeAndWrite(project, to: LibraryLayout.projectURL(id: project.id, inLibrary: root))
+    }
+
+    /// Edits a project against the file as it is now, so another device's
+    /// edit since the last reading is kept. Nil when it is gone.
+    @discardableResult
+    public func updateProject(_ id: UUID, _ change: (inout Project) -> Void) throws -> Project? {
+        let url = LibraryLayout.projectURL(id: id, inLibrary: root)
+        guard var project = try? FileOperations.decode(Project.self, at: url) else { return nil }
+        let before = project
+        change(&project)
+        if project != before { try FileOperations.encodeAndWrite(project, to: url) }
+        return project
+    }
+
+    /// Puts a project's file in the Trash (a probe's is removed instead).
+    /// The papers and notes it drew on are not touched.
+    public func deleteProject(_ id: UUID, toTrash: Bool = true) throws {
+        let url = LibraryLayout.projectURL(id: id, inLibrary: root)
+        guard FileManager.default.fileExists(atPath: url.path(percentEncoded: false)) else { return }
+        if toTrash, (try? FileManager.default.trashItem(at: url, resultingItemURL: nil)) != nil { return }
+        try FileManager.default.removeItem(at: url)
+    }
+
     // MARK: - Renaming the file
 
     /// Why a name was refused. Said in the app's two languages there, not

@@ -8,11 +8,12 @@
  * tab does. Every row can be dragged — to the page's edge, to put the paper
  * beside the one showing.
  */
+import { centreRow, pendingReveal } from './revealRow.js'
 import { iconNode } from '../icons.js'
 import { clear, el, on } from '../dom.js'
 import { isCommand } from '../bridge.js'
 import {
-  attachmentsOf, draggedFrom, isOpenPaper, isPinned, isSelected, papersByFolder, planByID, shelfPapers, store, tagByID,
+  attachmentsOf, draggedFrom, isOpenPaper, isPinned, isSelected, papersByFolder, planByID, projectByID, shelfPapers, store, tagByID,
   type Paper, type PickMode,
 } from '../state.js'
 import { setView, shelfKey } from '../plans.js'
@@ -27,6 +28,7 @@ import { passageKey, passageSubtitle, type TextHit } from '../textSearch.js'
 import { noteSubtitle } from '../meaningSearch.js'
 import { placeKey } from '../../shared/semantic/results.js'
 import { LEGACY } from '../../shared/legacy.js'
+import { areaTitle } from '../../shared/noteAreas.js'
 import { shelfHeader, shelfSymbol, shelfTone } from './shelfHeader.js'
 
 export interface PaperListActions {
@@ -104,6 +106,16 @@ export function buildPaperList(actions: PaperListActions): { node: HTMLElement; 
   const rowsPerPage = () => {
     const row = body.querySelector<HTMLElement>('.paper-row')
     return Math.max(1, Math.floor(body.clientHeight / Math.max(row?.offsetHeight ?? 56, 1)) - 1)
+  }
+  /** The ask taken last (`revealPaper`). */
+  let revealed = 0
+  /** Goes to the row Search Everything chose, once per ask. */
+  const goToAsked = () => {
+    const ask = pendingReveal(revealed)
+    if (!ask) return
+    const row = body.querySelector<HTMLElement>(`.paper-row[data-id="${CSS.escape(ask.paper)}"]`)
+    if (!row) return
+    if (centreRow(body, row)) revealed = ask.serial
   }
   const reveal = () => requestAnimationFrame(() => {
     const lead = (store.selectionLead && body.querySelector(`.paper-row[data-id="${store.selectionLead}"]`))
@@ -222,7 +234,7 @@ export function buildPaperList(actions: PaperListActions): { node: HTMLElement; 
         }
         trailing.push(seg)
       }
-      header.append(shelfHeader({ icon: shelfSymbol(store.shelf), tone: shelfTone(store.shelf), title, subtitle, trailing }))
+      header.append(shelfHeader({ icon: shelfSymbol(store.shelf), tone: shelfTone(store.shelf), title, subtitle, trailing, closes: true }))
     }
     // Parsed once for the list, not once per row: the setting is a string
     // taken apart, and sixty rows took it apart sixty times.
@@ -310,9 +322,11 @@ export function buildPaperList(actions: PaperListActions): { node: HTMLElement; 
         body.append(row.node)
         return { id, shape, row }
       })
+      goToAsked()
       return
     }
     for (const [at, { entry }] of wanted.entries()) if (entry) shown[at].row?.apply(entry, fields)
+    goToAsked()
   }
 
   update()
@@ -702,16 +716,16 @@ export function shelfTitle(): string {
       return ({
         paper: L('논문', 'Papers'),
         book: L('책', 'Books'),
-        lecture: L('강의자료', 'Course Material'),
         document: L('문서', 'Documents'),
-      } as Record<string, string>)[(store.shelf as { of: string }).of] ?? L('모두', 'All')
+      } as Record<string, string>)[(store.shelf as { of: string }).of] ?? L('논문', 'Papers')
     case 'folder':
       return basename((store.shelf as { root: string }).root)
     case 'open': return L('열린 문서', 'Open Documents')
     case 'status': return statusName(store.shelf.status)
     case 'favorites': return L('즐겨찾기', 'Favorites')
     case 'review': return L('살펴볼 것', 'Needs Review')
-    case 'notes': return L('노트', 'Notes')
+    case 'notes': return L('문헌 노트', 'Literature Notes')
+    case 'knowledge': return areaTitle((store.shelf as { area: string | null }).area)
     case 'collection':
       return store.collections.find((c) => c.id === (store.shelf as { id: string }).id)?.name ?? L('컬렉션', 'Collection')
     case 'tag':
@@ -719,6 +733,7 @@ export function shelfTitle(): string {
     case 'author': return (store.shelf as { name: string }).name
     case 'plan': return planByID((store.shelf as { id: string }).id)?.plan.name ?? L('계획', 'Plan')
     case 'week': return L('이번 주', 'This Week')
+    case 'projects': return projectByID((store.shelf as { id: string | null }).id)?.project.name ?? L('프로젝트', 'Projects')
   }
 }
 

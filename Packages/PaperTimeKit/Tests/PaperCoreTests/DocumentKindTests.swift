@@ -28,6 +28,29 @@ struct DocumentKindTests {
         #expect(!DocumentKind.document.isLookedUp)
     }
 
+    @Test("A book is a paper whose CSL type says book, and is never looked up")
+    func books() throws {
+        var meta = PaperMeta()
+        #expect(meta.shelfKind == .paper)
+        #expect(meta.isLookedUp)
+        meta.csl.type = .book
+        #expect(meta.shelfKind == .book)
+        #expect(meta.effectiveKind == .paper, "still cited")
+        #expect(!meta.isLookedUp, "a textbook's title matches a journal article's")
+        // A chapter is a paper: Crossref gives LNCS papers as book chapters.
+        meta.csl.type = .chapter
+        #expect(meta.shelfKind == .paper)
+        // A document stays one whatever its type says.
+        meta.kind = .document
+        meta.csl.type = .book
+        #expect(meta.shelfKind == .document)
+        #expect(!meta.isLookedUp)
+        // Nothing new is written: the shelf is read off the CSL type.
+        let written = String(decoding: try JSONCoding.encoder.encode(meta), as: UTF8.self)
+        #expect(written.contains("\"kind\" : \"document\""))
+        #expect(!written.contains("shelf"))
+    }
+
     @Test("Nothing found means a document")
     func nothing() {
         let guess = DocumentGuess.of(hasIdentifier: false, hasAbstract: false, hasReferences: false)

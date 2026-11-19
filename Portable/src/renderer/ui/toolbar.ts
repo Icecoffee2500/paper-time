@@ -188,7 +188,7 @@ let toastShowing: { node: HTMLElement; text: string; timer: number } | null = nu
  * Each used to bring its own timer, so the third of three quick toasts was
  * taken down by the first one's.
  */
-export function toast(message: string, action?: { label: string; press: () => void }) {
+export function toast(message: string, action?: { label: string; press: () => void }, options: { ms?: number } = {}) {
   if (toastShowing && (toastShowing.text !== message || action)) {
     toastShowing.node.remove()
     toastShowing = null
@@ -217,7 +217,22 @@ export function toast(message: string, action?: { label: string; press: () => vo
     showing.node.dataset.leaving = 'true'
     if (toastShowing === showing) toastShowing = null
     setTimeout(() => showing.node.remove(), 260)
-  }, action ? 7000 : 1600)
+  }, options.ms ?? (action ? 7000 : 1600))
+}
+
+/** The toast saying this, taken down — the reopen capsule once its pane is back. */
+export function dismissToast(message: string) {
+  if (!toastShowing || toastShowing.text !== message) return
+  const showing = toastShowing
+  clearTimeout(showing.timer)
+  showing.node.dataset.leaving = 'true'
+  toastShowing = null
+  setTimeout(() => showing.node.remove(), 260)
+}
+
+/** The toast standing now, if it says this — the reopen capsule asks whether it is still up. */
+export function toastShows(message: string): boolean {
+  return toastShowing?.text === message && toastShowing.node.dataset.leaving !== 'true'
 }
 
 export { clear }

@@ -662,6 +662,9 @@ public enum WindowProbe {
             if let png = shot {
                 try? png.write(to: URL(fileURLWithPath: path))
                 say("window probe: wrote \(path); opaque=\(window.isOpaque) background=\(window.backgroundColor)")
+                // And through the log, for a reader who cannot open the
+                // container (`--papertime-shot-to-log=1`).
+                PaneProbe.emit(png, named: URL(fileURLWithPath: path).lastPathComponent)
                 // What is actually in the window, for the times a picture of
                 // it cannot be trusted: `cacheDisplay` misses a ScrollView's
                 // contents, so an empty-looking shot proves nothing and this
@@ -746,8 +749,11 @@ public enum WindowProbe {
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(1.5))
             guard let model, !model.launchBegan, launchWindow == nil else { return }
+            // `--papertime-window-size=<w>x<h>`: a window of another size, for
+            // looking at what a wider screen holds.
+            let size = Boot.setting("PAPERTIME_WINDOW_SIZE")?.split(separator: "x").compactMap { Double($0) }
             let window = Unconstrained(
-                contentRect: NSRect(x: 0, y: 0, width: 1280, height: 820),
+                contentRect: NSRect(x: 0, y: 0, width: size?.first ?? 1280, height: size?.dropFirst().first ?? 820),
                 styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
                 backing: .buffered,
                 defer: true
@@ -872,6 +878,23 @@ public enum WindowProbe {
             .null, .optionIncludingWindow, CGWindowID(window.windowNumber), [.boundsIgnoreFraming, .bestResolution]
         ), image.width > 2, image.height > 2 else { return nil }
         return NSBitmapImageRep(cgImage: image).representation(using: .png, properties: [:])
+    }
+
+    /// The window as it is now, written to the log (`PaneProbe`) — a picture
+    /// taken at the moment a probe's step asks for, not at a time guessed
+    /// from the launch.
+    static func snapshot(named name: String) {
+        // A hidden probe's window is not "visible": the biggest one with
+        // content is the library's.
+        let biggest = NSApp.windows.filter { $0.contentView != nil && !($0 is NSPanel) }
+            .max { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height }
+        guard let window = NSApp.windows.first(where: { $0.attachedSheet != nil })
+                ?? NSApp.keyWindow ?? NSApp.windows.first(where: \.isVisible) ?? biggest,
+              let content = window.contentView,
+              let png = pixels(of: content) else {
+            return FileHandle.standardError.write(Data("window probe: nothing to photograph for \(name)\n".utf8))
+        }
+        PaneProbe.emit(png, named: name)
     }
 
     private static func pixels(of view: NSView) -> Data? {

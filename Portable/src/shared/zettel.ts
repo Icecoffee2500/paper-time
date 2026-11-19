@@ -39,6 +39,15 @@ export interface Zettel {
   paperID: string | null
   created: Date
   modified: Date
+  /**
+   * The area of knowledge it is filed under: the folder it sits in under the
+   * notes folder, «통계/추정» for a folder in a folder, '' for none (1.1,
+   * the slip-box's 지식). Never written in the note — the folder is the
+   * area, so the file manager and any other Markdown app see the same
+   * filing. Only a note of no paper has one: a literature note lives beside
+   * its paper.
+   */
+  area: string
 }
 
 // MARK: - Foundation's character sets, as the Mac trims and matches with them
@@ -195,6 +204,8 @@ export function zettelFromText(text: string, fallbackID: string, modified: Date)
     paperID: paperIDFrom(fields.get('paper')),
     created: (created === undefined ? null : parseISO8601(created)) ?? modified,
     modified,
+    // The folder the file sits in says this, not the file.
+    area: '',
   }
 }
 

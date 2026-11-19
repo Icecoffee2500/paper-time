@@ -15,7 +15,7 @@
 import { clear, el, on } from '../dom.js'
 import { L } from '../../shared/lang.js'
 import { store, type Paper } from '../state.js'
-import { isCitable, isLookedUp } from '../../shared/documentKind.js'
+import { isCitable, lookedUp } from '../../shared/documentKind.js'
 import { DEFAULT_EXPORT, formatBibliography, type ExportOptions } from '../../shared/bibtex.js'
 import { inCollection } from '../../shared/smartRule.js'
 
@@ -32,7 +32,7 @@ let open = false
 
 /** Nobody has checked it against a registrar — the Mac's «unverified». */
 function unverified(entry: Paper): boolean {
-  return isLookedUp(entry.meta.effectiveKind)
+  return lookedUp(entry.meta)
     && entry.meta.confidence !== 'verified' && entry.meta.confidence !== 'manual'
 }
 
