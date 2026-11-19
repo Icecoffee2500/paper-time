@@ -22,8 +22,8 @@
     if (node) node.setAttribute("content", value);
   };
   set('meta[name="description"]', say(
-    "한 계열의 논문을 모아 차례와 날짜를 정하고, 발표 자료와 코드를 논문 옆에 붙여 둬요. Paper Time의 다음 버전에 들어가는 읽기 계획이에요.",
-    "Gather a line of papers, give them an order and days to read them, and keep the slides and the code beside each one. Reading plans come in the next version of Paper Time."
+    "한 계열의 논문을 모아 차례와 날짜를 정하고, 발표 자료와 코드를 논문 옆에 붙여 둬요. Paper Time 1.1.0의 읽기 계획이에요.",
+    "Gather a line of papers, give them an order and days to read them, and keep the slides and the code beside each one. Reading plans are new in Paper Time 1.1.0."
   ));
   set('meta[property="og:title"]', document.title);
   set('meta[property="og:description"]', say(
