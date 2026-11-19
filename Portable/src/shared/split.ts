@@ -162,10 +162,112 @@ export function zoneRect(zone: DockZone, size: Size): Rect {
   }
 }
 
+/** A pane's paper replaced: the key `from` becomes `to`, in the same place. */
+export function splitReplace(arrangement: SplitArrangement, from: string, to: string): SplitArrangement {
+  const swap = (column: SplitColumn | undefined) => column && {
+    top: column.top === from ? to : column.top,
+    ...(column.bottom ? { bottom: column.bottom === from ? to : column.bottom } : {}),
+  }
+  return { left: swap(arrangement.left)!, right: swap(arrangement.right) }
+}
+
+/** Two panes trade places — a side-by-side pane dragged by its title onto another (the Mac's `open(_:inPane:moving:)`). */
+export function splitSwap(arrangement: SplitArrangement, a: string, b: string): SplitArrangement {
+  if (a === b || !splitContains(arrangement, a) || !splitContains(arrangement, b)) return arrangement
+  const trade = (key: string) => (key === a ? b : key === b ? a : key)
+  const swap = (column: SplitColumn | undefined) => column && {
+    top: trade(column.top),
+    ...(column.bottom ? { bottom: trade(column.bottom) } : {}),
+  }
+  return { left: swap(arrangement.left)!, right: swap(arrangement.right) }
+}
+
+/**
+ * Where a paper dragged over the page would land (the Mac's
+ * `DockDropDelegate.target`, 2026-11-18): a new pane at an edge, or in place
+ * of a pane's paper — `pane` null is the one reader, when nothing stands
+ * side by side.
+ */
+export type DockTarget = { kind: 'zone'; zone: DockZone } | { kind: 'open'; pane: string | null }
+
+/**
+ * One reader: the outer three tenths on either side make a new pane (a half,
+ * or a quarter at the top or the bottom), the rest opens here, in place of
+ * the paper shown. Side by side: a thin strip at either outer edge adds a
+ * pane while there are fewer than four, and anywhere else is the pane under
+ * the pointer — its paper is replaced. In a gap between panes, the nearest.
+ * `frames` are the side-by-side panes' boxes in the page's own coordinates.
+ */
+export function dockTarget(x: number, y: number, size: Size, arrangement: SplitArrangement | null, frames: Record<string, Rect>): DockTarget | null {
+  if (!(size.width > 0) || !(size.height > 0)) return null
+  if (!arrangement) {
+    const zone = zoneAt(x, y, size)
+    return zone ? { kind: 'zone', zone } : { kind: 'open', pane: null }
+  }
+  const keys = splitPapers(arrangement)
+  const fx = x / size.width
+  const fy = y / size.height
+  if (keys.length < 4 && (fx < 0.1 || fx > 0.9)) {
+    const left = fx < 0.1
+    if (fy < 0.33) return { kind: 'zone', zone: left ? 'topLeft' : 'topRight' }
+    if (fy > 0.67) return { kind: 'zone', zone: left ? 'bottomLeft' : 'bottomRight' }
+    return { kind: 'zone', zone: left ? 'left' : 'right' }
+  }
+  const shown = keys.filter((key) => frames[key]).map((key) => ({ key, rect: frames[key] }))
+  const inside = shown.find(({ rect }) => x >= rect.x && x <= rect.x + rect.width && y >= rect.y && y <= rect.y + rect.height)
+  if (inside) return { kind: 'open', pane: inside.key }
+  const distance = (rect: Rect) => {
+    const dx = Math.max(rect.x - x, 0, x - (rect.x + rect.width))
+    const dy = Math.max(rect.y - y, 0, y - (rect.y + rect.height))
+    return dx * dx + dy * dy
+  }
+  const nearest = shown.reduce<{ key: string; rect: Rect } | null>((best, one) => (!best || distance(one.rect) < distance(best.rect) ? one : best), null)
+  return { kind: 'open', pane: nearest?.key ?? keys[0] ?? null }
+}
+
+/** The side a dock zone stands on — what its words say. */
+export function zoneSide(zone: DockZone): 'left' | 'right' {
+  return zone === 'left' || zone === 'topLeft' || zone === 'bottomLeft' ? 'left' : 'right'
+}
+
 /** The MIME type a dragged paper travels under, inside the window. */
 export const PAPER_DRAG_TYPE = 'application/x-papertime-paper'
-/** And the pane a drag started from, when it started on a pane's title: that pane moves rather than a second one opening. */
-export const PANE_DRAG_TYPE = 'application/x-papertime-pane'
+/** And the reader a drag started from, when it started on a side-by-side reader's title: that reader moves rather than a second one opening. */
+export const READER_PANE_DRAG_TYPE = 'application/x-papertime-reader-pane'
+
+/**
+ * A sidebar row dragged into the row of panes (1.1): `{"shelf": <shelf>}`,
+ * the build's own shelf — it never leaves the window.
+ */
+export const SHELF_DRAG_TYPE = 'application/x-papertime-shelf'
+/** A pane's head dragged: the pane's id, and the pane moves. */
+export const CONTENT_PANE_DRAG_TYPE = 'application/x-papertime-pane'
+
+export function writeDraggedShelf(data: DataTransfer, shelf: unknown) {
+  data.setData(SHELF_DRAG_TYPE, JSON.stringify({ shelf }))
+}
+
+export function draggedShelf(data: DataTransfer | null | undefined): unknown | null {
+  const raw = data?.getData(SHELF_DRAG_TYPE) ?? ''
+  if (!raw) return null
+  try {
+    const value = JSON.parse(raw) as { shelf?: unknown }
+    return value && typeof value === 'object' && value.shelf && typeof value.shelf === 'object' ? value.shelf : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Whether a drag is a shelf's or a pane's — the drags the row of panes takes,
+ * with their three zones. Papers and notes keep their own places to go.
+ */
+export function carriesPaneDrop(data: DataTransfer | null | undefined): boolean {
+  if (!data) return false
+  const types = [...data.types]
+  if (types.includes(PAPER_DRAG_TYPE) || types.includes('application/x-papertime-note')) return false
+  return types.includes(SHELF_DRAG_TYPE) || types.includes(CONTENT_PANE_DRAG_TYPE)
+}
 
 /**
  * The papers a drag carries. A drag that starts on one of several chosen
@@ -186,4 +288,21 @@ export function draggedPapers(data: DataTransfer | null | undefined): string[] {
 /** Whether a drag is carrying papers — all a drop target can know before the drop. */
 export function carriesPapers(data: DataTransfer | null | undefined): boolean {
   return Boolean(data && [...data.types].includes(PAPER_DRAG_TYPE))
+}
+
+/** A note, dragged from the slip-box's list: onto an area in the sidebar to file it there (the Mac's `NoteTransfer`). */
+export const NOTE_DRAG_TYPE = 'application/x-papertime-note'
+
+export function writeDraggedNote(data: DataTransfer, id: string) {
+  data.setData(NOTE_DRAG_TYPE, id)
+}
+
+export function draggedNote(data: DataTransfer | null | undefined): string | null {
+  const id = (data?.getData(NOTE_DRAG_TYPE) ?? '').trim()
+  return id || null
+}
+
+/** Whether a drag is carrying a note. */
+export function carriesNote(data: DataTransfer | null | undefined): boolean {
+  return Boolean(data && [...data.types].includes(NOTE_DRAG_TYPE))
 }

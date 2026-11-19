@@ -43,6 +43,8 @@ import { windowHandlers } from './handlers/window.js'
 import { textHandlers } from './handlers/text.js'
 import { planHandlers } from './handlers/plans.js'
 import { PlanFiles } from './plans.js'
+import { projectHandlers } from './handlers/projects.js'
+import { ProjectFiles } from './projects.js'
 import { pageCount } from './handlers/shared.js'
 import { MetadataQueue } from './metadata/queue.js'
 import { lookupNetwork } from './metadata/wiring.js'
@@ -250,6 +252,8 @@ const metadata = new MetadataQueue({
 
 // The plans' files, for the handlers and for taking a supplement out of them.
 const planFiles = new PlanFiles(() => libraries.all())
+// The projects' files (1.1), read and written the way the plans' are.
+const projectFiles = new ProjectFiles(() => libraries.all())
 
 // Supplements under their papers (`supplements.ts`).
 const supplements = new Supplements({
@@ -353,6 +357,7 @@ const handlers: Handlers = {
   ...windowHandlers(context),
   ...textHandlers(context),
   ...planHandlers(context, planFiles),
+  ...projectHandlers(context, projectFiles),
 } as Handlers
 
 registerIPC(handlers)

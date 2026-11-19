@@ -1,6 +1,6 @@
 /** One paper: its bytes, its record, its name, its own window. */
 import { PaperMeta } from '../../shared/model.js'
-import { isLookedUp } from '../../shared/documentKind.js'
+import { lookedUp } from '../../shared/documentKind.js'
 import fsp from 'node:fs/promises'
 import { MathScanner } from '../mathScanner.js'
 import { shell } from 'electron'
@@ -101,7 +101,7 @@ export function paperHandlers(ctx: Context): Partial<Handlers> {
       // or one somebody typed in, has nothing to ask about.
       if (before && saved) {
         const was = new PaperMeta(before.meta)
-        if (!isLookedUp(was.effectiveKind) && was.confidence === 'unparsed') ctx.metadata.rerun([id])
+        if (!lookedUp(was) && was.confidence === 'unparsed' && lookedUp(new PaperMeta(saved))) ctx.metadata.rerun([id])
       }
       if (saved && ('tagIDs' in patch || 'collectionIDs' in patch)) await libraries.wear(holder, saved)
       windows.sendExcept(sender, 'paper:changed', { id, layers: ['record'] })

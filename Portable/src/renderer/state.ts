@@ -9,12 +9,12 @@
 import { defaultInkPresets, type InkPresets } from '../shared/inkPresets.js'
 import type { Settings as AppSettings } from '../shared/appSettings.js'
 import { findPath, isInside, isUnder, pathKey, samePath, slashed } from '../shared/paths.js'
-import type { LibrarySnapshot, NoteDTO, NotesFolderDTO, PaperRowDTO, PlanDTO } from '../shared/api.js'
+import type { LibrarySnapshot, NoteDTO, NotesFolderDTO, PaperRowDTO, PlanDTO, ProjectDTO } from '../shared/api.js'
 import { planOrder, todayDay, type PaperLink } from '../shared/readingPlan.js'
 import { weekShelf } from '../shared/planBoard.js'
 import type { Zettel } from '../shared/zettel.js'
 import type { TextHit } from '../main/textIndex.js'
-import { needsReview, type DocumentKind } from '../shared/documentKind.js'
+import { needsReview, SHELF_KINDS, type ShelfKind } from '../shared/documentKind.js'
 import { authorKey, caseInsensitiveOrder, nameShown, sortingSurname, standardOrder } from '../shared/authorKey.js'
 import { foldTitle } from '../shared/textFold.js'
 import { paperHaystack, prepare, type ActionName, type Prepared, type SearchablePaper } from '../shared/searchRank.js'
@@ -24,7 +24,7 @@ import { SketchColor, SketchStyle } from '../shared/sketch.js'
 import { freshPaneKey, paperOfPane, splitContains, splitContainsPaper, splitDock, splitPanesOf, splitPapers, splitRemove, splitRemovePaper, type DockZone, type SplitArrangement } from '../shared/split.js'
 import { DEFAULT_TINT_COLOR, type PageTint } from '../shared/pageTint.js'
 import { inCollection } from '../shared/smartRule.js'
-import type { PaneState } from '../shared/paneModel.js'
+import { INSPECTOR_PLACE, defaultRow, type InspectorPlace, type PaneRow, type PaneState } from '../shared/paneModel.js'
 
 export type Pane = 'sidebar' | 'paperList' | 'reader' | 'inspector'
 export type InspectorTab = 'details' | 'marks' | 'note' | 'tools'
@@ -34,15 +34,22 @@ export type SketchTool =
 
 /** Which shelf of the library is showing. */
 export type Shelf =
+  /** Every kind at once — no longer a row since 1.1 (`homeShelf` stands
+   *  where it did); kept so an old caller still means something. */
   | { kind: 'all' }
-  /** The two kinds, which only appear as rows once a library holds both. */
-  | { kind: 'kind'; of: DocumentKind }
+  /** The three kinds — 논문, 책, 문서 — where the library starts (1.1). */
+  | { kind: 'kind'; of: ShelfKind }
   | { kind: 'folder'; root: string }
   | { kind: 'open' }
   | { kind: 'status'; status: 'unread' | 'reading' | 'read' }
   | { kind: 'favorites' }
   | { kind: 'review' }
+  /** The slip-box's literature notes (문헌 노트): the notes written against
+   *  a paper, a book or a document. A place of its own, not papers. */
   | { kind: 'notes' }
+  /** The slip-box's knowledge (지식): the notes of no paper, in one area and
+   *  the areas inside it — null is every area, '' the notes filed in none (1.1). */
+  | { kind: 'knowledge'; area: string | null }
   | { kind: 'collection'; id: string }
   /** One person, by `authorKey` — «Y. LeCun» and «Yann LeCun» are one shelf. */
   | { kind: 'author'; key: string; name: string }
@@ -53,6 +60,8 @@ export type Shelf =
   | { kind: 'plan'; id: string }
   /** Every plan's papers for this week, and what is behind. */
   | { kind: 'week' }
+  /** The slip-box's projects (1.1): one, or — null — all of them. */
+  | { kind: 'projects'; id: string | null }
 
 /** One note of the slip-box, and the box it was read from. */
 export interface Note extends Zettel {
@@ -86,7 +95,7 @@ export const WINDOW_SETTINGS = [
   'libraryRoot', 'panes', 'columns', 'inspectorTab', 'sort', 'appearance', 'language', 'pageTint',
   'pageTintColor', 'pageLayout', 'selectedPaperID', 'latexShortcuts', 'semanticSearch', 'resolveMetadataOnImport', 'metadataContactEmail', 'keepPDFsInMemory', 'listSubtitle',
   'bibtexProtectCase', 'bibtexPreprintStyle', 'bibtexIncludeUnverified', 'sketchStyle', 'inkPresets', 'shortcuts', 'seenReleaseNotesVersion', 'checkForUpdates',
-  'planBoard',
+  'planBoard', 'slipBoxNoteOrder', 'literatureNoteKind', 'paneRow', 'projectView',
 ] as const satisfies readonly (keyof AppSettings)[]
 
 export type Settings = Pick<AppSettings, (typeof WINDOW_SETTINGS)[number]>
@@ -146,6 +155,8 @@ export interface Store {
   papers: Paper[]
   /** Every reading plan, and the folder its file is in. */
   plans: PlanDTO[]
+  /** Every project, and the folder its file is in — oldest first (1.1). */
+  projects: ProjectDTO[]
   /** Today where the reader is, `YYYY-MM-DD` — kept, and moved on at midnight. */
   today: string
   collections: Collection[]
@@ -168,8 +179,15 @@ export interface Store {
    *  tag narrowing it, and the paper shown instead after a link was followed. */
   slipBox: { openID: string | null; query: string; tag: string | null; paperID: string | null }
   shelf: Shelf
+  /** The kind a shelf that holds more than one shows — the chips over its
+   *  table. Follows the kind shelf picked last (the Mac's `shownKind`). */
+  shownKind: ShelfKind
   /** The paper showing — with panes side by side, the one in focus. */
   selectedID: string | null
+  /** A paper chosen away from the list — in Search Everything — that the
+   *  list should go to; the serial tells two asks for one paper apart (the
+   *  Mac's `revealRequest`). */
+  revealRequest: { paper: string; serial: number; at: number } | null
   /**
    * The rows chosen in the list, as the Mac's `selection: Set<UUID>`: a
    * shift-click takes a run, a Ctrl-click (⌘ on a Mac) adds or drops one,
@@ -227,6 +245,12 @@ export interface Store {
   searchMeanings: TextHit[]
   /** Focus mode, and the list and inspector it hid (`shared/paneModel.ts`). */
   focus: PaneState['focus']
+  /** The window's row of panes and the ones closed from it (1.1, `shared/paneModel.ts`). */
+  row: PaneRow
+  /** Where the inspector is: docked, or floating over the window. */
+  inspectorPlace: InspectorPlace
+  /** The pane pressed last — where a paper chosen in it opens beside. */
+  activePane: string | null
   sketch: {
     tool: SketchTool
     /** The shape tool last used — the one the rack's shapes button shows. */
@@ -266,6 +290,7 @@ export const store: Store = {
   folders: [],
   papers: [],
   plans: [],
+  projects: [],
   today: todayDay(),
   collections: [],
   tags: [],
@@ -275,8 +300,10 @@ export const store: Store = {
   notesFolder: null,
   noteOpenByPaper: new Map(),
   slipBox: { openID: null, query: '', tag: null, paperID: null },
-  shelf: { kind: 'all' },
+  shelf: { kind: 'kind', of: 'paper' },
+  shownKind: 'paper',
   selectedID: null,
+  revealRequest: null,
   selection: [],
   selectionAnchor: null,
   selectionLead: null,
@@ -313,6 +340,10 @@ export const store: Store = {
     seenReleaseNotesVersion: null,
     checkForUpdates: true,
     planBoard: null,
+    slipBoxNoteOrder: 'edited',
+    literatureNoteKind: '',
+    paneRow: null,
+    projectView: 'board',
   },
   windowState: { maximized: false, fullScreen: false, focused: true },
   trail: [],
@@ -323,6 +354,9 @@ export const store: Store = {
   searchScanning: false,
   searchMeanings: [],
   focus: { on: false, before: { paperList: true, inspector: true } },
+  row: defaultRow(),
+  inspectorPlace: { ...INSPECTOR_PLACE },
+  activePane: null,
   sketch: { tool: 'select', lastShape: 'rectangle', lastInk: 'pen', style: new SketchStyle(), presets: defaultInkPresets(), selection: null },
 }
 
@@ -337,10 +371,13 @@ export const store: Store = {
  * - `history`: Back or Forward became possible or impossible.
  * - `inspector`, `marks`, `notes`, `slipBox`, `sketch`, `settings`: their panes.
  * - `searchResults`: the list's passages for the search shelf arrived.
+ * - `projects`: a project was made, changed or taken away (1.1).
+ * - `panes`: the row of panes changed — one opened, closed, moved or showing something else.
  */
 export type Change =
   | 'papers' | 'shelf' | 'selection' | 'reader' | 'history'
   | 'inspector' | 'marks' | 'notes' | 'slipBox' | 'sketch' | 'settings' | 'searchResults'
+  | 'projects' | 'panes'
 
 type Listener = (changed: Set<Change>) => void
 const listeners = new Set<Listener>()
@@ -377,7 +414,7 @@ export function folderOf(entry: Paper): string | null {
   return [slashed(entry.root), ...parts].join('/')
 }
 
-/** Whether a paper sits at or under a folder — a term shows the term. */
+/** Whether a paper sits at or under a folder. */
 export function isUnderFolder(entry: Paper, folder: string): boolean {
   const here = folderOf(entry)
   if (here === null) return samePath(entry.root ?? '', folder)
@@ -385,8 +422,29 @@ export function isUnderFolder(entry: Paper, folder: string): boolean {
 }
 
 /**
- * The folders one step inside this one, and how many papers each holds
- * counting everything beneath it.
+ * Whether a paper sits directly in a folder — not in a folder inside it.
+ * What a folder's shelf shows (the Mac's `LibraryModel.isDirectlyIn`,
+ * 2026-11-19: «2번째 창에서는 해당 폴더에 있는 pdf만 보이게 하는게 나아 …
+ * 어차피 하위 폴더의 pdf는 사이드바에서 그 하위폴더를 열면 보이니까»): the
+ * shelf had been everything at or under the folder since 0.9.3, and a term's
+ * folder showed every week's PDFs in one run while the weeks stood right
+ * there in the sidebar.
+ */
+export function isDirectlyInFolder(entry: Paper, folder: string): boolean {
+  const here = folderOf(entry)
+  if (here === null) return samePath(entry.root ?? '', folder)
+  return samePath(here, folder)
+}
+
+/** How many papers sit directly in a folder — the count its row shows, which is what its shelf lists. */
+export function directCount(folder: string): number {
+  return store.papers.filter((entry) => !entry.meta.parentID && isDirectlyInFolder(entry, folder)).length
+}
+
+/**
+ * The folders one step inside this one, and how many papers sit directly in
+ * each — what each one's shelf shows (1.1, the Mac's `subfolders(of:)`). A
+ * paper deeper down still puts its folders in the tree.
  *
  * Two sources, because each is wrong alone: the papers say where the
  * library's papers are, and the disk (`store.folders`, from the main
@@ -403,9 +461,11 @@ export function subfolders(folder: string): { path: string; name: string; count:
     const here = folderOf(entry)
     if (here === null || !isInside(here, base)) continue
     // The same number of letters either way: only case is folded.
-    const name = here.slice(base.length + 1).split('/')[0]
+    const parts = here.slice(base.length + 1).split('/')
+    const name = parts[0]
     if (!name) continue
-    counts.set(name, (counts.get(name) ?? 0) + 1)
+    // Counted where it sits, which is what each folder's shelf shows.
+    counts.set(name, (counts.get(name) ?? 0) + (parts.length === 1 ? 1 : 0))
   }
   for (const here of store.folders) {
     if (!isInside(here, base)) continue
@@ -505,14 +565,14 @@ export function failed(message: string) {
 export function noteFromDTO(dto: NoteDTO): Note {
   return {
     id: dto.id, kind: dto.kind, title: dto.title, body: dto.body, paperID: dto.paperID,
-    created: new Date(dto.created), modified: new Date(dto.modified), box: dto.box,
+    created: new Date(dto.created), modified: new Date(dto.modified), box: dto.box, area: dto.area ?? '',
   }
 }
 
 export function noteDTO(note: Note): NoteDTO {
   return {
     id: note.id, kind: note.kind, title: note.title, body: note.body, paperID: note.paperID,
-    created: note.created.getTime(), modified: note.modified.getTime(), box: note.box,
+    created: note.created.getTime(), modified: note.modified.getTime(), box: note.box, area: note.area,
   }
 }
 
@@ -541,6 +601,7 @@ export function adopt(snapshot: LibrarySnapshot) {
   store.folders = snapshot.folders ?? []
   store.papers = snapshot.papers.map(toPaper)
   if (snapshot.plans) store.plans = snapshot.plans
+  if (snapshot.projects) store.projects = snapshot.projects
   store.collections = ((snapshot.collections?.collections as Collection[]) ?? []).slice()
   store.tags = ((snapshot.manifest?.tags as Tag[]) ?? []).slice()
   store.looseCount = snapshot.looseCount
@@ -566,6 +627,11 @@ function toPaper(row: PaperRowDTO): Paper {
 /** A plan by its id. */
 export function planByID(id: string): PlanDTO | undefined {
   return store.plans.find((one) => one.plan.id === id)
+}
+
+/** A project by its id. */
+export function projectByID(id: string | null | undefined): ProjectDTO | undefined {
+  return id ? store.projects.find((one) => one.project.id === id) : undefined
 }
 
 /** A plan's papers in its reading order — the ones the library has. */
@@ -943,7 +1009,47 @@ export function travelBy(by: 1 | -1): string | null {
  */
 export function setShelf(shelf: Shelf) {
   store.shelf = shelf
-  if (shelf.kind === 'notes') store.slipBox.paperID = null
+  // A kind's own shelf sets the kind the mixed shelves show.
+  if (shelf.kind === 'kind') store.shownKind = shelf.of
+  if (isSlipBoxShelf(shelf) || shelf.kind === 'projects') store.slipBox.paperID = null
+}
+
+/**
+ * Reads made as though another shelf were the sidebar's — a pinned pane
+ * drawing its own shelf with the helpers that read the one in front (1.1).
+ * Only for reads: nothing inside may announce a change, which would reach
+ * every pane while the shelf in the store is not the sidebar's.
+ */
+export function readingShelf<T>(shelf: Shelf, read: () => T, kind?: ShelfKind): T {
+  const was = store.shelf
+  const kindWas = store.shownKind
+  store.shelf = shelf
+  if (kind) store.shownKind = kind
+  try {
+    return read()
+  } finally {
+    store.shelf = was
+    store.shownKind = kindWas
+  }
+}
+
+/** Whether a shelf is one of the slip-box's places — 문헌 노트 or 지식 — rather than papers. */
+export function isSlipBoxShelf(shelf: Shelf): boolean {
+  return shelf.kind === 'notes' || shelf.kind === 'knowledge'
+}
+
+/**
+ * The slip-box's place a note is shown in: 문헌 노트 for a note on a
+ * source, 지식 — every area — for one of one's own (`slipBoxScope(for:)`).
+ */
+export function slipBoxShelfFor(note: Pick<Note, 'paperID'> | undefined): Shelf {
+  return note && !note.paperID ? { kind: 'knowledge', area: null } : { kind: 'notes' }
+}
+
+/** Where «out» goes: the kind shelf the reader was last on (the Mac's
+ *  `homeScope`). Out of a library's folders it used to be «All». */
+export function homeShelf(): Shelf {
+  return { kind: 'kind', of: store.shownKind }
 }
 
 /**
@@ -994,19 +1100,72 @@ export function pruneToLibrary() {
 
 // MARK: - Which papers a shelf holds
 
+/**
+ * What the shelf in front shows: a shelf that holds more than one kind cut
+ * down to one — the kind the chips chose, or the first one there is when it
+ * has none of those (the Mac's `oneKind`). Every table shows one kind, so
+ * every table has that kind's columns.
+ */
 export function shelfPapers(): Paper[] {
+  const all = everyKindOnShelf()
+  if (!mixesKinds(store.shelf)) return all
+  const counts = countKinds(all)
+  if (counts.size < 2) return all
+  const kind = kindAmong(counts)
+  return all.filter((entry) => entry.meta.shelfKind === kind)
+}
+
+/** Whether a shelf can hold more than one kind and so shows one at a time. */
+export function mixesKinds(shelf: Shelf): boolean {
+  switch (shelf.kind) {
+    case 'all': case 'kind': case 'plan': case 'week': case 'search': case 'notes': case 'knowledge': case 'projects': return false
+    default: return true
+  }
+}
+
+function countKinds(papers: Paper[]): Map<ShelfKind, number> {
+  const counts = new Map<ShelfKind, number>()
+  for (const entry of papers) counts.set(entry.meta.shelfKind, (counts.get(entry.meta.shelfKind) ?? 0) + 1)
+  return counts
+}
+
+function kindAmong(counts: Map<ShelfKind, number>): ShelfKind {
+  if ((counts.get(store.shownKind) ?? 0) > 0) return store.shownKind
+  return SHELF_KINDS.find((kind) => (counts.get(kind) ?? 0) > 0) ?? store.shownKind
+}
+
+/** The kinds the shelf in front holds, in order, with how many of each —
+ *  empty unless it holds more than one, which is when the chips show. */
+export function kindsOnShelf(): { kind: ShelfKind; count: number }[] {
+  if (!mixesKinds(store.shelf)) return []
+  const counts = countKinds(everyKindOnShelf())
+  if (counts.size < 2) return []
+  return SHELF_KINDS.filter((kind) => counts.has(kind)).map((kind) => ({ kind, count: counts.get(kind)! }))
+}
+
+/** Which kind's columns the table in front has. */
+export function tableKind(): ShelfKind {
+  if (store.shelf.kind === 'kind') return store.shelf.of
+  const all = everyKindOnShelf()
+  const counts = countKinds(all)
+  if (counts.size === 0) return store.shownKind
+  return kindAmong(counts)
+}
+
+function everyKindOnShelf(): Paper[] {
   const all = store.papers.filter((entry) => !entry.meta.parentID)
   let filtered = all
   switch (store.shelf.kind) {
     case 'all': break
     case 'kind': {
-      const of = (store.shelf as { kind: 'kind'; of: DocumentKind }).of
-      filtered = all.filter((entry) => entry.meta.effectiveKind === of)
+      const of = (store.shelf as { kind: 'kind'; of: ShelfKind }).of
+      filtered = all.filter((entry) => entry.meta.shelfKind === of)
       break
     }
     case 'folder': {
+      // What sits in it; what sits in its folders is theirs (`isDirectlyInFolder`).
       const root = (store.shelf as { kind: 'folder'; root: string }).root
-      filtered = all.filter((entry) => isUnderFolder(entry, root))
+      filtered = all.filter((entry) => isDirectlyInFolder(entry, root))
       break
     }
     case 'open': {
@@ -1033,6 +1192,14 @@ export function shelfPapers(): Paper[] {
       const noted = new Set(store.notes.map((note) => note.paperID))
       filtered = all.filter((entry) => noted.has(entry.id))
       break
+    }
+    // The notes of no paper hold no papers.
+    case 'knowledge': return []
+    // A project's papers, in the order it took them in.
+    case 'projects': {
+      const id = (store.shelf as { kind: 'projects'; id: string | null }).id
+      const project = projectByID(id)
+      return project ? project.project.papers.map((one) => paper(one)).filter((entry): entry is Paper => entry !== null) : []
     }
     case 'collection': {
       // A smart collection is whoever its rule matches — the Mac's
@@ -1084,6 +1251,8 @@ export function sameShelf(a: Shelf, b: Shelf): boolean {
     case 'folder': return samePath(a.root, (b as typeof a).root)
     case 'kind': return a.of === (b as typeof a).of
     case 'plan': return a.id === (b as typeof a).id
+    case 'knowledge': return a.area === (b as typeof a).area
+    case 'projects': return a.id === (b as typeof a).id
     default: return true
   }
 }
@@ -1100,6 +1269,7 @@ export function sameShelf(a: Shelf, b: Shelf): boolean {
 export interface ShelfCounts {
   all: number
   papers: number
+  books: number
   documents: number
   folders: Map<string, number>
   unread: number
@@ -1116,6 +1286,7 @@ export function shelfCounts(papers: Paper[]): ShelfCounts {
   const counts: ShelfCounts = {
     all: papers.length,
     papers: 0,
+    books: 0,
     documents: 0,
     folders: new Map(),
     unread: 0,
@@ -1129,9 +1300,12 @@ export function shelfCounts(papers: Paper[]): ShelfCounts {
   }
   const bump = (map: Map<string, number>, key: string) => map.set(key, (map.get(key) ?? 0) + 1)
   for (const entry of papers) {
-    if (entry.meta.effectiveKind === 'paper') counts.papers += 1
+    const kind = entry.meta.shelfKind
+    if (kind === 'paper') counts.papers += 1
+    else if (kind === 'book') counts.books += 1
     else counts.documents += 1
-    if (entry.root) bump(counts.folders, entry.root)
+    // A library's row counts what its own shelf shows: the PDFs at its top.
+    if (entry.root && isDirectlyInFolder(entry, entry.root)) bump(counts.folders, entry.root)
     if (entry.state.readingStatus === 'unread') counts.unread += 1
     else if (entry.state.readingStatus === 'reading') counts.reading += 1
     else counts.read += 1

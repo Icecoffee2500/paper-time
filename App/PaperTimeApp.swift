@@ -11,6 +11,9 @@ struct PaperTimeApp: App {
     #endif
 
     init() {
+        #if os(macOS)
+        PaneProbe.quietCrashIfAsked()
+        #endif
         let model = AppModel()
         _model = State(initialValue: model)
         #if os(macOS)

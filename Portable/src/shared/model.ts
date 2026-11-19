@@ -8,7 +8,7 @@
  * first time they opened a paper on Windows. Known fields are typed; unknown
  * ones are carried.
  */
-import { readKind } from './documentKind.js'
+import { readKind, shelfKindOf, type ShelfKind } from './documentKind.js'
 import { dateFromISO, isoTimestamp, makeUUID } from './coding.js'
 
 export type RawRecord = Record<string, unknown>
@@ -264,6 +264,11 @@ export class PaperMeta {
   /** What the app treats this as: the answer, then the guess, then a paper. */
   get effectiveKind(): DocumentKind {
     return this.kind ?? this.guessedKind ?? 'paper'
+  }
+
+  /** The shelf: a document, or — among the papers — a book, by its CSL type. */
+  get shelfKind(): ShelfKind {
+    return shelfKindOf(this)
   }
 
   get kindIsUnanswered(): boolean {

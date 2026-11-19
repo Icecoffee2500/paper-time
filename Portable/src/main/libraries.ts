@@ -18,6 +18,7 @@ import type { TextSource } from './textIndex.js'
 import { mergeVocabulary, missingVocabulary, type FolderVocabulary } from './vocabulary.js'
 import { settings, update } from './settings.js'
 import { readAllPlans } from './plans.js'
+import { readAllProjects } from './projects.js'
 
 export interface FolderRead {
   library: Library
@@ -223,6 +224,7 @@ export class LibrarySet {
       const extras = await this.hooks.notes(folders.map((one) => one.library.root), (id) => owners.get(id)?.root ?? null)
       const vocabulary = await this.settleVocabulary(rows, folders)
       const plans = await readAllPlans(folders.map((one) => one.library))
+      const projects = await readAllProjects(folders.map((one) => one.library))
       const first = folders[0]
       return {
         root: this.first.root,
@@ -235,6 +237,7 @@ export class LibrarySet {
         unreadable,
         refused,
         plans,
+        projects,
         notes: extras.notes,
         notesFolder: extras.notesFolder,
       }

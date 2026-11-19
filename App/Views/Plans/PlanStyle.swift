@@ -384,20 +384,34 @@ struct ShelfHeader<Trailing: View>: View {
 
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
-            Image(systemName: symbol)
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(tint)
-                .frame(width: 36, height: 36)
-                .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(tint.opacity(0.13)))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.system(size: 19, weight: .semibold)).lineLimit(1)
-                if let subtitle {
-                    Text(subtitle).font(.system(size: 12.5)).foregroundStyle(.secondary).lineLimit(1)
+            HStack(alignment: .center, spacing: 12) {
+                Image(systemName: symbol)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(tint)
+                    .frame(width: 36, height: 36)
+                    .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(tint.opacity(0.13)))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(.system(size: 19, weight: .semibold)).lineLimit(1)
+                    if let subtitle {
+                        Text(subtitle).font(.system(size: 12.5)).foregroundStyle(.secondary).lineLimit(1)
+                    }
                 }
             }
+            #if os(macOS)
+            // The tile and the name are the pane's handle: dragged, the pane
+            // goes with them (`Workspace`).
+            .contentShape(.rect)
+            .paneDragHandle()
+            #endif
             .layoutPriority(1)
-            Spacer(minLength: 8)
-            trailing()
+            Spacer(minLength: 0)
+            HStack(spacing: 8) {
+                trailing()
+                #if os(macOS)
+                // The pane's ⌄ and ×, when the head stands in a pane.
+                PaneHeadControls()
+                #endif
+            }
         }
     }
 }

@@ -285,6 +285,16 @@ struct ContentsPopup: View {
 /// and the page still gets the click that put it away — the way a popover
 /// behaves, rather than the way a modal does.
 private struct ClickOutside: NSViewRepresentable {
+    /// The size it is given, without asking AppKit. Left to itself SwiftUI
+    /// asks an AppKit view for its layout traits on every pass of the
+    /// window's layout, and AppKit answers by updating the constraints of
+    /// the view's whole subtree — for a table, every row on screen, each
+    /// row's SwiftUI body with it. That was most of what a pane opening or
+    /// closing cost (2026-11-19, `--papertime-perf`).
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSViewType, context: Context) -> CGSize? {
+        CGSize(width: proposal.width ?? 0, height: proposal.height ?? 0)
+    }
+
     let onClick: () -> Void
 
     func makeNSView(context: Context) -> Watcher {

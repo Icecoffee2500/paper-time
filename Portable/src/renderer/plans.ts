@@ -10,7 +10,7 @@
  */
 import { call } from './bridge.js'
 import {
-  changed, paper, patchPlanSidecars, planByID, planPapers, sameShelf, setShelf, shelfPapers, store,
+  changed, paper, patchPlanSidecars, homeShelf, planByID, planPapers, sameShelf, setShelf, shelfPapers, store, tableKind,
   type Paper, type Shelf,
 } from './state.js'
 import { solo } from './shell.js'
@@ -28,7 +28,7 @@ import { addDays, spreadDays, todayDay, type PaperLink, type PlanEntry, type Pla
 import type { PlanEdit } from '../shared/planEdit.js'
 import type { PlanDTO } from '../shared/api.js'
 import {
-  BOARD_SORT_KEYS, DEFAULT_COLUMNS, boardPlace, fullDay, holdsAddress, isBehind, kindName, nextStatus, readAddRow, readColumns, spreadOrder, spreadStart, viewFor, withRo,
+  BOARD_CONTEXTS, BOARD_SORT_KEYS, DEFAULT_COLUMNS, boardPlace, shelfContext, fullDay, holdsAddress, isBehind, kindName, nextStatus, readAddRow, readColumns, spreadOrder, spreadStart, viewFor, withRo,
   type BoardContext, type BoardPaper, type BoardSortKey, type ColumnID, type Status,
 } from '../shared/planBoard.js'
 import { addressText } from '../shared/paperAddress.js'
@@ -46,7 +46,11 @@ export type SortKey = BoardSortKey
 export interface BoardPrefs {
   views: Record<string, View>
   columns: Record<BoardContext, ColumnID[]>
+  /** The papers' shelf's sort. */
   sort: { key: SortKey | null; ascending: boolean }
+  /** The books' and the documents' tables' sorts — each kind sorted its own
+   *  way, by columns the others do not have. */
+  kindSorts: Partial<Record<'book' | 'document', { key: SortKey; ascending: boolean }>>
   group: Grouping
   spread: { days: number[]; per: number; from: 'today' | 'next' }
   /** Whether a shelf's table shows «Read On» and «Plan» — off until asked
@@ -57,8 +61,9 @@ export interface BoardPrefs {
 function defaults(): BoardPrefs {
   return {
     views: {},
-    columns: { plan: [...DEFAULT_COLUMNS.plan], week: [...DEFAULT_COLUMNS.week], other: [...DEFAULT_COLUMNS.other] },
+    columns: Object.fromEntries(BOARD_CONTEXTS.map((context) => [context, [...DEFAULT_COLUMNS[context]]])) as Record<BoardContext, ColumnID[]>,
     sort: { key: null, ascending: true },
+    kindSorts: {},
     group: 'section',
     spread: { days: [0, 2, 4], per: 1, from: 'today' },
     planColumns: false,
@@ -78,7 +83,7 @@ export function prefs(): BoardPrefs {
       for (const [key, value] of Object.entries(read.views)) if (value === 'list' || value === 'table' || value === 'calendar') made.views[key] = value
     }
     if (read.columns && typeof read.columns === 'object') {
-      for (const context of ['plan', 'week', 'other'] as BoardContext[]) {
+      for (const context of BOARD_CONTEXTS) {
         const list = readColumns((read.columns as Record<string, unknown>)[context])
         if (list) made.columns[context] = list
       }
@@ -88,6 +93,12 @@ export function prefs(): BoardPrefs {
       const key = raw === 'who' ? 'authors' : raw
       // A key this build does not sort by reads as no sort, not as a sort by nothing.
       made.sort = { key: BOARD_SORT_KEYS.includes(key as SortKey) ? (key as SortKey) : null, ascending: read.sort.ascending !== false }
+    }
+    if (read.kindSorts && typeof read.kindSorts === 'object') {
+      for (const kind of ['book', 'document'] as const) {
+        const one = (read.kindSorts as Record<string, { key?: unknown; ascending?: unknown } | undefined>)[kind]
+        if (one && BOARD_SORT_KEYS.includes(one.key as SortKey)) made.kindSorts[kind] = { key: one.key as SortKey, ascending: one.ascending !== false }
+      }
     }
     if (read.group === 'section' || read.group === 'week' || read.group === 'status') made.group = read.group
     if (read.planColumns === true) made.planColumns = true
@@ -118,7 +129,7 @@ export function savePrefs(change: (prefs: BoardPrefs) => void) {
 /** The key a shelf's view is remembered under; null for the slip-box, which has none. */
 export function shelfKey(shelf: Shelf): string | null {
   switch (shelf.kind) {
-    case 'notes': return null
+    case 'notes': case 'knowledge': case 'projects': return null
     case 'kind': return `kind:${shelf.of}`
     case 'folder': return `folder:${shelf.root}`
     case 'status': return `status:${shelf.status}`
@@ -143,7 +154,10 @@ export function viewOf(shelf: Shelf = store.shelf): View {
 }
 
 export function boardContext(shelf: Shelf = store.shelf): BoardContext {
-  return shelf.kind === 'plan' ? 'plan' : shelf.kind === 'week' ? 'week' : 'other'
+  if (shelf.kind === 'plan') return 'plan'
+  if (shelf.kind === 'week') return 'week'
+  // A shelf shows one kind at a time, with that kind's columns.
+  return shelfContext(shelf.kind === 'kind' ? shelf.of : tableKind())
 }
 
 /**
@@ -172,14 +186,19 @@ export function boardVisible(): boolean {
   return boardPlaceNow() !== 'none'
 }
 
-/** Another view for the shelf showing. */
-export function setView(view: View) {
-  const shelf = store.shelf
+/** A shelf's view, remembered — the one in front's, or a pinned pane's own (1.1). */
+export function rememberView(shelf: Shelf, view: View) {
   const key = shelfKey(shelf)
   if (key === null) return
   savePrefs((prefs) => {
     prefs.views[shelf.kind === 'plan' ? `plan:${shelf.id}` : key] = view
   })
+}
+
+/** Another view for the shelf showing. */
+export function setView(view: View) {
+  if (shelfKey(store.shelf) === null) return
+  rememberView(store.shelf, view)
   layoutPanes()
   if (view !== 'calendar') reconcileReaders()
   changed('shelf')
@@ -308,7 +327,7 @@ function putPlan(dto: PlanDTO) {
 /** Every plan read again — another window or machine changed one. */
 export async function reloadPlans() {
   store.plans = await call('plans:load')
-  if (store.shelf.kind === 'plan' && !planByID(store.shelf.id)) setShelf({ kind: 'all' })
+  if (store.shelf.kind === 'plan' && !planByID(store.shelf.id)) setShelf(homeShelf())
   changed('papers', 'shelf')
 }
 
@@ -422,7 +441,7 @@ export async function deletePlan(id: string) {
   }
   store.plans = store.plans.filter((one) => one.plan.id !== id)
   if (store.shelf.kind === 'plan' && store.shelf.id === id) {
-    setShelf({ kind: 'all' })
+    setShelf(homeShelf())
     layoutPanes()
   }
   changed('papers', 'shelf')

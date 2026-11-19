@@ -21,8 +21,9 @@ export function fillHeader(header: HTMLElement, options: {
 }) {
   clear(header)
   header.append(el('span', { class: 'reader-title', text: options.title ?? '' }))
-  // The title is the handle in a pane: drag it to another zone to move it.
-  header.draggable = options.pane && options.title !== null
+  // The title is the handle: in a pane beside others it moves that paper to
+  // another zone; alone, it moves the page's pane in the row (1.1).
+  header.draggable = options.title !== null
   if (options.title === null) return
   // A pane's strip is a handle and a close box, as the Mac's is; the pen is
   // in the reader's own toolbar and on ⇧⌘D.

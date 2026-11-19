@@ -20,8 +20,9 @@ import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
 import * as L from './layout.js'
-import { zettelFromText, zettelIsEmpty, zettelText, type Zettel } from '../shared/zettel.js'
-import type { NoteDTO, NotesFolderDTO } from '../shared/api.js'
+import { trimWhitespaceAndNewlines, zettelFromText, zettelIsEmpty, zettelText, type Zettel } from '../shared/zettel.js'
+import { DEEPEST_AREA, areaAfterRename, areaParent, isAreaName, renamedArea, sortAreas } from '../shared/noteAreas.js'
+import type { AreaRefusal, NoteDTO, NotesFolderDTO } from '../shared/api.js'
 
 /** One place notes are kept: a library's box, or the loose one. */
 /**
@@ -43,16 +44,39 @@ export function sameFolder(a: string, b: string): boolean {
   }
 }
 
+/** A note's file, and the area it is filed in — '' for none. */
+interface NoteFile {
+  file: string
+  area: string
+}
+
+/** Thrown for an area that cannot be made or renamed, saying why. */
+export class AreaRefused extends Error {
+  constructor(readonly why: AreaRefusal) {
+    super(`area refused: ${why}`)
+  }
+}
+
 export class SlipBoxFolder {
   /**
    * `id` tells boxes apart and is what a note remembers about where it came
    * from: a library's root for its box, the folder itself for a loose one.
+   * `holdsAreas`: the loose box files its notes in areas — folders under
+   * it (1.1); a library's box keeps its notes in one folder beside the
+   * papers, as both builds always have.
    */
-  constructor(readonly id: string, readonly directory: string, readonly chosen = false) {}
+  constructor(readonly id: string, readonly directory: string, readonly chosen = false, readonly holdsAreas = true) {}
 
   static forLibrary(root: string): SlipBoxFolder {
-    return new SlipBoxFolder(root, L.slipBoxDir(root))
+    return new SlipBoxFolder(root, L.slipBoxDir(root), false, false)
   }
+
+  /**
+   * Which area each note was read from or written to, by identifier — so a
+   * note written again goes to its own folder, and a note filed elsewhere
+   * leaves the old one (`LooseNotes.areaOf`).
+   */
+  private areaOf = new Map<string, string>()
 
   /**
    * Whether the folder is there to be written to. Only a chosen folder can
@@ -70,47 +94,63 @@ export class SlipBoxFolder {
     return !inATrash(this.directory)
   }
 
-  private async files(): Promise<string[]> {
-    let entries: string[]
-    try {
-      entries = await fsp.readdir(this.directory)
-    } catch {
-      return []
-    }
-    return entries.filter((name) => !name.startsWith('.') && name.endsWith('.md')).sort()
+  /** The folder an area is, under this box. */
+  areaFolder(area: string): string {
+    return area ? path.join(this.directory, ...area.split('/')) : this.directory
+  }
+
+  /**
+   * Every note's file here, with the area it is filed in. A box of areas is
+   * walked folder by folder, six deep at most, past every hidden folder; a
+   * library's box is its one folder.
+   */
+  private async files(): Promise<NoteFile[]> {
+    return this.holdsAreas ? markdownUnder(this.directory, '', 0) : (await markdownIn(this.directory)).map((file) => ({ file, area: '' }))
   }
 
   async noteIDs(): Promise<string[]> {
-    return (await this.files()).map((name) => name.slice(0, -3))
+    const found = await this.files()
+    for (const one of found) this.areaOf.set(noteID(one.file), one.area)
+    return found.map((one) => noteID(one.file)).sort()
   }
 
-  /** Every note here, newest first. */
+  /** Every note here, newest first, each with the area it is filed in. */
   async loadNotes(): Promise<Zettel[]> {
-    const notes = await Promise.all((await this.files()).map(async (name) => {
-      const file = path.join(this.directory, name)
+    const found = await this.files()
+    const notes = await Promise.all(found.map(async ({ file, area }) => {
       try {
         const [text, stat] = await Promise.all([fsp.readFile(file, 'utf8'), fsp.stat(file)])
-        return zettelFromText(text, name.slice(0, -3), stat.mtime)
+        return { ...zettelFromText(text, noteID(file), stat.mtime), area }
       } catch {
         return null
       }
     }))
+    this.areaOf = new Map(found.map((one) => [noteID(one.file), one.area]))
     return notes.filter((note): note is Zettel => note !== null).sort((a, b) => b.modified.getTime() - a.modified.getTime())
   }
 
-  noteFile(id: string): string {
-    return path.join(this.directory, `${id}.md`)
+  noteFile(id: string, area = ''): string {
+    return path.join(this.holdsAreas ? this.areaFolder(area) : this.directory, `${id}.md`)
   }
 
-  /** Writes a note; an empty one takes its file away instead. Throws when a chosen folder is not there. */
+  /**
+   * Writes a note; an empty one takes its file away instead. Throws when a
+   * chosen folder is not there. A note filed in another area than the one it
+   * was read from is written into its new folder, and then the old file goes.
+   */
   async saveNote(note: Zettel): Promise<void> {
     if (!this.isReachable()) throw new Error(`The notes folder is not there: ${this.directory}`)
-    const file = this.noteFile(note.id)
+    const area = this.holdsAreas ? note.area ?? '' : ''
+    const file = this.noteFile(note.id, area)
+    const was = this.areaOf.get(note.id)
     if (zettelIsEmpty(note)) {
+      noteOwnWrite(file)
       await fsp.rm(file, { force: true })
+      if (was !== undefined && was !== area) await this.removeFile(this.noteFile(note.id, was))
+      this.areaOf.delete(note.id)
       return
     }
-    await fsp.mkdir(this.directory, { recursive: true })
+    await fsp.mkdir(path.dirname(file), { recursive: true })
     // Beside its own name and then renamed into place: a rename inside one
     // folder is the one move that cannot be caught half-done.
     const temporary = `${file}.${process.pid}.tmp`
@@ -125,10 +165,103 @@ export class SlipBoxFolder {
       await fsp.rm(temporary, { force: true })
       throw error
     }
+    // Filed somewhere else now: the copy in the old folder goes, once the
+    // new one is written.
+    if (was !== undefined && was !== area) await this.removeFile(this.noteFile(note.id, was))
+    this.areaOf.set(note.id, area)
   }
 
+  /** Takes a note's file away, from wherever it was read — or, for one this box has not read, wherever it is. */
   async deleteNote(id: string): Promise<void> {
-    await fsp.rm(this.noteFile(id), { force: true })
+    let area = this.areaOf.get(id)
+    if (area === undefined && this.holdsAreas) {
+      area = (await this.files()).find((one) => noteID(one.file) === id)?.area
+    }
+    this.areaOf.delete(id)
+    await this.removeFile(this.noteFile(id, area ?? ''))
+  }
+
+  private async removeFile(file: string) {
+    noteOwnWrite(file)
+    await fsp.rm(file, { force: true })
+  }
+
+  // MARK: - Areas
+
+  /** The areas of knowledge: every folder under the box, empty ones too, in Finder's order. */
+  async areas(): Promise<string[]> {
+    if (!this.holdsAreas) return []
+    return sortAreas(await foldersUnder(this.directory, '', 0))
+  }
+
+  /** Makes an area — `inside` another one, or at the top — and says which. */
+  async createArea(name: string, inside = ''): Promise<string> {
+    if (!this.isReachable()) throw new AreaRefused('away')
+    if (!isAreaName(name, process.platform)) throw new AreaRefused('name')
+    const trimmed = trimWhitespaceAndNewlines(name)
+    const area = inside ? `${inside}/${trimmed}` : trimmed
+    const folder = this.areaFolder(area)
+    if (fs.existsSync(folder)) throw new AreaRefused('exists')
+    noteOwnWrite(folder)
+    await fsp.mkdir(folder, { recursive: true })
+    return area
+  }
+
+  /** Renames an area's folder. Its notes go with it; nothing is rewritten. */
+  async renameArea(area: string, name: string): Promise<string> {
+    if (!this.isReachable()) throw new AreaRefused('away')
+    if (!isAreaName(name, process.platform)) throw new AreaRefused('name')
+    const renamed = renamedArea(area, name)
+    if (renamed === area) return area
+    const from = this.areaFolder(area)
+    const to = this.areaFolder(renamed)
+    if (!fs.existsSync(from)) throw new AreaRefused('missing')
+    // The same folder by another spelling — «통계» to «Stats» is a new
+    // name, «stats» to «Stats» on a disk that does not mind case is this
+    // one — goes through; anything else already there is somebody's.
+    if (fs.existsSync(to) && !sameFolder(from, to)) throw new AreaRefused('exists')
+    noteOwnWrite(from)
+    noteOwnWrite(to)
+    await renameHeld(from, to)
+    for (const [id, was] of this.areaOf) {
+      const now = areaAfterRename(was, area, renamed)
+      if (now !== null) this.areaOf.set(id, now)
+    }
+    return renamed
+  }
+
+  /**
+   * Takes an area away. Its notes are not: they go up to the area it was in
+   * (or to no area), and only then is the folder removed — and only if
+   * nothing else is left in it, since what else is there is not ours. A note
+   * of the same name already one level up keeps its folder: the name is the
+   * identifier, so two of them are two notes. Says how many moved.
+   */
+  async removeArea(area: string): Promise<number> {
+    if (!this.isReachable()) throw new AreaRefused('away')
+    const folder = this.areaFolder(area)
+    const parent = areaParent(area)
+    const landing = this.areaFolder(parent)
+    let moved = 0
+    for (const { file } of await markdownUnder(folder, area, 0)) {
+      const target = path.join(landing, path.basename(file))
+      if (fs.existsSync(target)) continue
+      noteOwnWrite(file)
+      noteOwnWrite(target)
+      await renameHeld(file, target)
+      this.areaOf.set(noteID(file), parent)
+      moved += 1
+    }
+    const left = await markdownUnder(folder, area, 0)
+    if (left.length === 0) {
+      // Empty folders under it go with it; other files keep it.
+      const others = (await filesUnder(folder, 0)).filter((file) => !file.endsWith('.md'))
+      if (others.length === 0) {
+        noteOwnWrite(folder)
+        await fsp.rm(folder, { recursive: true, force: true })
+      }
+    }
+    return moved
   }
 
   /**
@@ -143,19 +276,26 @@ export class SlipBoxFolder {
    */
   async move(into: SlipBoxFolder): Promise<{ moved: number; kept: number }> {
     if (sameFolder(this.directory, into.directory)) return { moved: 0, kept: 0 }
-    const names = await this.files()
-    if (names.length === 0) return { moved: 0, kept: 0 }
-    if (!into.isReachable()) return { moved: 0, kept: names.length }
+    // Every note, the ones filed in an area with the area: it goes to the
+    // same folder there.
+    const notes = await this.files()
+    // Nothing to carry, nothing to ask of the other folder — which may be in
+    // a cloud drive, where even «is it there» is a round trip.
+    if (notes.length === 0) return { moved: 0, kept: 0 }
+    if (!into.isReachable()) return { moved: 0, kept: notes.length }
     await fsp.mkdir(into.directory, { recursive: true })
     let moved = 0
     let kept = 0
-    for (const name of names) {
-      const file = path.join(this.directory, name)
-      const landing = path.join(into.directory, name)
+    for (const { file, area } of notes) {
+      const id = noteID(file)
+      const landing = into.noteFile(id, area)
       try {
+        await fsp.mkdir(path.dirname(landing), { recursive: true })
         if (fs.existsSync(landing)) {
           if ((await fsp.readFile(file)).equals(await fsp.readFile(landing))) {
             await fsp.rm(file, { force: true })
+            this.areaOf.delete(id)
+            into.areaOf.set(id, area)
             moved += 1
           } else {
             kept += 1
@@ -164,13 +304,86 @@ export class SlipBoxFolder {
         }
         await fsp.copyFile(file, landing)
         await fsp.rm(file, { force: true })
+        this.areaOf.delete(id)
+        into.areaOf.set(id, area)
         moved += 1
       } catch {
         kept += 1
       }
     }
+    if (this.holdsAreas && into.holdsAreas) {
+      // The areas carried over, empty ones too; the ones left here empty go —
+      // a folder of nothing is not a place the reader made twice.
+      const areas = await foldersUnder(this.directory, '', 0)
+      for (const area of areas) await fsp.mkdir(into.areaFolder(area), { recursive: true }).catch(() => undefined)
+      for (const area of [...areas].reverse()) {
+        const folder = this.areaFolder(area)
+        if ((await visibleEntries(folder)).length === 0) await fsp.rm(folder, { recursive: true, force: true }).catch(() => undefined)
+      }
+    }
     return { moved, kept }
   }
+}
+
+/** A note's identifier: its file's name without `.md`. */
+function noteID(file: string): string {
+  return path.basename(file).slice(0, -3)
+}
+
+/** What a folder holds that a person put there: everything but the hidden names. */
+async function visibleEntries(folder: string): Promise<fs.Dirent[]> {
+  try {
+    return (await fsp.readdir(folder, { withFileTypes: true })).filter((entry) => !entry.name.startsWith('.'))
+  } catch {
+    return []
+  }
+}
+
+/** The notes in one folder, by path, in name order. */
+async function markdownIn(folder: string): Promise<string[]> {
+  return (await visibleEntries(folder))
+    .filter((entry) => !entry.isDirectory() && entry.name.endsWith('.md'))
+    .map((entry) => path.join(folder, entry.name))
+    .sort()
+}
+
+/** Every note under a folder, with the area it is filed in (`LooseNotes.markdown(under:)`). */
+async function markdownUnder(folder: string, area: string, depth: number): Promise<NoteFile[]> {
+  const found: NoteFile[] = []
+  for (const entry of (await visibleEntries(folder)).sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0))) {
+    const at = path.join(folder, entry.name)
+    if (entry.isDirectory()) {
+      if (depth >= DEEPEST_AREA) continue
+      found.push(...await markdownUnder(at, area ? `${area}/${entry.name}` : entry.name, depth + 1))
+    } else if (entry.name.endsWith('.md')) {
+      found.push({ file: at, area })
+    }
+  }
+  return found
+}
+
+/** Every folder under a folder, as areas, parents before their children (`LooseNotes.folders(under:)`). */
+async function foldersUnder(folder: string, area: string, depth: number): Promise<string[]> {
+  if (depth >= DEEPEST_AREA) return []
+  const found: string[] = []
+  for (const entry of await visibleEntries(folder)) {
+    if (!entry.isDirectory()) continue
+    const inner = area ? `${area}/${entry.name}` : entry.name
+    found.push(inner, ...await foldersUnder(path.join(folder, entry.name), inner, depth + 1))
+  }
+  return found
+}
+
+/** Every file under a folder, the hidden ones aside. */
+async function filesUnder(folder: string, depth: number): Promise<string[]> {
+  if (depth >= DEEPEST_AREA) return []
+  const found: string[] = []
+  for (const entry of await visibleEntries(folder)) {
+    const at = path.join(folder, entry.name)
+    if (entry.isDirectory()) found.push(...await filesUnder(at, depth + 1))
+    else found.push(at)
+  }
+  return found
 }
 
 /** Whether a path is inside a desktop's trash — the Mac's, Windows' or a freedesktop one. */
@@ -185,7 +398,7 @@ export function inATrash(folder: string): boolean {
 export function noteDTO(note: Zettel, box: string): NoteDTO {
   return {
     id: note.id, kind: note.kind, title: note.title, body: note.body, paperID: note.paperID,
-    created: note.created.getTime(), modified: note.modified.getTime(), box,
+    created: note.created.getTime(), modified: note.modified.getTime(), box, area: note.area ?? '',
   }
 }
 
@@ -193,7 +406,17 @@ export function noteFromDTO(dto: NoteDTO): Zettel {
   return {
     id: dto.id, kind: dto.kind, title: dto.title, body: dto.body, paperID: dto.paperID,
     created: new Date(dto.created), modified: new Date(dto.modified),
+    area: typeof dto.area === 'string' ? cleanArea(dto.area) : '',
   }
+}
+
+/**
+ * An area as a window sent it, kept to folder names: no step out of the box
+ * (`..`, a hidden name, a root), nothing the disk would read as a path of
+ * its own. What the window says is not believed.
+ */
+export function cleanArea(area: string): string {
+  return area.split('/').filter((part) => part.length > 0 && isAreaName(part, process.platform)).join('/')
 }
 
 /**
@@ -320,8 +543,55 @@ export class NotesStore {
       this.sharedNames = shared
       const notes = order.map((id) => loaded.get(id)!)
       await this.settle(notes)
+      // The areas of knowledge — the folders under the loose box, empty ones
+      // too: where the next note can be filed (`NotesModel.areas`).
+      this.knownAreas = await this.loose.areas().catch(() => this.knownAreas)
       return notes.map((note) => noteDTO(note, this.boxByNote.get(note.id) ?? this.loose.id))
     })
+  }
+
+  /** The areas as the last reading found them, kept so `info()` can say them without a walk. */
+  private knownAreas: string[] = []
+
+  /** Makes an area in the loose box — `inside` another, or at the top. Throws `AreaRefused`. */
+  createArea(name: string, inside = ''): Promise<string> {
+    return this.run(async () => {
+      const made = await this.loose.createArea(name, cleanArea(inside))
+      this.knownAreas = await this.loose.areas()
+      return made
+    })
+  }
+
+  /** Renames an area's folder; its notes go with it, and each one's area follows. Throws `AreaRefused`. */
+  renameArea(area: string, name: string): Promise<string> {
+    return this.run(async () => {
+      const renamed = await this.loose.renameArea(cleanArea(area), name)
+      this.knownAreas = await this.loose.areas()
+      return renamed
+    })
+  }
+
+  /** Takes an area away; its notes go up one level, never away. Says how many moved. */
+  removeArea(area: string): Promise<number> {
+    return this.run(async () => {
+      const cleaned = cleanArea(area)
+      // The box itself is no area: «remove» on it would empty nothing and
+      // then try to take the notes folder away.
+      if (!cleaned) throw new AreaRefused('missing')
+      const moved = await this.loose.removeArea(cleaned)
+      this.knownAreas = await this.loose.areas()
+      return moved
+    })
+  }
+
+  /** The folder an area is, for the file manager — null when it is not there. */
+  areaFolder(area: string): string | null {
+    const folder = this.loose.areaFolder(cleanArea(area))
+    try {
+      return fs.statSync(folder).isDirectory() ? folder : null
+    } catch {
+      return null
+    }
   }
 
   /**
@@ -353,6 +623,8 @@ export class NotesStore {
       }
       await source.deleteNote(note.id)
       this.boxByNote.set(note.id, target.id)
+      // Beside its paper now, in no area: a library's box has none.
+      if (!target.holdsAreas) note.area = ''
     }
   }
 
@@ -410,6 +682,7 @@ export class NotesStore {
         second = await this.carry(this.appFolder, box)
       }
       this.wentAway = false
+      this.knownAreas = await this.loose.areas().catch(() => this.knownAreas)
       return { moved: first.moved + second.moved, kept: first.kept + second.kept }
     })
   }
@@ -452,6 +725,8 @@ export class NotesStore {
     }
     this.leftBehind = this.leftBehind.filter((one) => one.id !== into.id && one.id !== old.id)
     if (stillThere.size > 0) this.leftBehind.push(old)
+    // The areas came along: the loose box's list says them now.
+    if (into.id === this.loose.id) this.knownAreas = await this.loose.areas().catch(() => this.knownAreas)
     return result
   }
 
@@ -465,6 +740,7 @@ export class NotesStore {
       away: this.chosenPath !== null && !this.loose.chosen || this.wentAway,
       leftBehind: this.leftBehind.filter((one) => one.id !== this.loose.id).map((one) => one.directory),
       lastMove: this.lastMove,
+      areas: [...this.knownAreas],
     }
   }
 }

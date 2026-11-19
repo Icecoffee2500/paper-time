@@ -149,8 +149,23 @@ struct PaperTimeCommands: Commands {
                 .disabled(model.library == nil)
 
             command(
-                model.showsInspector ? L("정보 패널 숨기기", "Hide Inspector") : L("정보 패널 보이기", "Show Inspector"), .inspector
+                !model.showsInspector ? L("정보 패널 띄우기", "Float Inspector")
+                    : model.inspectorFloats ? L("정보 패널 붙이기", "Dock Inspector") : L("정보 패널 숨기기", "Hide Inspector"), .inspector
             ) { model.toggleInspector() }
+
+            // Floating, or docked again: closed with its ×, it came back
+            // the way it was, and the other way was nowhere to be found.
+            Button(model.showsInspector && model.inspectorFloats ? L("정보 패널 붙이기", "Dock Inspector") : L("정보 패널 띄워 보기", "Float Inspector")) {
+                model.showInspector(floating: !(model.showsInspector && model.inspectorFloats))
+            }
+            .keyboardShortcut("i", modifiers: [.command, .option, .shift])
+            .disabled(model.library == nil)
+
+            // The last pane closed by its ×, back where it stood — the key a
+            // browser gives a closed tab (`Workspace.swift`).
+            Button(L("닫은 칸 다시 열기", "Reopen Closed Pane")) { model.reopenLastClosedPane() }
+                .keyboardShortcut("t", modifiers: [.command, .shift])
+                .disabled(model.library == nil || model.closedPanes.isEmpty)
 
             command(
                 model.isFocusMode ? L("집중에서 나오기", "Leave Focus") : L("논문에 집중", "Focus on the Paper"), .focus

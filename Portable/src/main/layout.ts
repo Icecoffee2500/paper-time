@@ -34,6 +34,8 @@ export const SCHEDULE_FILE = 'plan.json'
 export const LINKS_FILE = 'links.json'
 /** The reading plans, one file each (`ReadingPlan`). */
 export const PLANS_DIR = 'plans'
+/** The projects, one file each (`Project`, 1.1). */
+export const PROJECTS_DIR = 'projects'
 export const NOTES_DIR = 'notes'
 export const INK_DIR = 'ink'
 export const SKETCH_DIR = 'sketch'
@@ -55,6 +57,8 @@ export const schedulePath = (root: string, id: string) => path.join(paperDir(roo
 export const linksPath = (root: string, id: string) => path.join(paperDir(root, id), LINKS_FILE)
 export const plansDir = (root: string) => path.join(supportDir(root), PLANS_DIR)
 export const planPath = (root: string, id: string) => path.join(plansDir(root), `${id}.json`)
+export const projectsDir = (root: string) => path.join(supportDir(root), PROJECTS_DIR)
+export const projectPath = (root: string, id: string) => path.join(projectsDir(root), `${id}.json`)
 export const inkDir = (root: string, id: string) => path.join(paperDir(root, id), INK_DIR)
 export const sketchDir = (root: string, id: string) => path.join(paperDir(root, id), SKETCH_DIR)
 export const marksDir = (root: string, id: string) => path.join(paperDir(root, id), MARKS_DIR)

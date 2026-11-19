@@ -100,7 +100,7 @@ struct GraphSidePanel: View {
                             .buttonStyle(.plain)
                         }
                         Button(L("이 논문 열기", "Open This Paper")) {
-                            model.scope = .all
+                            model.scope = model.homeScope
                             model.selectedPaperID = id
                         }
                         .buttonStyle(.borderless)

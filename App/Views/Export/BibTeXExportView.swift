@@ -180,7 +180,7 @@ struct BibTeXExportView: View {
     /// counting manuals as unfinished business made the warning cry wolf.
     private var reviewCount: Int {
         papersInScope.filter {
-            $0.meta.effectiveKind.isLookedUp
+            $0.meta.isLookedUp
                 && ($0.meta.confidence == .needsReview || $0.meta.confidence == .unparsed)
         }.count
     }

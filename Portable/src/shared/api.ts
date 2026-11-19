@@ -5,6 +5,7 @@ import type { PDFLock, ByteTrouble } from './pdfLock.js'
 import type { Settings } from './appSettings.js'
 import type { PaperLink, ReadingPlan } from './readingPlan.js'
 import type { PlanEdit } from './planEdit.js'
+import type { Project, ProjectEdit } from './project.js'
 
 export type { Settings } from './appSettings.js'
 
@@ -37,6 +38,8 @@ export type KeptReason = 'encrypted' | 'permissions' | 'structure' | 'unconfirme
 /** What the menu bar reflects of the window in front. */
 export interface MenuState {
   panes: { sidebar: boolean; paperList: boolean; reader: boolean; inspector: boolean }
+  /** The inspector floats over the window rather than standing docked — ⌘]'s item says the next step. */
+  inspectorFloats: boolean
   focus: boolean
   hasPaper: boolean
   layout: 'continuous' | 'single' | 'book'
@@ -223,6 +226,19 @@ export interface Requests {
   /** Writes a note into its box; an empty note takes its file away. Answers with the box it went to. */
   'notes:save': { args: { note: NoteDTO }; result: NoteDTO }
   'notes:delete': { args: { id: string }; result: void }
+  /**
+   * An area of knowledge made in the loose box (1.1) — `inside` another, or
+   * at the top. Answers with the area and the folder's new list of areas, or
+   * why not: a name that is no folder's, one already there, the chosen
+   * folder away.
+   */
+  'notes:createArea': { args: { name: string; inside?: string }; result: { area: string; notesFolder: NotesFolderDTO } | { error: AreaRefusal } }
+  /** An area's folder renamed; its notes go with it. */
+  'notes:renameArea': { args: { area: string; name: string }; result: { area: string; notesFolder: NotesFolderDTO } | { error: AreaRefusal } }
+  /** An area taken away: its notes go up one level, never away. Answers with the box read again. */
+  'notes:removeArea': { args: { area: string }; result: { moved: number; notes: NoteDTO[]; notesFolder: NotesFolderDTO } | { error: AreaRefusal } }
+  /** An area's folder in the desktop's file manager, chosen in its parent. */
+  'notes:revealArea': { args: { area: string }; result: void }
   /** The note's ⋯ «Export as PDF…»: the document the window built, printed where the person says. */
   /** `to`: a probe's file, written without asking — in a probe run only. */
   'notes:exportPDF': { args: { title: string; html: string; to?: string }; result: { path: string } | { cancelled: true } | { error: string } }
@@ -249,6 +265,14 @@ export interface Requests {
   'plans:edit': { args: { id: string; edit: PlanEdit }; result: PlanDTO | { error: string } }
   /** The plan's file to the trash. The papers stay. */
   'plans:delete': { args: { id: string }; result: boolean }
+  /** Every project in every open folder (`main/projects.ts`). */
+  'projects:load': { args: void; result: ProjectDTO[] }
+  /** A new project, named, in the first folder. */
+  'projects:create': { args: { name: string }; result: ProjectDTO | { error: string } }
+  /** One change, made to the project's file as it is on disk now. */
+  'projects:edit': { args: { id: string; edit: ProjectEdit }; result: ProjectDTO | { error: string } }
+  /** The project's file to the trash. The papers and notes it drew on stay. */
+  'projects:delete': { args: { id: string }; result: boolean }
   /** Days set (`YYYY-MM-DD`) or cleared (null): each paper's `plan.json`. Answers with what was written. */
   'schedule:set': { args: { changes: { id: string; date: string | null }[] }; result: { id: string; date: string | null }[] }
   /** An address, or files copied in beside the PDF, kept beside a paper. */
@@ -260,6 +284,12 @@ export interface Requests {
   'links:edit': { args: { id: string; linkID: string; title?: string | null; remove?: boolean }; result: PaperLink[] }
   /** An address in the browser, a file with the desktop's app for it. */
   'links:open': { args: { id: string; linkID: string }; result: boolean }
+}
+
+/** One project and the library folder its file is in. */
+export interface ProjectDTO {
+  root: string
+  project: Project
 }
 
 /** One reading plan and the library folder its file is in. */
@@ -290,7 +320,12 @@ export interface NoteDTO {
   modified: number
   /** The box it was read from and goes back to: a library's root, or the loose folder. */
   box: string
+  /** The area of knowledge it is filed in — a folder under the loose box, `통계/추정` — or '' (1.1). */
+  area: string
 }
+
+/** Why an area was not made, renamed or removed. */
+export type AreaRefusal = 'name' | 'exists' | 'away' | 'missing'
 
 /** Where the notes about no paper live. */
 export interface NotesFolderDTO {
@@ -307,6 +342,9 @@ export interface NotesFolderDTO {
   leftBehind: string[]
   /** What the last move made without being asked did — at launch, or when the chosen folder came back. */
   lastMove?: { moved: number; kept: number } | null
+  /** The areas of knowledge: every folder under the loose box, empty ones
+   *  too, in Finder's order, `/` between a folder and the one inside it (1.1). */
+  areas?: string[]
 }
 
 export interface SemanticStatusDTO {
@@ -335,6 +373,8 @@ export interface Events {
   'library:changed': void
   /** A plan's file changed somewhere else — another window, another machine. */
   'plans:changed': void
+  /** A project's file changed somewhere else. */
+  'projects:changed': void
   /** «Add n PDFs» under way: how many are left, every twenty-five. */
   'library:adopting': { remaining: number }
   'library:opened': LibrarySnapshot | { error: string }
@@ -422,6 +462,8 @@ export interface LibrarySnapshot {
   unreadable?: string[]
   /** Every reading plan in every folder. */
   plans?: PlanDTO[]
+  /** Every project in every folder. */
+  projects?: ProjectDTO[]
   /** The slip-box, read with the folders: every note, and where the loose ones live. */
   notes?: NoteDTO[]
   notesFolder?: NotesFolderDTO

@@ -72,10 +72,40 @@ export function guessKind(parts: { identifier: boolean; abstract: boolean; refer
 }
 
 /**
+ * Which shelf a record stands on: 논문, 책 or 문서 — the Mac's `ShelfKind`.
+ *
+ * 1.1 brought the book back as a shelf (2026-11-18, the user's ask: «모두
+ * 보기를 그냥 없애고, 논문/일반/책 이렇게 나눴으면 좋겠어») — not as a
+ * fourth answer written into the record. A book is still a paper to
+ * everything that cites, and what makes it a book is the field every build
+ * already writes and every export already reads: its CSL type, `book`. So
+ * nothing new goes into `meta.json`, a 1.0 build sees what it always saw,
+ * and the books 1.0 folded into papers come back on their own.
+ */
+export type ShelfKind = 'paper' | 'book' | 'document'
+
+export const SHELF_KINDS: readonly ShelfKind[] = ['paper', 'book', 'document']
+
+export function shelfKindOf(meta: { effectiveKind: DocumentKind; csl?: { type?: string } }): ShelfKind {
+  if (meta.effectiveKind === 'document') return 'document'
+  return meta.csl?.type === 'book' ? 'book' : 'paper'
+}
+
+/**
+ * Whether a registrar may be asked about this record (the Mac's
+ * `PaperMeta.isLookedUp`): a paper — not a book, whose title matches a
+ * journal article's often enough, and which has no preprint to be published
+ * from.
+ */
+export function lookedUp(meta: { effectiveKind: DocumentKind; csl?: { type?: string } }): boolean {
+  return shelfKindOf(meta) === 'paper'
+}
+
+/**
  * Whether a record wants a look: a paper whose lookup came back unsure. A
- * document has no registrar to disagree with, so it never is one
+ * book or a document has no registrar to disagree with, so it never is one
  * (`PaperRow.needsReview`, the «Needs Review» shelf).
  */
-export function needsReview(meta: { effectiveKind: DocumentKind; confidence?: string }): boolean {
-  return isLookedUp(meta.effectiveKind) && (meta.confidence === 'needsReview' || meta.confidence === 'unparsed')
+export function needsReview(meta: { effectiveKind: DocumentKind; confidence?: string; csl?: { type?: string } }): boolean {
+  return lookedUp(meta) && (meta.confidence === 'needsReview' || meta.confidence === 'unparsed')
 }

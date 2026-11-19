@@ -41,6 +41,13 @@ public struct Zettel: Identifiable, Hashable, Sendable {
     public var paperID: UUID?
     public var created: Date
     public var modified: Date
+    /// The area of knowledge it is filed under: the folder it sits in under
+    /// the notes folder, «통계/추정» for a folder in a folder, "" for none.
+    /// Not written in the note — the folder is the area, so Finder and any
+    /// other Markdown app see the same filing (1.1, the slip-box's 지식).
+    /// Only a note of no paper has one: a literature note lives beside its
+    /// paper.
+    public var area: String
 
     public init(
         id: String,
@@ -49,7 +56,8 @@ public struct Zettel: Identifiable, Hashable, Sendable {
         body: String = "",
         paperID: UUID? = nil,
         created: Date = .now,
-        modified: Date = .now
+        modified: Date = .now,
+        area: String = ""
     ) {
         self.id = id
         self.kind = kind
@@ -58,6 +66,7 @@ public struct Zettel: Identifiable, Hashable, Sendable {
         self.paperID = paperID
         self.created = created
         self.modified = modified
+        self.area = area
     }
 
     public var isEmpty: Bool {

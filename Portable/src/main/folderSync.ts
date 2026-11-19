@@ -34,6 +34,8 @@ export type Change =
   | { kind: 'sidecar'; id: string; layer: 'marks' | 'ink' | 'sketch' | 'pdf' | 'plan' | 'links' | 'other' }
   /** A reading plan's file (`plans/<id>.json`). */
   | { kind: 'plans' }
+  /** A project's file (`projects/<id>.json`). */
+  | { kind: 'projects' }
   | { kind: 'record'; id: string }
   | { kind: 'notes' }
   | { kind: 'vocabulary' }
@@ -61,6 +63,7 @@ export function classifyChange(root: string, file: ChangedFile): Change {
     }
     if (parts[1] === L.NOTES_DIR) return { kind: 'notes' }
     if (parts[1] === L.PLANS_DIR) return { kind: 'plans' }
+    if (parts[1] === L.PROJECTS_DIR) return { kind: 'projects' }
     if (parts[1] === L.MANIFEST_FILE || parts[1] === L.COLLECTIONS_FILE) return { kind: 'vocabulary' }
     return { kind: 'ignore' }
   }
@@ -115,6 +118,7 @@ export class FolderSync {
     const papers = new Map<string, Set<string>>()
     let whole = false
     let plans = false
+    let projects = false
     for (const file of changed) {
       if (file !== null && isOwnWrite(file)) continue
       const change = notesOnly ? ({ kind: 'notes' } as Change) : classifyChange(root, file)
@@ -123,6 +127,9 @@ export class FolderSync {
           break
         case 'plans':
           plans = true
+          break
+        case 'projects':
+          projects = true
           break
         case 'sidecar': {
           const layers = papers.get(change.id) ?? new Set<string>()
@@ -135,6 +142,7 @@ export class FolderSync {
       }
     }
     if (plans) this.hooks.send('plans:changed')
+    if (projects) this.hooks.send('projects:changed')
     if (whole) {
       void this.settle()
       return

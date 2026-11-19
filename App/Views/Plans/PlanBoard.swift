@@ -6,13 +6,27 @@ import SwiftUI
 
 /// A column a board can show beside the title.
 enum BoardColumn: String, CaseIterable, Identifiable, Hashable {
-    case authors, year, venue, plan, day, progress, materials, tags, rating, notes, added, opened
+    case authors, year, venue, publisher, folder, pages, plan, day, progress, materials, tags, rating, notes, added, opened
 
     var id: String { rawValue }
+
+    /// The column's name over a table of that kind: a book has «지은이»,
+    /// a document «쓴 사람», the way the inspector names them.
+    func title(for kind: ShelfKind) -> String {
+        guard self == .authors else { return title }
+        switch kind {
+        case .paper: return title
+        case .book: return L("지은이", "Authors")
+        case .document: return L("쓴 사람", "Written By")
+        }
+    }
 
     var title: String {
         switch self {
         case .authors: L("저자", "Authors")
+        case .publisher: L("출판사", "Publisher")
+        case .folder: L("폴더", "Folder")
+        case .pages: L("쪽", "Pages")
         case .year: L("해", "Year")
         case .venue: L("학회", "Venue")
         case .plan: L("계획", "Plan")
@@ -32,6 +46,9 @@ enum BoardColumn: String, CaseIterable, Identifiable, Hashable {
         case .authors: 110
         case .year: 44
         case .venue: 84
+        case .publisher: 110
+        case .folder: 140
+        case .pages: 44
         case .plan: 124
         case .day: 100
         case .progress: 86
@@ -204,30 +221,52 @@ struct SlidingColumns<Cell: View>: View {
     }
 }
 
-/// Which board is in front.
+/// Which board is in front: a plan, the week, or a shelf — of one kind,
+/// since a shelf shows one kind at a time (1.1).
 enum BoardKind: Equatable {
-    case plan(UUID), week, shelf
+    case plan(UUID), week, shelf(ShelfKind)
 
+    /// Where its columns are remembered. A shelf of papers keeps the key it
+    /// had before books and documents had tables of their own.
     var key: String {
         switch self {
         case .plan: "plan"
         case .week: "week"
-        case .shelf: "shelf"
+        case .shelf(.paper): "shelf"
+        case let .shelf(kind): "shelf." + kind.rawValue
         }
+    }
+
+    var isShelf: Bool {
+        if case .shelf = self { return true }
+        return false
+    }
+
+    /// The kind whose names the header uses.
+    var shelfKind: ShelfKind {
+        if case let .shelf(kind) = self { return kind }
+        return .paper
     }
 
     /// Which columns stay when the column is narrow, most wanted first.
     /// Progress gives way before the materials: the ring at the head of
     /// every row already fills with it.
     static let priority: [BoardColumn] = [.day, .plan, .materials, .progress, .year, .authors, .venue,
-                                          .tags, .rating, .notes, .added, .opened]
+                                          .publisher, .folder, .pages, .tags, .rating, .notes, .added, .opened]
 
-    /// The columns the demo shows, in its order.
+    /// The columns each table starts with (2026-11-18, the user's ask: each
+    /// kind its own columns). A paper is placed by who, when and where; a
+    /// book by who, when and who published it — and how far through it you
+    /// are, since a book is read over weeks; a document has no authors or
+    /// venue worth a column, and is found by the folder it was put in, its
+    /// length and when it arrived — the week's slides are the newest.
     var defaults: [BoardColumn] {
         switch self {
         case .plan: [.authors, .year, .venue, .day, .progress, .materials]
         case .week: [.plan, .day, .materials]
-        case .shelf: [.authors, .year, .venue, .day, .plan, .materials]
+        case .shelf(.paper): [.authors, .year, .venue, .day, .plan, .materials]
+        case .shelf(.book): [.authors, .year, .publisher, .day, .plan, .progress]
+        case .shelf(.document): [.folder, .pages, .day, .plan, .added]
         }
     }
 }
@@ -258,6 +297,23 @@ struct PlanBoard: View {
     /// Rows in a stack rather than a table, for `ImageRenderer`, which cannot
     /// draw an `NSTableView` (`PlanProbe`).
     var staticRows = false
+    /// The shelf this board shows, when it is not the one in front — a shelf
+    /// or a plan pinned in a pane of its own (`Workspace`).
+    var shownScope: LibraryModel.Scope? = nil
+    /// What opening a paper does here, when it is not the list's own —
+    /// a pinned pane opens it on the page.
+    var onOpen: ((UUID) -> Void)? = nil
+    private var scope: LibraryModel.Scope { shownScope ?? model.scope }
+    /// Pinned: the shelf is not the one the sidebar is on, so its papers are
+    /// its own rather than the list's (`LibraryModel.pinnedShelf`).
+    private var pinned: Bool { shownScope != nil && shownScope != model.scope }
+    /// The kind a pinned shelf that holds several shows — its own chips.
+    @State private var pinnedKind: ShelfKind?
+    private var pinnedShelf: (papers: [LoadedPaper], kind: ShelfKind, kinds: [(kind: ShelfKind, count: Int)]) {
+        model.pinnedShelf(scope, kind: pinnedKind)
+    }
+    /// The papers the board stands on: the list's, or the pinned shelf's.
+    private var shelfPapers: [LoadedPaper] { pinned ? pinnedShelf.papers : model.visiblePapers }
     @Environment(AppModel.self) private var app
     @Environment(\.undoManager) private var undoManager
     @Environment(\.colorScheme) private var colorScheme
@@ -287,14 +343,14 @@ struct PlanBoard: View {
     @State private var showsPlanColumns = PlanBoard.storedPlanColumns()
 
     private var kind: BoardKind {
-        switch model.scope {
+        switch scope {
         case let .plan(id): .plan(id)
         case .thisWeek: .week
-        default: .shelf
+        default: .shelf(pinned ? pinnedShelf.kind : model.tableKind)
         }
     }
 
-    private var view: LibraryModel.ShelfView { model.shelfView(for: model.scope) }
+    private var view: LibraryModel.ShelfView { model.shelfView(for: scope) }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -317,10 +373,13 @@ struct PlanBoard: View {
                     if needsDays(id), !quietStrips.contains(id) { daysStrip(id) }
                     viewbar
                 }
-                if kind == .shelf { notices }
+                if kind.isShelf {
+                    notices
+                    kindBar
+                }
                 columnHeader
-                if kind == .shelf, data.entries.isEmpty {
-                    let empty = PaperListView.emptyShelf(for: model.scope)
+                if kind.isShelf, data.entries.isEmpty {
+                    let empty = PaperListView.emptyShelf(for: scope)
                     ContentUnavailableView(empty.title, systemImage: empty.symbol, description: Text(empty.note))
                         .frame(maxHeight: .infinity)
                 } else if kind == .week, data.entries.isEmpty {
@@ -352,7 +411,9 @@ struct PlanBoard: View {
                     row: { entry, selected in row(entry, selected: selected) },
                     reorders: reorders,
                     drop: drop,
-                    open: open
+                    open: open,
+                    model: model,
+                    reveal: model.revealRequest
                 )
                 // The scroller floats over the rows rather than taking a lane
                 // of its own, as the list's did: with «Show scroll bars:
@@ -368,11 +429,13 @@ struct PlanBoard: View {
         // measured at its own wish kept itself at 512 points in a 300-point
         // column — the wide layout asked for the width that made it wide
         // (2026-11-16, `--papertime-plan-window` caught it).
-        .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        // Leading: in a pane narrower than the board will go, the start of
+        // every row is what stays in sight.
+        .frame(minWidth: 0, maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .onGeometryChange(for: CGFloat.self) { ($0.size.width / 8).rounded(.down) * 8 } action: { width = $0 }
         // Another shelf, or other columns: the slide starts again at the
         // first column.
-        .onChange(of: model.scope) { slide.x = 0 }
+        .onChange(of: scope) { slide.x = 0 }
         .onChange(of: columns) { slide.x = 0 }
         .overlay(alignment: .bottom) { toastView }
         // What the New Plan sheet did, said here once the plan is showing.
@@ -399,7 +462,7 @@ struct PlanBoard: View {
     @ViewBuilder
     private var header: some View {
         VStack(alignment: .leading, spacing: 10) {
-            ShelfHeader(symbol: ShelfTitle.symbol(of: model.scope), tint: ShelfTitle.tint(of: model.scope),
+            ShelfHeader(symbol: ShelfTitle.symbol(of: scope), tint: ShelfTitle.tint(of: scope),
                         title: title, subtitle: subtitle) {
                 topControls
             }
@@ -435,21 +498,28 @@ struct PlanBoard: View {
     private var topControls: some View {
         switch kind {
         case .plan:
-            ShelfViewSwitch(view: Binding(get: { view }, set: { model.setShelfView($0, for: model.scope) }),
-                            choices: [.table, .calendar])
+            // Smaller in a narrow pane, and gone in a very narrow one, so the
+            // plan's name — and the pane's ⌄ and × — keep their room.
+            if width >= 340 {
+                ShelfViewSwitch(view: Binding(get: { view }, set: { model.setShelfView($0, for: scope) }),
+                                choices: [.table, .calendar], compact: width < 440)
+            }
         case .week:
             if Legacy.paperList {
-                ShelfViewSwitch(view: Binding(get: { view }, set: { model.setShelfView($0, for: model.scope) }),
+                ShelfViewSwitch(view: Binding(get: { view }, set: { model.setShelfView($0, for: scope) }),
                                 choices: [.list, .table])
             }
         case .shelf:
             HStack(spacing: 8) {
+                // In a narrow pane the shelf's name comes first: the words
+                // go, then the button (a pane's ⌄ and × share the head now).
+                if width >= 320 {
                 Button {
                     withAnimation(Motion.move) { showsPlanColumns.toggle() }
                     PlanBoard.storePlanColumns(showsPlanColumns)
                 } label: {
                     Label(L("읽을 날·계획", "Read On · Plan"), systemImage: "calendar")
-                        .labelStyle(.titleAndIcon)
+                        .labelStyle(PlanColumnsLabelStyle(words: width >= 440))
                         .font(.system(size: 12, weight: showsPlanColumns ? .semibold : .regular))
                         .foregroundStyle(showsPlanColumns ? Color.accentColor : .secondary)
                         .padding(.horizontal, 10)
@@ -459,8 +529,9 @@ struct PlanBoard: View {
                 }
                 .buttonStyle(.plain)
                 .help(L("읽을 날과 계획 열을 보이거나 숨겨요", "Show or hide the Read On and Plan columns"))
+                }
                 if Legacy.paperList {
-                    ShelfViewSwitch(view: Binding(get: { view }, set: { model.setShelfView($0, for: model.scope) }),
+                    ShelfViewSwitch(view: Binding(get: { view }, set: { model.setShelfView($0, for: scope) }),
                                     choices: [.list, .table])
                 }
             }
@@ -521,10 +592,10 @@ struct PlanBoard: View {
     }
 
     private var title: String {
-        switch model.scope {
+        switch scope {
         case let .plan(id): model.plan(id)?.name ?? L("계획", "Plan")
         case .thisWeek: L("이번 주", "This Week")
-        default: ShelfTitle.of(model.scope, in: model)
+        default: ShelfTitle.of(scope, in: model)
         }
     }
 
@@ -540,13 +611,13 @@ struct PlanBoard: View {
             return L("\(span) · \(papers.count)편 중 \(read)편 읽음", "\(span) · \(read) of \(papers.count) read")
         case .week:
             let monday = model.today.monday
-            let papers = model.visiblePapers
+            let papers = shelfPapers
             let plans = Set(papers.flatMap { model.plans(containing: $0.id).map(\.id) }).count
             let span = PlanText.span(monday, monday.adding(days: 6))
             return L("\(span) · 계획 \(plans)개에서 \(papers.count)편", "\(span) · \(PlanText.papers(papers.count)) from \(plans == 1 ? "1 plan" : "\(plans) plans")")
-        case .shelf:
-            let count = model.visiblePapers.count
-            return L("논문 \(count)편 · 열 머리를 누르면 정렬돼요", "\(PlanText.papers(count)) · Click a column to sort")
+        case let .shelf(shelfKind):
+            let count = shelfPapers.count
+            return L("\(shelfKind.counted(count)) · 열 머리를 누르면 정렬돼요", "\(shelfKind.counted(count)) · Click a column to sort")
         }
     }
 
@@ -598,7 +669,7 @@ struct PlanBoard: View {
             if none > 0 {
                 // Where the undated ones wait: the calendar's tray.
                 Button {
-                    model.setShelfView(.calendar, for: model.scope)
+                    model.setShelfView(.calendar, for: scope)
                 } label: {
                     StatCapsule(text: L("날짜 없음 \(none)편", "No date \(none)"), color: .gray)
                 }
@@ -632,7 +703,7 @@ struct PlanBoard: View {
             Spacer(minLength: 8)
             Button(L("고르게 나누기…", "Spread Out…")) { showsSpread = true }
                 .buttonStyle(SoftButtonStyle(prominent: true))
-            Button(L("달력에서 정하기", "Use the Calendar")) { model.setShelfView(.calendar, for: model.scope) }
+            Button(L("달력에서 정하기", "Use the Calendar")) { model.setShelfView(.calendar, for: scope) }
                 .buttonStyle(SoftButtonStyle())
             Button {
                 withAnimation(Motion.move) { _ = quietStrips.insert(id) }
@@ -675,6 +746,52 @@ struct PlanBoard: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(.horizontal, 20)
+    }
+
+    // MARK: The kinds on a shelf
+
+    /// A shelf that holds more than one kind — a semester's folder, «안
+    /// 읽음» — shows one at a time, each under its own columns: these chips
+    /// say which, and how many of each there are. The choice follows the
+    /// kind shelf picked last.
+    @ViewBuilder
+    private var kindBar: some View {
+        let kinds = pinned ? pinnedShelf.kinds : model.kindsOnShelf
+        if kinds.count > 1 {
+            HStack(spacing: 4) {
+                ForEach(kinds, id: \.kind) { entry in
+                    kindChip(entry.kind, count: entry.count)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 6)
+        }
+    }
+
+    private func kindChip(_ shelfKind: ShelfKind, count: Int) -> some View {
+        let on = kind.shelfKind == shelfKind
+        return Button {
+            withAnimation(Motion.tap) {
+                if pinned { pinnedKind = shelfKind } else { model.shownKind = shelfKind }
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Text(shelfKind.label)
+                Text("\(count)")
+                    .monospacedDigit()
+                    .opacity(0.7)
+            }
+            .font(.system(size: 11.5, weight: on ? .semibold : .regular))
+            .foregroundStyle(on ? Color.accentColor : .secondary)
+            .padding(.horizontal, 9)
+            .frame(height: 22)
+            .background(Capsule().fill(on ? Color.accentColor.opacity(0.13) : .clear))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .pressable(cornerRadius: 11)
+        .help(L("\(shelfKind.counted(count)) 보기", "Show \(shelfKind.counted(count))"))
     }
 
     // MARK: The bar over a plan's table
@@ -758,7 +875,7 @@ struct PlanBoard: View {
         switch kind {
         case let .plan(id): "plan:" + id.uuidString
         case .week: "week"
-        case .shelf: "shelf"
+        case .shelf: kind.key
         }
     }
 
@@ -821,6 +938,9 @@ struct PlanBoard: View {
         case .authors: paper.meta.csl.author.first?.sortingSurname.map { .text($0) }
         case .year: paper.meta.csl.year.map { .number(Double($0)) }
         case .venue: BoardRow.venue(paper).map { .text($0) }
+        case .publisher: paper.meta.csl.publisher.flatMap { $0.isEmpty ? nil : .text($0) }
+        case .folder: .text(model.folderLabel(for: paper.documentURL.deletingLastPathComponent()))
+        case .pages: paper.meta.file.pageCount > 0 ? .number(Double(paper.meta.file.pageCount)) : nil
         case .plan: model.plans(containing: paper.id).first.map { .text($0.name) }
         case .day: paper.schedule.map { .number(Double($0.ordinal)) }
         case .progress: .number(Double(model.progress(of: paper)))
@@ -838,7 +958,7 @@ struct PlanBoard: View {
     private var wantedColumns: [BoardColumn] {
         let off = Set(hidden[kind.key] ?? [])
         var base = kind.defaults
-        if kind == .shelf, !showsPlanColumns { base.removeAll { $0 == .day || $0 == .plan } }
+        if kind.isShelf, !showsPlanColumns { base.removeAll { $0 == .day || $0 == .plan } }
         let shown = base.filter { !off.contains($0.rawValue) }
         let extra = BoardColumn.allCases.filter { !kind.defaults.contains($0) && off.contains("+" + $0.rawValue) }
         return shown + extra
@@ -881,7 +1001,7 @@ struct PlanBoard: View {
                 .frame(maxWidth: geometry.title == nil ? .infinity : nil, alignment: .leading)
                 .zIndex(1)
             SlidingColumns(columns: columns, geometry: geometry, slide: slide) { column in
-                headerLabel(column.title, column: column)
+                headerLabel(column.title(for: kind.shelfKind), column: column)
             }
             .overlay(alignment: .leading) {
                 if geometry.slides, min(slide.x, geometry.limit) > 0.5 {
@@ -907,7 +1027,7 @@ struct PlanBoard: View {
         .contextMenu {
             Text(L("보일 열", "Columns"))
             ForEach(BoardColumn.allCases) { column in
-                Toggle(column.title, isOn: Binding(get: { isShown(column) }, set: { _ in toggle(column) }))
+                Toggle(column.title(for: kind.shelfKind), isOn: Binding(get: { isShown(column) }, set: { _ in toggle(column) }))
             }
             Divider()
             Button(L("기본으로 되돌리기", "Restore Defaults")) {
@@ -1013,7 +1133,7 @@ struct PlanBoard: View {
     private func weekRows() -> ([BoardEntry], [String: BoardGroup]) {
         var entries: [BoardEntry] = []
         var groups: [String: BoardGroup] = [:]
-        let papers = model.visiblePapers
+        let papers = shelfPapers
         let behind = papers.filter(model.isBehind)
         if !behind.isEmpty {
             groups["behind"] = BoardGroup(title: L("밀린 것", "Overdue"), detail: PlanText.papers(behind.count), behind: true)
@@ -1030,7 +1150,7 @@ struct PlanBoard: View {
         return (entries, groups)
     }
 
-    private func sortedShelf() -> [LoadedPaper] { sorted(model.visiblePapers) }
+    private func sortedShelf() -> [LoadedPaper] { sorted(shelfPapers) }
 
     private func row(_ entry: BoardEntry, selected: Bool) -> AnyView {
         switch entry {
@@ -1146,8 +1266,9 @@ struct PlanBoard: View {
     // MARK: Doing
 
     private func open(_ id: UUID) {
+        if let onOpen { return onOpen(id) }
         model.openFromBoard(id)
-        if !app.showsReader { app.toggleReader() }
+        if !app.showsReader { app.ensurePagePane(after: ContentPane.listID) }
     }
 
     private func pickDay(for id: UUID) {
@@ -1383,6 +1504,20 @@ struct BoardRow: View {
             Text(BoardRow.venue(paper) ?? "—")
                 .font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
                 .help(paper.meta.csl.containerTitle ?? "")
+        case .publisher:
+            Text(paper.meta.csl.publisher.flatMap { $0.isEmpty ? nil : $0 } ?? "—")
+                .font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
+                .help(paper.meta.csl.publisher ?? "")
+        case .folder:
+            // The folder it sits in by name; the way down from the library
+            // in the tooltip.
+            let folder = paper.documentURL.deletingLastPathComponent()
+            Text(folder.lastPathComponent)
+                .font(.system(size: 12)).foregroundStyle(.secondary).lineLimit(1)
+                .help(model.folderLabel(for: folder))
+        case .pages:
+            Text(paper.meta.file.pageCount > 0 ? "\(paper.meta.file.pageCount)" : "—")
+                .font(.system(size: 12)).monospacedDigit().foregroundStyle(.secondary).lineLimit(1)
         case .plan:
             if let plan = model.plans(containing: paper.id).first {
                 TagCapsule(name: plan.name, color: .indigo)
@@ -1512,6 +1647,19 @@ struct PlanPath: View {
     }
 }
 
+/// The «읽을 날·계획» button's label: its words and its symbol, or the
+/// symbol alone where the head is narrow.
+private struct PlanColumnsLabelStyle: LabelStyle {
+    let words: Bool
+
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 5) {
+            configuration.icon
+            if words { configuration.title }
+        }
+    }
+}
+
 /// What a shelf is called, for a board's header.
 enum ShelfTitle {
     /// The symbol the sidebar gives the shelf.
@@ -1519,10 +1667,13 @@ enum ShelfTitle {
         switch scope {
         case .all: "tray.full"
         case .papers: "text.document"
+        case .books: "book"
         case .documents: "doc"
         case .folder: "folder"
         case .open: "rectangle.on.rectangle"
-        case .notes: "note.text"
+        case .notes: "text.quote"
+        case let .knowledge(area): area.map { $0.isEmpty ? "tray" : "folder" } ?? "lightbulb"
+        case .projects: "flag"
         case .graph: "point.3.connected.trianglepath.dotted"
         case .searchResults: "magnifyingglass"
         case .unread: "circle"
@@ -1553,10 +1704,13 @@ enum ShelfTitle {
         switch scope {
         case .all: L("모두", "All")
         case .papers: L("논문", "Papers")
+        case .books: L("책", "Books")
         case .documents: L("문서", "Documents")
         case let .folder(root): root.lastPathComponent
         case .open: L("열린 문서", "Open Documents")
-        case .notes: L("노트", "Notes")
+        case .notes: L("문헌 노트", "Literature Notes")
+        case let .knowledge(area): KnowledgeArea.title(area)
+        case let .projects(id): id.flatMap { model.project($0)?.name } ?? L("프로젝트", "Projects")
         case .graph: L("그래프", "Graph")
         case .searchResults: L("찾은 것", "Search Results")
         case .unread: L("안 읽음", "Unread")

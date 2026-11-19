@@ -5,12 +5,13 @@
  */
 import assert from 'node:assert/strict'
 import {
-  authorCounts, authorShelf, closeOtherOpenPapers, draggedFrom, extendRun, folderAbove, folderLabel, folderTrail,
-  isPinned, keepOpen, papersByFolder, pickRow, sameShelf, selectedPapers, shelfCounts, shelfPapers, sorted, store,
-  subfolders, type Paper, type Shelf,
+  authorCounts, authorShelf, closeOtherOpenPapers, directCount, draggedFrom, extendRun, folderAbove, folderLabel, folderTrail, isDirectlyInFolder,
+  homeShelf, isPinned, keepOpen, kindsOnShelf, papersByFolder, pickRow, sameShelf, selectedPapers, setShelf, shelfCounts,
+  shelfPapers, sorted, store, subfolders, tableKind, type Paper, type Shelf,
 } from '../renderer/state.js'
 import { authorKey, sortingSurname } from '../shared/authorKey.js'
-import { needsReview } from '../shared/documentKind.js'
+import { lookedUp, needsReview, shelfKindOf } from '../shared/documentKind.js'
+import { DEFAULT_COLUMNS, shelfContext, withPlanColumns } from '../shared/planBoard.js'
 import { parseSubtitle } from '../shared/subtitle.js'
 import { draggedPapers, writeDraggedPapers } from '../shared/split.js'
 import { setPathPlatform } from '../shared/paths.js'
@@ -28,11 +29,13 @@ interface Made {
   added?: string
   parent?: string
   kind?: string
+  type?: string
   confidence?: string
 }
 
 function made(one: Made): Paper {
   const csl: Record<string, unknown> = { title: one.title ?? one.id }
+  if (one.type) csl.type = one.type
   if (one.authors) csl.author = one.authors
   if (one.year) csl.issued = { 'date-parts': [[one.year]] }
   return {
@@ -58,6 +61,7 @@ function library(papers: Paper[], roots = ['/lib']) {
   store.folders = []
   store.root = roots[0]
   store.shelf = { kind: 'all' }
+  store.shownKind = 'paper'
   store.selectedID = null
   store.selection = []
   store.selectionAnchor = null
@@ -86,6 +90,7 @@ export async function libraryListSuite(test: Test, suite: (name: string) => void
     setPathPlatform('win32')
     const shelves: Shelf[] = [
       { kind: 'all' }, { kind: 'open' }, { kind: 'favorites' }, { kind: 'review' }, { kind: 'notes' }, { kind: 'search' },
+      { kind: 'knowledge', area: null }, { kind: 'knowledge', area: '' }, { kind: 'knowledge', area: '통계' }, { kind: 'knowledge', area: '통계/추정' },
       { kind: 'kind', of: 'paper' }, { kind: 'kind', of: 'document' },
       { kind: 'status', status: 'unread' }, { kind: 'status', status: 'read' },
       { kind: 'collection', id: 'C1' }, { kind: 'collection', id: 'C2' },
@@ -123,6 +128,35 @@ export async function libraryListSuite(test: Test, suite: (name: string) => void
     assert.equal(folderAbove(root), null)
     assert.equal(folderAbove('d:\\papers\\'), null, 'a root however it is spelt')
     assert.equal(folderLabel('D:/Papers/2026/Week 2'), 'Papers › 2026 › Week 2')
+    setPathPlatform(process.platform)
+  })
+
+  // 1.1, the Mac's `LibraryModel.isDirectlyIn` (2026-11-19).
+  await test('a folder’s shelf lists only the PDFs directly in it; its row counts the same', () => {
+    setPathPlatform('win32')
+    const root = 'D:\\Papers'
+    library([
+      made({ id: 'top', root, path: 'top.pdf' }),
+      made({ id: 'term', root, path: '2026/syllabus.pdf' }),
+      made({ id: 'w1', root, path: '2026/Week 1/a.pdf' }),
+      made({ id: 'w2', root, path: '2026/Week 2/b.pdf' }),
+      made({ id: 'w2s', root, path: '2026/Week 2/s.pdf', parent: 'w2' }),
+      made({ id: 'deep', root, path: '2027/Week 1/deep.pdf' }),
+    ], [root])
+    assert.ok(isDirectlyInFolder(store.papers[1], 'd:/papers/2026'), 'spelt as Windows spells it')
+    assert.ok(!isDirectlyInFolder(store.papers[2], 'D:/Papers/2026'), 'a week’s PDF is the week’s')
+    setShelf({ kind: 'folder', root: 'D:/Papers/2026' })
+    assert.deepEqual(shelfPapers().map((one) => one.id), ['term'], 'the term’s own syllabus, not every week’s')
+    setShelf({ kind: 'folder', root })
+    assert.deepEqual(shelfPapers().map((one) => one.id), ['top'], 'the library’s shelf: the PDFs at its top')
+    setShelf({ kind: 'folder', root: 'D:/Papers/2027' })
+    assert.deepEqual(shelfPapers(), [], 'nothing directly in it: an empty shelf, which says why')
+    // Each row's number is what its shelf shows.
+    assert.equal(shelfCounts(store.papers.filter((one) => !one.meta.parentID)).folders.get(root), 1)
+    assert.equal(directCount('D:/Papers/2026'), 1)
+    assert.equal(directCount('D:/Papers/2026/Week 2'), 1, 'a supplement is not a paper of the folder')
+    assert.deepEqual(subfolders(root).map((one) => [one.name, one.count]), [['2026', 1], ['2027', 0]], 'deeper papers still put their folders in the tree')
+    assert.deepEqual(subfolders('D:/Papers/2027').map((one) => [one.name, one.count]), [['Week 1', 1]])
     setPathPlatform(process.platform)
   })
 
@@ -198,6 +232,68 @@ export async function libraryListSuite(test: Test, suite: (name: string) => void
     assert.equal(counts.documents, 1)
     assert.ok(needsReview(store.papers[0].meta))
     assert.equal(needsReview(store.papers[1].meta), false)
+  })
+
+  await test('a book is a paper whose CSL type says book; it is never looked up', () => {
+    library([
+      made({ id: 'p', confidence: 'unparsed' }),
+      made({ id: 'b', type: 'book', confidence: 'unparsed' }),
+      made({ id: 'd', kind: 'document', type: 'book' }),
+      made({ id: 'c', type: 'chapter' }),
+    ])
+    const kinds = store.papers.map((one) => shelfKindOf(one.meta))
+    // A document stays one whatever its type says; a chapter is a paper (LNCS
+    // papers come back from Crossref as book chapters).
+    assert.deepEqual(kinds, ['paper', 'book', 'document', 'paper'])
+    assert.equal(store.papers[1].meta.shelfKind, 'book')
+    assert.equal(lookedUp(store.papers[1].meta), false, 'a textbook’s title matches a journal article’s')
+    assert.equal(needsReview(store.papers[1].meta), false)
+    assert.ok(needsReview(store.papers[0].meta))
+    const counts = shelfCounts(store.papers)
+    assert.deepEqual([counts.papers, counts.books, counts.documents], [2, 1, 1])
+    setShelf({ kind: 'kind', of: 'book' })
+    assert.deepEqual(shelfPapers().map((one) => one.id), ['b'])
+  })
+
+  await test('a shelf of more than one kind shows one at a time, the kind picked last', () => {
+    library([
+      made({ id: 'p1', title: 'A' }),
+      made({ id: 'd1', title: 'B', kind: 'document' }),
+      made({ id: 'd2', title: 'C', kind: 'document' }),
+      made({ id: 'b1', title: 'D', type: 'book' }),
+    ])
+    // The kind shelves are one kind each, and set the kind the others show.
+    setShelf({ kind: 'kind', of: 'document' })
+    assert.deepEqual(kindsOnShelf(), [])
+    assert.equal(tableKind(), 'document')
+    setShelf({ kind: 'status', status: 'unread' })
+    assert.deepEqual(kindsOnShelf(), [{ kind: 'paper', count: 1 }, { kind: 'book', count: 1 }, { kind: 'document', count: 2 }])
+    assert.deepEqual(shelfPapers().map((one) => one.id), ['d1', 'd2'], 'the documents, picked last')
+    assert.equal(tableKind(), 'document')
+    // A chip picks another.
+    store.shownKind = 'book'
+    assert.deepEqual(shelfPapers().map((one) => one.id), ['b1'])
+    // A shelf with none of the kind shows the first kind it has.
+    store.shownKind = 'document'
+    store.papers = store.papers.filter((one) => one.meta.shelfKind !== 'document')
+    assert.equal(tableKind(), 'paper')
+    assert.deepEqual(shelfPapers().map((one) => one.id), ['p1'])
+    assert.equal(store.shownKind, 'document', 'looking elsewhere does not forget the choice')
+    // One kind on a shelf: no chips.
+    setShelf({ kind: 'favorites' })
+    assert.deepEqual(kindsOnShelf(), [])
+    // «Out» is the kind shelf last picked.
+    assert.deepEqual(homeShelf(), { kind: 'kind', of: 'document' })
+  })
+
+  await test('each kind’s table has its own columns, and «Read On · Plan» waits to be asked', () => {
+    assert.equal(shelfContext('paper'), 'other', 'the papers keep the key their columns were remembered under')
+    assert.deepEqual(DEFAULT_COLUMNS.other, ['authors', 'year', 'venue', 'date', 'plan', 'materials'])
+    assert.deepEqual(DEFAULT_COLUMNS.book, ['authors', 'year', 'publisher', 'date', 'plan', 'progress'])
+    assert.deepEqual(DEFAULT_COLUMNS.document, ['folder', 'pages', 'date', 'plan', 'added'])
+    assert.deepEqual(withPlanColumns(DEFAULT_COLUMNS.document, 'document', false), ['folder', 'pages', 'added'])
+    assert.deepEqual(withPlanColumns(DEFAULT_COLUMNS.book, 'book', true), DEFAULT_COLUMNS.book)
+    assert.deepEqual(withPlanColumns(DEFAULT_COLUMNS.plan, 'plan', false), DEFAULT_COLUMNS.plan)
   })
 
   await test('«Close Other Papers» lets go of the others’ pins', () => {

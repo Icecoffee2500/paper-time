@@ -38,6 +38,8 @@ public enum LibraryLayout {
     public static let linksFileName = "links.json"
     /// The reading plans, one file each (`ReadingPlan`).
     public static let plansDirectoryName = "plans"
+    /// The projects (1.1), one file each, beside the plans.
+    public static let projectsDirectoryName = "projects"
     /// The single note a paper used to have, kept only so an old library can
     /// be read and moved into the notes folder.
     public static let noteFileName = "note.md"
@@ -72,6 +74,15 @@ public enum LibraryLayout {
 
     public static func planURL(id: UUID, inLibrary root: URL) -> URL {
         plansDirectoryURL(inLibrary: root).appending(path: "\(id.uuidString).json")
+    }
+
+    public static func projectsDirectoryURL(inLibrary root: URL) -> URL {
+        supportDirectoryURL(inLibrary: root)
+            .appending(path: projectsDirectoryName, directoryHint: .isDirectory)
+    }
+
+    public static func projectURL(id: UUID, inLibrary root: URL) -> URL {
+        projectsDirectoryURL(inLibrary: root).appending(path: "\(id.uuidString).json")
     }
 
     public static func collectionsURL(inLibrary root: URL) -> URL {

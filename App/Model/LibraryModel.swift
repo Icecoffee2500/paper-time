@@ -32,17 +32,25 @@ public final class LibraryModel {
         /// The papers open in this session, in the order they were opened —
         /// what a browser's tab strip is, as a shelf.
         case open
-        /// The slip-box, which is not a filter over papers but a place of its
-        /// own: all the notes, whichever paper they came from.
+        /// The slip-box's literature notes (문헌 노트): the notes written
+        /// against a paper, a book or a document. Not a filter over papers
+        /// but a place of its own.
         case notes
+        /// The slip-box's knowledge (지식): the notes of no paper, in one area
+        /// and the areas inside it — nil is every area, "" is the notes filed
+        /// in none (1.1).
+        case knowledge(String?)
+        /// The slip-box's projects: their list, and the one open (1.1).
+        case projects(UUID?)
         /// The results of a library-wide search, shown as its own source-list
         /// row so a search is somewhere you can be rather than a filter you
         /// have to remember you left on.
         case searchResults
-        /// The three kinds, which only appear as rows once a library holds
-        /// more than one of them: a shelf of papers that has never seen a
-        /// manual should look exactly as it did.
+        /// The three kinds — 논문, 책, 문서 (`ShelfKind`). Since 1.1 they are
+        /// where the library starts: there is no shelf of everything, because
+        /// one table cannot have the right columns for all three.
         case papers
+        case books
         case documents
         /// One of the folders the library is reading.
         case folder(URL)
@@ -107,7 +115,7 @@ public final class LibraryModel {
     /// A folder inside the library, the way the sidebar shows one.
     public struct FolderNode: Identifiable, Hashable, Sendable {
         public let url: URL
-        /// Papers at or under it.
+        /// Papers directly in it — what its shelf shows.
         public let count: Int
         public var name: String { url.lastPathComponent }
         public var id: URL { url }
@@ -125,6 +133,17 @@ public final class LibraryModel {
     /// term shows the term and pressing a week narrows to the week. The old
     /// test asked only which library root a paper belonged to, which is the
     /// same answer for a root and no answer at all for anything inside one.
+    /// Whether this paper sits directly in a folder — not in a folder
+    /// inside it. What a folder's shelf shows (2026-11-19, «2번째 창에서는
+    /// 해당 폴더에 있는 pdf만 보이게 하는게 나아 … 어차피 하위 폴더의 pdf는
+    /// 사이드바에서 그 하위폴더를 열면 보이니까»): the shelf had been
+    /// everything at or under the folder since 0.9.3, and a term's folder
+    /// showed every week's PDFs in one run while the weeks stood right there
+    /// in the sidebar.
+    func isDirectlyIn(_ paper: LoadedPaper, _ folder: URL) -> Bool {
+        LibraryStore.normalizedPath(paper.documentURL.deletingLastPathComponent()) == LibraryStore.normalizedPath(folder)
+    }
+
     func isUnder(_ paper: LoadedPaper, _ folder: URL) -> Bool {
         let base = folder.path(percentEncoded: false)
         let path = paper.documentURL.path(percentEncoded: false)
@@ -154,9 +173,11 @@ public final class LibraryModel {
         for paper in papers where paper.meta.parentID == nil {
             let path = LibraryStore.normalizedPath(paper.documentURL.deletingLastPathComponent())
             guard path.hasPrefix(prefix) else { continue }
-            let rest = path.dropFirst(prefix.count)
-            guard let head = rest.split(separator: "/").first.map(String.init), !head.isEmpty else { continue }
-            counts[head, default: 0] += 1
+            let parts = path.dropFirst(prefix.count).split(separator: "/")
+            guard let head = parts.first.map(String.init), !head.isEmpty else { continue }
+            // Counted where it sits, which is what each folder's shelf shows;
+            // a paper deeper down still puts its folders in the tree.
+            counts[head, default: 0] += parts.count == 1 ? 1 : 0
         }
         for path in diskFolders where path.hasPrefix(prefix) {
             let rest = path.dropFirst(prefix.count)
@@ -187,7 +208,7 @@ public final class LibraryModel {
 
     public var visibleByFolder: [(folder: URL, papers: [LoadedPaper])]? {
         switch scope {
-        case .papers, .documents: break
+        case .papers, .books, .documents: break
         default: return nil
         }
         var groups: [URL: [LoadedPaper]] = [:]
@@ -303,7 +324,7 @@ public final class LibraryModel {
         extraSources.remove(at: index)
         extraStores.removeAll { $0.root == root }
         rootPathsCache = nil
-        if case let .folder(current) = scope, current == root { scope = .all }
+        if case let .folder(current) = scope, current == root { scope = homeScope }
         stopWatchingFolder()
         await refresh()
     }
@@ -323,6 +344,9 @@ public final class LibraryModel {
     public internal(set) var plans: [ReadingPlan] = [] { didSet { invalidateVisibleCache() } }
     /// The folder each plan was read from, and is written back to.
     @ObservationIgnored var planRoots: [UUID: URL] = [:]
+    /// The projects (1.1), oldest first, and the folder each one's file is in.
+    public internal(set) var projects: [Project] = []
+    @ObservationIgnored var projectRoots: [UUID: URL] = [:]
     /// Today, where the reader is. Kept, not asked for, so the boards redraw
     /// when the day turns rather than whenever they happen to be asked.
     public var today: PlanDay = .today() { didSet { invalidateVisibleCache() } }
@@ -360,6 +384,9 @@ public final class LibraryModel {
     /// rather than once per redraw. `@ObservationIgnored` because filling a
     /// cache while a view is being built must not invalidate that view.
     @ObservationIgnored private var visibleCache: [LoadedPaper]?
+    /// The shelves pinned in panes of their own, as they were last worked out.
+    @ObservationIgnored private var pinnedCache: [String: (papers: [LoadedPaper], kind: ShelfKind, kinds: [(kind: ShelfKind, count: Int)])] = [:]
+    @ObservationIgnored private var pinnedCacheRevision = -1
     private var indexByID: [UUID: Int] = [:]
     private var attachmentIDsByParent: [UUID: [UUID]] = [:]
     public private(set) var counts = ScopeCounts()
@@ -383,6 +410,7 @@ public final class LibraryModel {
     public struct ScopeCounts: Equatable, Sendable {
         public var all = 0
         public var papers = 0
+        public var books = 0
         public var documents = 0
         /// How many papers each folder holds, by its root.
         public var folders: [URL: Int] = [:]
@@ -461,7 +489,30 @@ public final class LibraryModel {
     /// describes the last press.
     public private(set) var adoptFailures: [String] = []
 
-    public var scope: Scope = .all { didSet { invalidateVisibleCache() } }
+    public var scope: Scope = .papers {
+        didSet {
+            // A kind's own shelf sets the kind the mixed shelves show.
+            if let kind = scope.ownKind, kind != shownKind { shownKind = kind }
+            invalidateVisibleCache()
+        }
+    }
+    /// The kind a shelf that holds more than one of them shows — the chips
+    /// over its table. It follows the kind shelf picked last, so a reader in
+    /// 문서 who opens a semester's folder sees that folder's documents.
+    public var shownKind: ShelfKind = .paper { didSet { if shownKind != oldValue { invalidateVisibleCache() } } }
+    /// How many of each kind the shelf in front holds, before it is cut down
+    /// to one — what the chips count. Empty when the shelf is one kind.
+    @ObservationIgnored private var kindCountCache: [ShelfKind: Int]?
+    /// The slip-box's place a note is shown in: 문헌 노트 for a note on a
+    /// source, 지식 — every area — for one of one's own.
+    public func slipBoxScope(for noteID: String) -> Scope {
+        if let note = notes.note(noteID), note.paperID == nil { return .knowledge(nil) }
+        return .notes
+    }
+
+    /// Where «out» goes: the kind shelf the reader was last on. Out of a
+    /// library's folders it used to be «All», which 1.1 took away.
+    public var homeScope: Scope { Scope.of(shownKind) }
     public var searchText = "" { didSet { invalidateVisibleCache() } }
     /// The query behind the `searchResults` scope, kept apart from the list's
     /// own filter field so leaving the scope does not silently keep filtering.
@@ -503,6 +554,42 @@ public final class LibraryModel {
         }
     }
 
+    /// A paper chosen away from the list — in Search Everything — that the
+    /// list should go to. Its serial tells two requests for one paper apart.
+    public struct RevealRequest: Equatable, Sendable {
+        public let paper: UUID
+        public let serial: Int
+        public let at: Date
+    }
+
+    /// The last paper the list was asked to go to (`reveal`).
+    public private(set) var revealRequest: RevealRequest?
+
+    /// Opens a paper chosen outside the list and brings the list to its row.
+    ///
+    /// «논문이 논문 창에 켜지기는 하는데, 2번째 창은 가만히 있거든» (1.1): the
+    /// reader went to the paper and the list stayed where it was, so the
+    /// paper picked was nowhere in sight. The shelf stays when the paper is
+    /// on it; otherwise the lens turns to its kind, then the list's filter is
+    /// let go, and last the shelf of its kind is shown. A supplement's row
+    /// is its paper's.
+    public func reveal(_ id: UUID) {
+        let row = paper(id)?.meta.parentID.flatMap { paper($0)?.id } ?? id
+        if let shown = paper(row), !visiblePaperIDs.contains(row) {
+            let kind = shown.meta.shelfKind
+            if scope.mixesKinds, shownKind != kind { shownKind = kind }
+            if !visiblePaperIDs.contains(row), scope != .searchResults,
+               !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                searchText = ""
+            }
+            // The found list keeps what it found; the paper may be in it
+            // as a passage rather than a row.
+            if !visiblePaperIDs.contains(row), scope != .searchResults { scope = .of(kind) }
+        }
+        selectedPaperID = id
+        revealRequest = RevealRequest(paper: row, serial: (revealRequest?.serial ?? 0) + 1, at: .now)
+    }
+
     /// The papers kept open in this session, in the order they were kept.
     ///
     /// Not every paper looked at: walking down the list shows each paper in
@@ -512,7 +599,10 @@ public final class LibraryModel {
     /// start typing in it. The one merely showing is on the shelf too, as a
     /// preview, and leaves when the next one is shown.
     public private(set) var openPaperIDs: [UUID] = [] {
-        didSet { if scope == .open { invalidateVisibleCache() } }
+        didSet {
+            pinnedCache = [:]
+            if scope == .open { invalidateVisibleCache() }
+        }
     }
 
     public func isOpenPaper(_ id: UUID) -> Bool { openPaperIDs.contains(id) }
@@ -1071,6 +1161,7 @@ public final class LibraryModel {
 
     private func rebuildDerivedIndexesNow() {
         visibleCache = nil
+        pinnedCache = [:]
         var index: [UUID: Int] = [:]
         index.reserveCapacity(papers.count)
         var attachments: [UUID: [UUID]] = [:]
@@ -1083,8 +1174,9 @@ public final class LibraryModel {
                 continue
             }
             counts.all += 1
-            switch paper.meta.effectiveKind {
+            switch paper.meta.shelfKind {
             case .paper: counts.papers += 1
+            case .book: counts.books += 1
             case .document: counts.documents += 1
             }
             counts.folders[rootURL(of: paper), default: 0] += 1
@@ -1096,7 +1188,7 @@ public final class LibraryModel {
             if paper.state.isFavorite { counts.favorites += 1 }
             // Only a paper: the shelf means "the registrar's answer might be
             // wrong", and a book or a document was never asked.
-            if paper.meta.effectiveKind.isLookedUp,
+            if paper.meta.isLookedUp,
                paper.meta.confidence == .needsReview || paper.meta.confidence == .unparsed {
                 counts.needsReview += 1
             }
@@ -1152,9 +1244,11 @@ public final class LibraryModel {
     /// papers that stand on their own.
     private func invalidateVisibleCache() {
         visibleCache = nil
+        pinnedCache = [:]
         visibleIDCache = nil
         byFolderIDCache = nil
         attachableCache = nil
+        kindCountCache = nil
     }
 
     public var visiblePapers: [LoadedPaper] {
@@ -1190,7 +1284,7 @@ public final class LibraryModel {
             // In the order they were kept, not the list's sort: this shelf
             // is a row of tabs. The preview — showing, not kept — is last.
             let order = Dictionary(uniqueKeysWithValues: openPaperIDs.enumerated().map { ($1, $0) })
-            return result.sorted { (order[$0.id] ?? Int.max) < (order[$1.id] ?? Int.max) }
+            return oneKind(result).sorted { (order[$0.id] ?? Int.max) < (order[$1.id] ?? Int.max) }
         }
         let query = scope == .searchResults
             ? searchQuery
@@ -1199,7 +1293,48 @@ public final class LibraryModel {
             let folded = TextNormalization.foldedTitle(query)
             result = result.filter { Self.matches(folded: folded, paper: $0) }
         }
-        return result.sorted(by: comparator)
+        return oneKind(result).sorted(by: comparator)
+    }
+
+    /// A shelf that holds more than one kind, cut down to one: the kind the
+    /// chips chose, or the first one there is when it has none of those.
+    /// Every table shows one kind, so every table has that kind's columns.
+    private func oneKind(_ papers: [LoadedPaper]) -> [LoadedPaper] {
+        guard scope.mixesKinds else {
+            kindCountCache = [:]
+            return papers
+        }
+        var counted: [ShelfKind: Int] = [:]
+        for paper in papers { counted[paper.meta.shelfKind, default: 0] += 1 }
+        kindCountCache = counted.count > 1 ? counted : [:]
+        guard counted.count > 1 else { return papers }
+        let kind = tableKind(among: counted)
+        return papers.filter { $0.meta.shelfKind == kind }
+    }
+
+    private func tableKind(among counted: [ShelfKind: Int]) -> ShelfKind {
+        if counted[shownKind, default: 0] > 0 { return shownKind }
+        return ShelfKind.allCases.first { counted[$0, default: 0] > 0 } ?? shownKind
+    }
+
+    /// The kinds the shelf in front holds, in order, with how many of each —
+    /// empty unless it holds more than one, which is when the chips show.
+    public var kindsOnShelf: [(kind: ShelfKind, count: Int)] {
+        // Read for the observation the cache does not give.
+        _ = (scope, shownKind, papers.count, searchText)
+        if kindCountCache == nil { _ = visiblePapers }
+        let counted = kindCountCache ?? [:]
+        return ShelfKind.allCases.compactMap { kind in counted[kind].map { (kind, $0) } }
+    }
+
+    /// Which kind's columns the table in front has.
+    public var tableKind: ShelfKind {
+        if let own = scope.ownKind { return own }
+        _ = (scope, shownKind, papers.count, searchText)
+        if kindCountCache == nil { _ = visiblePapers }
+        let counted = kindCountCache ?? [:]
+        if counted.isEmpty, let first = visiblePapers.first { return first.meta.shelfKind }
+        return tableKind(among: counted)
     }
 
     /// Everything a person might type when they are looking for a paper they
@@ -1254,7 +1389,7 @@ public final class LibraryModel {
         searchQuery = ""
         invalidateVisibleCache()
         if scope == .searchResults {
-            withAnimation(Motion.move) { scope = .all }
+            withAnimation(Motion.move) { scope = homeScope }
         }
     }
 
@@ -1452,21 +1587,68 @@ public final class LibraryModel {
         papers.filter { $0.meta.parentID == nil && matches(shelf, $0) }.sorted(by: comparator).map(\.id)
     }
 
+    /// A shelf as its own table shows it, whatever shelf the sidebar is on —
+    /// a shelf pinned in a pane of its own (`Workspace.swift`): its papers in
+    /// the list's order (a plan's in its own, the open shelf's in the order
+    /// kept), one kind of them when it holds several, and how many of each.
+    /// The list's filter field is the list's own and is left out.
+    public func pinnedShelf(_ shelf: Scope, kind wanted: ShelfKind?) -> (papers: [LoadedPaper], kind: ShelfKind, kinds: [(kind: ShelfKind, count: Int)]) {
+        // Read for the observation a cached answer does not give.
+        _ = (papers.count, manifest, collections, plans, sortOrder, sortAscending, openPaperIDs, today)
+        // Tags, collections and the papers themselves all move the revision.
+        if pinnedCacheRevision != searchRevision {
+            pinnedCache = [:]
+            pinnedCacheRevision = searchRevision
+        }
+        let key = "\(Self.shelfKey(shelf) ?? "")|\(wanted?.rawValue ?? "")"
+        if let kept = pinnedCache[key] { return kept }
+        var found: [LoadedPaper]
+        switch shelf {
+        case let .plan(id):
+            found = plan(id)?.readingOrder.compactMap { paper($0) } ?? []
+        case .thisWeek:
+            found = weekPapers()
+        case .open:
+            let order = Dictionary(uniqueKeysWithValues: openPaperIDs.enumerated().map { ($1, $0) })
+            found = papers.filter { $0.meta.parentID == nil && matches(shelf, $0) }
+                .sorted { (order[$0.id] ?? Int.max) < (order[$1.id] ?? Int.max) }
+        default:
+            found = papers.filter { $0.meta.parentID == nil && matches(shelf, $0) }.sorted(by: comparator)
+        }
+        var kind = shelf.ownKind ?? wanted ?? shownKind
+        var kinds: [(kind: ShelfKind, count: Int)] = []
+        if shelf.mixesKinds {
+            var counted: [ShelfKind: Int] = [:]
+            for paper in found { counted[paper.meta.shelfKind, default: 0] += 1 }
+            if counted[kind, default: 0] == 0 { kind = ShelfKind.allCases.first { counted[$0, default: 0] > 0 } ?? kind }
+            if counted.count > 1 {
+                kinds = ShelfKind.allCases.compactMap { each in counted[each].map { (each, $0) } }
+                found = found.filter { $0.meta.shelfKind == kind }
+            }
+        } else if shelf.ownKind == nil, let first = found.first {
+            kind = first.meta.shelfKind
+        }
+        let answer = (found, kind, kinds)
+        pinnedCache[key] = answer
+        return answer
+    }
+
     private func matches(_ shelf: Scope, _ paper: LoadedPaper) -> Bool {
         switch shelf {
         case .all, .searchResults: true
         case .open: openPaperIDs.contains(paper.id) || openPaperID == paper.id
         // These two are places of their own, not filters over papers.
-        case .notes, .graph: false
-        case .papers: paper.meta.effectiveKind == .paper
-        case .documents: paper.meta.effectiveKind == .document
-        case let .folder(root): isUnder(paper, root)
+        case .notes, .knowledge, .projects, .graph: false
+        case .papers: paper.meta.shelfKind == .paper
+        case .books: paper.meta.shelfKind == .book
+        case .documents: paper.meta.shelfKind == .document
+        case let .folder(root): isDirectlyIn(paper, root)
         case .unread: paper.state.readingStatus == .unread
         case .reading: paper.state.readingStatus == .reading
         case .read: paper.state.readingStatus == .read
         case .favorites: paper.state.isFavorite
         case .needsReview:
-            paper.meta.effectiveKind.isLookedUp
+            paper.meta.isLookedUp
                 && (paper.meta.confidence == .needsReview || paper.meta.confidence == .unparsed)
         case let .collection(id): matchesCollection(id, paper: paper)
         case let .tag(id): paper.meta.tagIDs.contains(id)
@@ -1684,7 +1866,7 @@ public final class LibraryModel {
         let guess = signals.guess
         var meta = paper.meta
         if meta.guessedKind == nil { meta.guessedKind = guess.kind }
-        if !meta.effectiveKind.isLookedUp {
+        if !meta.isLookedUp {
             if let saved = try? await store(for: paper).save(meta: meta, in: paper.folder, baseline: paper.meta) {
                 stageResolved(meta: saved, to: paperID)
             }
@@ -1718,13 +1900,32 @@ public final class LibraryModel {
 
     /// Records the answer to "what is this?" — and looks the paper up when
     /// the answer turns a document into one.
-    public func setKind(_ kind: DocumentKind, for paperID: UUID) async {
+    ///
+    /// A book is a paper whose CSL type is `book` (`ShelfKind`), so «책»
+    /// writes the type, and «논문» takes a book's type back off it — to a
+    /// journal article when it names a journal, otherwise to the type a new
+    /// record starts with — so the paper is not still a book. A book is
+    /// never looked up: its title is a journal article's too often.
+    public func setKind(_ kind: ShelfKind, for paperID: UUID) async {
         guard let paper = papers.first(where: { $0.id == paperID }) else { return }
         var meta = paper.meta
-        guard meta.kind != kind else { return }
-        let wasUnlookedUp = !meta.effectiveKind.isLookedUp && meta.confidence == .unparsed
-        meta.kind = kind
-        if !kind.isLookedUp {
+        // Pressing the kind already shown is an answer too, until there is one.
+        guard meta.kindIsUnanswered || meta.shelfKind != kind else { return }
+        let wasUnlookedUp = !meta.isLookedUp && meta.confidence == .unparsed
+        switch kind {
+        case .paper:
+            meta.kind = .paper
+            if meta.csl.type == .book {
+                let journal = !(meta.csl.containerTitle ?? "").trimmingCharacters(in: .whitespaces).isEmpty
+                meta.csl.type = journal ? .articleJournal : .other
+            }
+        case .book:
+            meta.kind = .paper
+            meta.csl.type = .book
+        case .document:
+            meta.kind = .document
+        }
+        if !meta.isLookedUp {
             // Nothing to review about a document or a book: neither has a
             // registrar to disagree with, so the "needs review" shelf lets it
             // go.
@@ -1759,7 +1960,7 @@ public final class LibraryModel {
             let now = Date()
             var asked = PublishedChecks.load()
             let due = papers.filter { paper in
-                paper.meta.effectiveKind.isLookedUp
+                paper.meta.isLookedUp
                     && paper.meta.confidence == .verified
                     && paper.meta.parentID == nil
                     && Self.mayBePreprint(paper.meta)
@@ -1811,7 +2012,7 @@ public final class LibraryModel {
     /// confirmed record gives way only to another confirmed one.
     public func refreshAllMetadata() async {
         let all = papers
-            .filter { $0.meta.effectiveKind.isLookedUp && $0.meta.confidence != .manual && $0.meta.parentID == nil }
+            .filter { $0.meta.isLookedUp && $0.meta.confidence != .manual && $0.meta.parentID == nil }
             .map(\.id)
         for id in all {
             await resolveMetadata(for: id, refreshing: true)
@@ -1822,7 +2023,7 @@ public final class LibraryModel {
     /// Re-runs resolution for everything that is not yet confirmed.
     public func resolveAllPending() async {
         let pending = papers
-            .filter { $0.meta.effectiveKind.isLookedUp }
+            .filter { $0.meta.isLookedUp }
             .filter { $0.meta.confidence == .unparsed || $0.meta.confidence == .needsReview }
             .map(\.id)
         for id in pending {
@@ -2438,5 +2639,81 @@ enum SupplementChoices {
     private static func store(_ ids: Set<UUID>) {
         guard Boot.setting("PAPERTIME_LIBRARY") == nil else { memory = ids; return }
         UserDefaults.standard.set(ids.map(\.uuidString).sorted(), forKey: key)
+    }
+}
+
+extension ShelfKind {
+    /// The shelf's name in the sidebar and over the table.
+    var label: String {
+        switch self {
+        case .paper: L("논문", "Papers")
+        case .book: L("책", "Books")
+        case .document: L("문서", "Documents")
+        }
+    }
+
+    /// The answer's name, where one paper is being called something.
+    var answer: String {
+        switch self {
+        case .paper: L("논문", "Paper")
+        case .book: L("책", "Book")
+        case .document: L("일반 문서", "Document")
+        }
+    }
+
+    var symbolName: String {
+        switch self {
+        case .paper: "text.document"
+        case .book: "book"
+        case .document: "doc"
+        }
+    }
+
+    /// «논문 79편», «책 3권», «문서 506개» — each counted the way it is.
+    func counted(_ count: Int) -> String {
+        switch self {
+        case .paper: L("논문 \(count)편", count == 1 ? "1 paper" : "\(count) papers")
+        case .book: L("책 \(count)권", count == 1 ? "1 book" : "\(count) books")
+        case .document: L("문서 \(count)개", count == 1 ? "1 document" : "\(count) documents")
+        }
+    }
+}
+
+extension LibraryModel.Scope {
+    /// Whether the shelf is one of the slip-box's places rather than papers.
+    var isSlipBox: Bool {
+        switch self {
+        case .notes, .knowledge, .projects: true
+        default: false
+        }
+    }
+
+    /// The kind shelf for a kind.
+    static func of(_ kind: ShelfKind) -> Self {
+        switch kind {
+        case .paper: .papers
+        case .book: .books
+        case .document: .documents
+        }
+    }
+
+    /// The kind this shelf is, when it is one of the three.
+    var ownKind: ShelfKind? {
+        switch self {
+        case .papers: .paper
+        case .books: .book
+        case .documents: .document
+        default: nil
+        }
+    }
+
+    /// Whether the shelf can hold more than one kind and so shows one at a
+    /// time. The kinds' own shelves are one kind; a plan and the week are
+    /// reading orders with their own columns; search results are passages.
+    var mixesKinds: Bool {
+        switch self {
+        case .papers, .books, .documents, .plan, .thisWeek, .searchResults, .notes, .knowledge, .projects, .graph, .all: false
+        default: true
+        }
     }
 }

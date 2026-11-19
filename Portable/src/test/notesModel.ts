@@ -6,7 +6,10 @@
  */
 import assert from 'node:assert/strict'
 import { setInvoke } from '../renderer/bridge.js'
-import { adoptNotes, createNote, flushNote, linkedFrom, noteSuggestions, noteTagCounts, onNoteWriteFailed, updateNote } from '../renderer/notesModel.js'
+import {
+  adoptNotes, createNote, flushNote, linkedFrom, moveNoteToArea, noteAreas, noteSuggestions, noteTagCounts, onNoteWriteFailed,
+  removeArea, renameArea, slipBoxList, slipBoxShows, updateNote,
+} from '../renderer/notesModel.js'
 import { latestNoteForPaper, noteByID, notesForPaper, store } from '../renderer/state.js'
 import type { NoteDTO } from '../shared/api.js'
 
@@ -113,6 +116,63 @@ export async function notesModelSuite(test: Test, suite: (name: string) => void)
     adoptNotes([], undefined)
     assert.equal(noteByID(note.id)?.body, 'Kept, and more', 'still in hand after a reading')
     onNoteWriteFailed(() => undefined)
+  })
+
+  await test('a note is filed in an area, the editor never decides where, and each place lists what it holds', async () => {
+    store.notes = []
+    store.slipBox.query = ''
+    store.slipBox.tag = null
+    store.settings.literatureNoteKind = ''
+    store.settings.slipBoxNoteOrder = 'edited'
+    store.notesFolder = { loose: '/box', chosen: false, chosenPath: null, appFolder: '/box', away: false, leftBehind: [], areas: ['통계'] }
+    const written: NoteDTO[] = []
+    setInvoke(async (name, args) => {
+      if (name === 'notes:save') {
+        const note = (args as { note: NoteDTO }).note
+        written.push(note)
+        return { ...note, box: '/box' }
+      }
+      if (name === 'notes:renameArea') return { area: 'Stats', notesFolder: { ...store.notesFolder!, areas: ['Stats'] } }
+      if (name === 'notes:removeArea') {
+        const last = written.at(-1)!
+        return { moved: 1, notes: [{ ...last, area: '' }], notesFolder: { ...store.notesFolder!, areas: [] } }
+      }
+      return null
+    })
+    const mine = createNote(null, 'note', '통계')
+    assert.equal(mine.area, '통계')
+    const literature = createNote('P-not-here', 'note', '통계')
+    assert.equal(literature.area, '', 'a literature note lives beside its paper, in no area')
+    updateNote({ ...noteByID(mine.id)!, body: 'Bayes' })
+    await flushNote(mine.id)
+    assert.equal(written.at(-1)?.area, '통계')
+    await moveNoteToArea(mine.id, '')
+    assert.equal(written.at(-1)?.area, '')
+    // The editor still holds the note as it was opened; its copy does not move it back.
+    updateNote({ ...mine, body: 'Bayes, edited' })
+    await flushNote(mine.id)
+    assert.equal(written.at(-1)?.area, '')
+    await moveNoteToArea(mine.id, '통계')
+    // The places: 지식 in an area and all of it, 문헌 노트 by the source's kind.
+    assert.deepEqual(slipBoxList({ kind: 'knowledge', area: '통계' }).map((note) => note.id), [mine.id])
+    assert.deepEqual(slipBoxList({ kind: 'knowledge', area: '' }).map((note) => note.id), [])
+    assert.deepEqual(slipBoxList({ kind: 'notes' }).map((note) => note.id), [literature.id])
+    store.settings.literatureNoteKind = 'book'
+    assert.deepEqual(slipBoxList({ kind: 'notes' }), [], 'a paper no longer here counts as a paper')
+    assert.equal(slipBoxShows({ kind: 'notes' }, noteByID(literature.id), { narrowed: true }), false)
+    assert.equal(slipBoxShows({ kind: 'notes' }, noteByID(literature.id), { narrowed: false }), true)
+    store.settings.literatureNoteKind = ''
+    assert.equal(slipBoxShows({ kind: 'knowledge', area: null }, noteByID(mine.id), { narrowed: false }), true)
+    assert.equal(slipBoxShows({ kind: 'notes' }, noteByID(mine.id), { narrowed: false }), false)
+    // Renamed: the note's area follows, and so does the list of areas.
+    await renameArea('통계', 'Stats')
+    assert.equal(noteByID(mine.id)?.area, 'Stats')
+    assert.deepEqual(noteAreas(), ['Stats'])
+    // Taken away: the note goes up a level, never away.
+    await removeArea('Stats')
+    assert.equal(noteByID(mine.id)?.area, '')
+    assert.deepEqual(noteAreas(), [])
+    store.notesFolder = null
   })
 
   setInvoke(() => Promise.reject(new Error('No window to ask.')))

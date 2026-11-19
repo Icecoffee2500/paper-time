@@ -30,6 +30,7 @@ export interface MenuActions {
 
 export const DEFAULT_MENU_STATE: MenuState = {
   panes: { sidebar: true, paperList: true, reader: true, inspector: true },
+  inspectorFloats: false,
   focus: false,
   hasPaper: false,
   layout: 'continuous',
@@ -138,10 +139,18 @@ export function buildMenu({ send, chooseLibrary }: MenuActions, state: MenuState
         pane('sidebar', '옆 목록', 'Sidebar'),
         pane('paperList', '논문 목록', 'Paper List'),
         pane('reader', '논문', 'Paper'),
-        pane('inspector', '정보 패널', 'Inspector'),
+        // ⌘] turns the inspector through floating, docked and gone; the item
+        // says the next step (the Mac's `toggleInspector`).
+        item('inspector', !state.panes.inspector ? L('정보 패널 띄우기', 'Float Inspector')
+          : state.inspectorFloats ? L('정보 패널 붙이기', 'Dock Inspector') : L('정보 패널 숨기기', 'Hide Inspector')),
+        // Floating, or docked again: closed with its ×, it came back the way
+        // it was, and the other way was nowhere to be found.
+        item('floatInspector', state.panes.inspector && state.inspectorFloats
+          ? L('정보 패널 붙이기', 'Dock Inspector') : L('정보 패널 띄워 보기', 'Float Inspector')),
         item('focus', state.focus ? L('집중 끝내기', 'Exit Focus') : undefined),
         item('pages'),
         item('openPapers'),
+        item('reopenPane', L('닫은 칸 다시 열기', 'Reopen Closed Pane')),
         separator,
         layout('layoutContinuous', 'continuous', L('이어서 보기', 'Continuous')),
         layout('layoutSinglePage', 'single', L('한 쪽씩 보기', 'Single Page')),

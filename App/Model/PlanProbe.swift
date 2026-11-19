@@ -39,7 +39,9 @@ enum PlanProbe {
         case "plan": if let id = model.plans.first?.id { model.scope = .plan(id) }
         case "plan2": if model.plans.count > 1 { model.scope = .plan(model.plans[1].id) }
         case "week": model.scope = .thisWeek
-        case "all": model.scope = .all
+        case "all", "papers": model.scope = .papers
+        case "books": model.scope = .books
+        case "documents": model.scope = .documents
         default: break
         }
         if let raw = Boot.setting("PAPERTIME_PLAN_VIEW"), let view = LibraryModel.ShelfView(rawValue: raw) {
@@ -417,9 +419,14 @@ enum PlanProbe {
         let column = Double(Boot.setting("PAPERTIME_PLAN_COLUMN_WIDTH") ?? "") ?? 620
         model.scope = .thisWeek
         draw("week", PlanBoard(model: model, staticRows: true), width: column, dark: false)
-        model.scope = .all
-        model.setShelfView(.table, for: .all)
-        draw("all", PlanBoard(model: model, staticRows: true), width: column, dark: false)
+        // Each kind's shelf under its own columns, then a shelf of every
+        // kind — «Unread» — which shows the kind picked last, with its chips.
+        for (name, shelf) in [("papers", LibraryModel.Scope.papers), ("books", .books), ("documents", .documents), ("unread", .unread)] {
+            model.scope = shelf
+            draw("shelf-" + name, PlanBoard(model: model, staticRows: true), width: column, dark: false)
+        }
+        model.scope = .unread
+        draw("shelf-unread", PlanBoard(model: model, staticRows: true), width: column, dark: true)
         model.scope = scope
         for dark in [false, true] {
             draw("board", PlanBoard(model: model, staticRows: true), width: column, dark: dark)

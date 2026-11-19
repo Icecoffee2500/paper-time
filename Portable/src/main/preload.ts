@@ -40,10 +40,12 @@ const soloPaper = process.argv
 const wantsSplit = process.argv.includes('--papertime-split=1')
 /** A run somebody is only looking at: the page's probe surfaces go up. */
 const isProbe = process.argv.includes('--papertime-probe-run=1')
+/** A sample project made in the probe's own library (1.1). */
+const projectSample = isProbe && process.argv.includes('--papertime-project-sample=1')
 
 contextBridge.exposeInMainWorld('papertime', {
   paper: soloPaper ?? null,
-  flags: { split: wantsSplit, probe: isProbe },
+  flags: { split: wantsSplit, probe: isProbe, projectSample },
   invoke: (name: string, args?: unknown) => ipcRenderer.invoke(CHANNEL.invoke, name, args),
   on: (handler: (event: string, payload: unknown) => void) => {
     const listener = (_: unknown, event: string, payload: unknown) => handler(event, payload)

@@ -1,33 +1,69 @@
 /**
- * Dropping onto the window: a paper onto a half or a quarter of the page
- * area, and PDFs from the desktop into the library.
+ * Dropping onto the window: a paper onto the page — beside the paper there,
+ * or in its place — and PDFs from the desktop into the library.
  */
 import { call, droppedPaths } from './bridge.js'
-import { on } from './dom.js'
-import { dockZone, pageArea } from './pageArea.js'
-import { dockPaper } from './actions/openPapers.js'
+import { el, on } from './dom.js'
+import { dockZone, pageArea, readers } from './pageArea.js'
+import { dockPaper, openInPane } from './actions/openPapers.js'
 import { addLibraryFolder, addPapers, openLibraryAt } from './library.js'
 import { store } from './state.js'
 import { closeOpenPapers } from './ui/openPapers.js'
 import { toast } from './ui/toolbar.js'
 import { L } from '../shared/lang.js'
-import { PANE_DRAG_TYPE, carriesPapers, draggedPapers, zoneAt, zoneRect, type DockZone } from '../shared/split.js'
+import {
+  READER_PANE_DRAG_TYPE, carriesPapers, dockTarget, draggedPapers, zoneRect, zoneSide, type DockTarget, type Rect,
+} from '../shared/split.js'
 
 /**
- * A paper dragged over the page area — a row of the list, a pane's title, a
- * row of the popup — lights the half or the quarter it would go into, and
- * goes there when dropped. The middle of the page is no zone at all.
+ * A paper dragged over the page — a row of a list, a side-by-side pane's
+ * title, a row of the popup — lights where it would go (the Mac's
+ * `DockDropDelegate.target`, 2026-11-18). With one reader, a half or a
+ * quarter at either side puts it beside, and the middle opens it here in
+ * place of the paper shown. With papers side by side, a thin strip at
+ * either edge adds a pane while there are fewer than four, and anywhere
+ * else is the pane under the pointer: its paper is replaced — or, dragged
+ * by another pane's title, the two trade places.
  */
-let litZone: DockZone | null = null
+let litTarget = ''
+const words = el('span', { class: 'dock-zone-words' })
+dockZone.append(words)
 
-function lightZone(zone: DockZone | null) {
-  litZone = zone
-  if (!zone) {
+/** The side-by-side panes' boxes, in the page's own coordinates. */
+function paneFrames(): Record<string, Rect> {
+  const page = pageArea.getBoundingClientRect()
+  const frames: Record<string, Rect> = {}
+  for (const [key, reader] of readers) {
+    if (!reader.node.isConnected || !pageArea.contains(reader.node)) continue
+    const box = reader.node.getBoundingClientRect()
+    frames[key] = { x: box.left - page.left, y: box.top - page.top, width: box.width, height: box.height }
+  }
+  return frames
+}
+
+function light(target: DockTarget | null, frames: Record<string, Rect>) {
+  const key = target ? JSON.stringify(target) : ''
+  if (key === litTarget) return
+  litTarget = key
+  if (!target) {
     dockZone.dataset.on = 'false'
     return
   }
   const size = { width: pageArea.clientWidth, height: pageArea.clientHeight }
-  const rect = zoneRect(zone, size)
+  let rect: Rect
+  if (target.kind === 'zone') {
+    rect = zoneRect(target.zone, size)
+    words.textContent = zoneSide(target.zone) === 'left'
+      ? L('왼쪽에 나란히', 'Side by Side on the Left')
+      : L('오른쪽에 나란히', 'Side by Side on the Right')
+  } else {
+    const frame = target.pane ? frames[target.pane] : undefined
+    rect = frame
+      ? { x: frame.x + 6, y: frame.y + 6, width: frame.width - 12, height: frame.height - 12 }
+      : { x: size.width * 0.3 + 4, y: 8, width: size.width * 0.4 - 8, height: size.height - 16 }
+    words.textContent = target.pane ? L('이 칸에 열기', 'Open in This Pane') : L('여기에 열기', 'Open Here')
+  }
+  dockZone.dataset.kind = target.kind
   dockZone.style.left = `${rect.x}px`
   dockZone.style.top = `${rect.y}px`
   dockZone.style.width = `${rect.width}px`
@@ -39,9 +75,9 @@ function carriesPaper(event: DragEvent): boolean {
   return carriesPapers(event.dataTransfer)
 }
 
-function zoneUnder(event: DragEvent): DockZone | null {
+function targetUnder(event: DragEvent, frames: Record<string, Rect>): DockTarget | null {
   const box = pageArea.getBoundingClientRect()
-  return zoneAt(event.clientX - box.left, event.clientY - box.top, { width: box.width, height: box.height })
+  return dockTarget(event.clientX - box.left, event.clientY - box.top, { width: box.width, height: box.height }, store.split, frames)
 }
 
 export function installDockDrop() {
@@ -49,12 +85,13 @@ export function installDockDrop() {
     if (!carriesPaper(event)) return
     event.preventDefault()
     event.stopPropagation()
-    const zone = zoneUnder(event)
-    if (event.dataTransfer) event.dataTransfer.dropEffect = zone ? 'move' : 'none'
-    if (zone !== litZone) lightZone(zone)
+    const frames = paneFrames()
+    const target = targetUnder(event, frames)
+    if (event.dataTransfer) event.dataTransfer.dropEffect = target ? 'move' : 'none'
+    light(target, frames)
   })
   on(pageArea, 'dragleave', (event: DragEvent) => {
-    if (!pageArea.contains(event.relatedTarget as Node | null)) lightZone(null)
+    if (!pageArea.contains(event.relatedTarget as Node | null)) light(null, {})
   })
   on(pageArea, 'drop', (event: DragEvent) => {
     if (!carriesPaper(event)) return
@@ -65,16 +102,28 @@ export function installDockDrop() {
     // Begun on a pane's title, the drag moves that pane; begun anywhere else
     // it opens one more — a second pane of the same paper, when the paper
     // is in one already.
-    const pane = event.dataTransfer?.getData(PANE_DRAG_TYPE) || undefined
-    const zone = zoneUnder(event)
-    lightZone(null)
-    if (!id || !zone) return
+    const pane = event.dataTransfer?.getData(READER_PANE_DRAG_TYPE) || undefined
+    const target = targetUnder(event, paneFrames())
+    light(null, {})
+    if (!id || !target) return
     closeOpenPapers()
-    dockPaper(id, zone, pane)
+    if (target.kind === 'zone') dockPaper(id, target.zone, pane)
+    else openInPane(id, target.pane, pane)
   })
   // A drag cancelled with Escape, or let go outside the page area, ends on
   // the element it started from; the highlight goes with it.
-  on(window, 'dragend', () => lightZone(null))
+  on(window, 'dragend', () => light(null, {}))
+}
+
+/** Where the page's zone stands now, and what it says — for a probe. */
+export function dockZoneShown(): { on: boolean; kind: string | null; words: string; rect: Rect | null } {
+  const on = dockZone.dataset.on === 'true'
+  return {
+    on,
+    kind: on ? dockZone.dataset.kind ?? null : null,
+    words: on ? words.textContent ?? '' : '',
+    rect: on ? { x: dockZone.offsetLeft, y: dockZone.offsetTop, width: dockZone.offsetWidth, height: dockZone.offsetHeight } : null,
+  }
 }
 
 /** PDFs dropped anywhere on the window go into the library. */
