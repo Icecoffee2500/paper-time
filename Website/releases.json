@@ -2,11 +2,191 @@
   "repo": "Icecoffee2500/paper-time",
   "releases": [
     {
+      "version": "1.1.1",
+      "date": "2026-11-23T13:05:51Z",
+      "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/1.1.1/Paper.Time.1.1.1.dmg",
+      "size": 90320404,
+      "downloads": 0,
+      "builds": {
+        "mac": [
+          {
+            "label": "디스크 이미지",
+            "label_en": "Disk image",
+            "arch": "Apple Silicon",
+            "arch_en": "Apple Silicon",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/1.1.1/Paper.Time.1.1.1.dmg",
+            "size": 90320404,
+            "downloads": 0
+          }
+        ],
+        "windows": [
+          {
+            "label": "설치본",
+            "label_en": "Installer",
+            "arch": "64비트 · ARM",
+            "arch_en": "64-bit and ARM",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/1.1.1/Paper.Time.Setup.1.1.1.exe",
+            "size": 311439528,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "64비트",
+            "arch_en": "64-bit",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/1.1.1/Paper.Time-1.1.1-win.zip",
+            "size": 185820671,
+            "downloads": 0
+          },
+          {
+            "label": "압축본 — 설치 없이",
+            "label_en": "Zip — no install",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/1.1.1/Paper.Time-1.1.1-arm64-win.zip",
+            "size": 190768347,
+            "downloads": 0
+          }
+        ],
+        "linux": [
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/1.1.1/Paper.Time-1.1.1-x86_64.AppImage",
+            "size": 184058341,
+            "downloads": 0
+          },
+          {
+            "label": "AppImage",
+            "label_en": "AppImage",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/1.1.1/Paper.Time-1.1.1-arm64.AppImage",
+            "size": 184444939,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "x86_64",
+            "arch_en": "x86_64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/1.1.1/paper-time-1.1.1.tar.gz",
+            "size": 176929833,
+            "downloads": 0
+          },
+          {
+            "label": "tar.gz — 풀어서 실행",
+            "label_en": "tar.gz — unpack and run",
+            "arch": "ARM64",
+            "arch_en": "ARM64",
+            "url": "https://github.com/Icecoffee2500/paper-time/releases/download/1.1.1/paper-time-1.1.1-arm64.tar.gz",
+            "size": 181425492,
+            "downloads": 0
+          }
+        ]
+      },
+      "note": null,
+      "note_en": null,
+      "stable": false,
+      "notes": {
+        "note": {
+          "ko": "노트에 서식이 생겼어요. 글꼴과 크기, 글자 색, 정렬, 그림까지 인스펙터의 패널에서 고르고, 긴 목록은 가볍게 넘어가요.",
+          "en": "Notes take formatting. Choose the font, the size, a color, the alignment and pictures in the inspector’s panel, and long lists scroll lightly."
+        },
+        "added": [
+          {
+            "title": {
+              "ko": "노트 서식",
+              "en": "Note format"
+            },
+            "detail": {
+              "ko": "노트 위의 붓 단추를 누르면 인스펙터의 Tools 탭이 서식 패널이 돼요. 문단 스타일, 글꼴, 크기, 굵게·기울임·밑줄·취소선, 정렬, 목록을 골라요. 노트는 여전히 Markdown 파일이에요.",
+              "en": "Press the brush over a note and the inspector’s Tools tab becomes its format panel: paragraph style, font, size, bold, italic, underline, strikethrough, alignment and lists. The note is still a Markdown file."
+            }
+          },
+          {
+            "title": {
+              "ko": "글자 색",
+              "en": "Text color"
+            },
+            "detail": {
+              "ko": "형광펜과 같은 다섯 색으로 글자를 칠해요. 고른 글 위에 뜨는 막대에서 형광펜 단추를 누르면 글자 색으로 바뀌어요. 형광펜과 글자 색은 함께 쓸 수 있어요.",
+              "en": "Color words in the highlighter’s five colors. On the bar over a selection, press the highlighter button to switch to text color. A highlight and a color go together."
+            }
+          },
+          {
+            "title": {
+              "ko": "노트의 그림",
+              "en": "Pictures in notes"
+            },
+            "detail": {
+              "ko": "그림을 붙여 넣거나 끌어다 놓으면 문단 사이에 놓여요. 그림 파일은 노트 옆 폴더에 함께 있어서 폴더를 옮겨도 따라가요.",
+              "en": "Paste or drop a picture and it sits between paragraphs. The file is kept in a folder beside the notes, so it moves with them."
+            }
+          },
+          {
+            "title": {
+              "ko": "눈에 띄는 글머리표",
+              "en": "Bullets you can see"
+            },
+            "detail": {
+              "ko": "글머리표가 글자와 같은 색으로, 한 단 크게 찍혀요.",
+              "en": "Bullets are set in the text’s own color, a size larger."
+            }
+          }
+        ],
+        "fixed": [
+          {
+            "title": {
+              "ko": "느린 스크롤",
+              "en": "Slow scrolling"
+            },
+            "detail": {
+              "ko": "옆 목록과 논문 목록을 넘길 때 창 전체를 다시 배치하던 것을 고쳤어요. 옆 목록은 한 걸음이 스무 배쯤 빨라졌어요.",
+              "en": "Scrolling the sidebar or the paper list laid out the whole window again at every step. The sidebar now takes about a twentieth of the time."
+            }
+          },
+          {
+            "title": {
+              "ko": "클라우드 폴더 훑기",
+              "en": "Walking the cloud folder"
+            },
+            "detail": {
+              "ko": "3초마다 라이브러리 폴더 전체를 훑던 것을 기록과 PDF만 묻도록 줄였어요.",
+              "en": "The library folder was walked whole every three seconds. Only records and PDFs are asked about now."
+            }
+          },
+          {
+            "title": {
+              "ko": "낱말 속 형광펜",
+              "en": "A highlight inside a word"
+            },
+            "detail": {
+              "ko": "낱말 한가운데서 시작한 형광펜이 기호째 보이던 것을 고쳤어요.",
+              "en": "A highlight begun in the middle of a word showed its marks instead of the color."
+            }
+          },
+          {
+            "title": {
+              "ko": "제목에 보이던 태그",
+              "en": "Tags in a note’s title"
+            },
+            "detail": {
+              "ko": "색을 입힌 첫 줄이 노트 목록에서 태그째 보이던 것을 고쳤어요.",
+              "en": "A note whose first line was colored showed its tags in the list of notes."
+            }
+          }
+        ]
+      }
+    },
+    {
       "version": "1.1.0",
       "date": "2026-11-19T08:29:05Z",
       "asset": "https://github.com/Icecoffee2500/paper-time/releases/download/1.1.0/Paper.Time.1.1.0.dmg",
       "size": 89994976,
-      "downloads": 0,
+      "downloads": 9,
       "builds": {
         "mac": [
           {
@@ -16,7 +196,7 @@
             "arch_en": "Apple Silicon",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/1.1.0/Paper.Time.1.1.0.dmg",
             "size": 89994976,
-            "downloads": 0
+            "downloads": 2
           }
         ],
         "windows": [
@@ -27,7 +207,7 @@
             "arch_en": "64-bit and ARM",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/1.1.0/Paper.Time.Setup.1.1.0.exe",
             "size": 311414620,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
@@ -36,7 +216,7 @@
             "arch_en": "64-bit",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/1.1.0/Paper.Time-1.1.0-win.zip",
             "size": 185804766,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "압축본 — 설치 없이",
@@ -45,7 +225,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/1.1.0/Paper.Time-1.1.0-arm64-win.zip",
             "size": 190752441,
-            "downloads": 0
+            "downloads": 1
           }
         ],
         "linux": [
@@ -56,7 +236,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/1.1.0/Paper.Time-1.1.0-x86_64.AppImage",
             "size": 184046234,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "AppImage",
@@ -65,7 +245,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/1.1.0/Paper.Time-1.1.0-arm64.AppImage",
             "size": 184428716,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -74,7 +254,7 @@
             "arch_en": "x86_64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/1.1.0/paper-time-1.1.0.tar.gz",
             "size": 176914436,
-            "downloads": 0
+            "downloads": 1
           },
           {
             "label": "tar.gz — 풀어서 실행",
@@ -83,7 +263,7 @@
             "arch_en": "ARM64",
             "url": "https://github.com/Icecoffee2500/paper-time/releases/download/1.1.0/paper-time-1.1.0-arm64.tar.gz",
             "size": 181410836,
-            "downloads": 0
+            "downloads": 1
           }
         ]
       },
