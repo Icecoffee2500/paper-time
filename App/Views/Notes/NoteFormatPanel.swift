@@ -80,7 +80,6 @@ final class NoteFormatCenter {
 /// own marks where it has them, a span where it has not.
 struct NoteFormatPanel: View {
     private var center: NoteFormatCenter { .shared }
-    @State private var color = Color.primary
 
     var body: some View {
         ScrollView { controls }
@@ -114,24 +113,28 @@ struct NoteFormatPanel: View {
                     sizeControl(state)
                 }
 
-                HStack {
+                // The five colours, as the highlighter's are offered — a
+                // letter in the ink for the words, a dot for the band. The
+                // system's colour panel stood here, and beside the row of
+                // dots under it it was another app's control.
+                HStack(spacing: 7) {
                     Text(L("글자 색", "Text Color")).font(.system(size: 12.5))
                     Spacer()
-                    if state.style.color != nil {
-                        Button(L("기본", "Default")) { center.set(.color(nil), named: L("글자 색", "Text Color")) }
-                            .buttonStyle(.plain)
-                            .font(.system(size: 11.5))
-                            .foregroundStyle(.secondary)
-                    }
-                    ColorPicker("", selection: Binding(
-                        get: { state.style.color.flatMap { NSColor(noteHex: $0) }.map(Color.init(nsColor:)) ?? color },
-                        set: { picked in
-                            color = picked
-                            guard let hex = NSColor(picked).noteHex else { return }
-                            center.set(.color(hex), named: L("글자 색", "Text Color"))
+                    ForEach(NoteSpanStyle.inks, id: \.name) { ink in
+                        let on = state.style.color == ink.hex
+                        Button {
+                            center.set(.color(on ? nil : ink.hex), named: L("글자 색", "Text Color"))
+                        } label: {
+                            Text("A")
+                                .font(.system(size: 14, weight: .bold, design: .rounded))
+                                .foregroundStyle(Color(nsColor: NoteHighlight.ink(ink.name)))
+                                .frame(width: 16, height: 16)
+                                .overlay(Circle().strokeBorder(Color.primary.opacity(on ? 0.75 : 0), lineWidth: 1.5).padding(-3))
+                                .contentShape(Circle().inset(by: -4))
                         }
-                    ), supportsOpacity: false)
-                    .labelsHidden()
+                        .buttonStyle(.plain)
+                        .help(on ? L("글자 색 지우기", "Remove Text Color") : L("글자 색", "Text Color"))
+                    }
                 }
                 HStack(spacing: 7) {
                     Text(L("형광펜", "Highlight")).font(.system(size: 12.5))

@@ -1975,7 +1975,12 @@ enum NoteMarkdown {
         if let name = span.highlight {
             for (key, value) in highlightAttributes(in: block, color: name) where key != .font { attributes[key] = value }
         }
-        if let color = span.color, let ink = NoteColor(noteHex: color) { attributes[.foregroundColor] = ink }
+        if let name = NoteSpanStyle.inkName(of: span.color) {
+            // One of the five: the shade for the page it is on.
+            attributes[.foregroundColor] = NoteHighlight.ink(name)
+        } else if let color = span.color, let ink = NoteColor(noteHex: color) {
+            attributes[.foregroundColor] = ink
+        }
         if span.underline { attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue }
         if span.strike { attributes[.strikethroughStyle] = NSUnderlineStyle.single.rawValue }
         return attributes

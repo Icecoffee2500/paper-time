@@ -2111,7 +2111,19 @@ final class NoteTextView: LatexSuiteTextView {
         setSelectedRange(edit.selection)
     }
 
+    /// The words in one of the five colours — the same again takes it off,
+    /// another changes it. From the bar over a selection and the panel.
+    func toggleTextColor(_ name: String) {
+        guard coordinator?.showsRawText != true, codeRowAtCaret() == nil, let hex = NoteSpanStyle.ink(named: name) else { return }
+        let now = formatState().style.color
+        format(named: L("글자 색", "Text Color")) {
+            NoteFormat.set(.color(now == hex ? nil : hex), in: $0, selection: $1)
+        }
+    }
+
     func toggleEmphasis(_ mark: String) {
+        // A colour for the words, from the bar.
+        if mark.hasPrefix("color:") { return toggleTextColor(String(mark.dropFirst(6))) }
         // A highlight's marks go through their own edit.
         if mark.hasPrefix("==") {
             let name = mark.dropFirst(2)

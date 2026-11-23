@@ -41,6 +41,17 @@ struct NoteSpanStyle: Equatable {
         ("yellow", "#fff3b0"), ("green", "#cfeedd"), ("blue", "#cfe2fb"), ("pink", "#fbd3dc"), ("purple", "#e6d7f8"),
     ]
 
+    /// The five colours words are offered in — the inks a highlight's own
+    /// words take, by the highlighters' names, so the two rows of dots are
+    /// one palette. Written as the hex; drawn from the name, which has a
+    /// lighter shade for a dark page.
+    static let inks: [(name: String, hex: String)] = [
+        ("yellow", "#c78005"), ("green", "#219959"), ("blue", "#1f70d9"), ("pink", "#d62e54"), ("purple", "#8c47d1"),
+    ]
+
+    static func ink(named name: String) -> String? { inks.first { $0.name == name }?.hex }
+    static func inkName(of hex: String?) -> String? { hex.flatMap { value in inks.first { $0.hex == value }?.name } }
+
     static func highlight(forGround value: String) -> String? {
         guard let hex = hex(value), let wanted = Int(hex.dropFirst(), radix: 16) else { return nil }
         func distance(_ other: String) -> Int {
