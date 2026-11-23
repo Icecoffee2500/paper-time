@@ -4,12 +4,12 @@
     <title>Paper Time</title>
     <link>https://github.com/Icecoffee2500/paper-time/releases</link>
     <item>
-      <title>Paper Time 1.1.0</title>
-      <pubDate>Thu, 19 Nov 2026 08:29:12 +0000</pubDate>
-      <sparkle:version>1.1.0</sparkle:version>
-      <sparkle:shortVersionString>1.1.0</sparkle:shortVersionString>
+      <title>Paper Time 1.1.1</title>
+      <pubDate>Mon, 23 Nov 2026 13:05:57 +0000</pubDate>
+      <sparkle:version>1.1.1</sparkle:version>
+      <sparkle:shortVersionString>1.1.1</sparkle:shortVersionString>
       <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-      <enclosure url="https://github.com/Icecoffee2500/paper-time/releases/download/1.1.0/Paper.Time.1.1.0.dmg" length="89994976" type="application/octet-stream" sparkle:edSignature="9pPBTF4yUZj5kXCH3zznck7in25LhY7aI5a80VzDn+bqUb4H+AeyN0AiXvRi/455cYCp/6Vfy5C9LcMeLlu+BQ=="/>
+      <enclosure url="https://github.com/Icecoffee2500/paper-time/releases/download/1.1.1/Paper.Time.1.1.1.dmg" length="90320404" type="application/octet-stream" sparkle:edSignature="uMYdeBJZbmecsJKQLZDl+1shWJPg/5QJbCOEOjfk9EREjP2hjdSghAORMadVwwsPDM+iNBe+Vk93jxt4mVAZDw=="/>
     </item>
   </channel>
 </rss>
