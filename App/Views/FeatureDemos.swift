@@ -66,6 +66,7 @@ struct FeatureDemoView: View {
             case .noteEnvironments: NoteEnvironmentsDemo(scale: scale)
             case .handwriting: HandwritingDemo(scale: scale)
             case .noteCodeBlock: NoteCodeBlockDemo(scale: scale)
+            case .noteFormat: NoteFormatDemo(scale: scale)
             case .nightPage: NightPageDemo(scale: scale)
             case .projectBoard: ProjectBoardDemo(scale: scale)
             }
@@ -4768,6 +4769,105 @@ private struct NoteEnvironmentsDemo: View {
 /// numbered, the code in the colours the note itself gives it (the same
 /// highlighter, `CodeHighlighter`, and the same palette). The button works:
 /// it copies the demo's code and says so for a moment, as the note's does.
+/// A line of a note and the format panel's row for it: the selected words
+/// take bold, an underline, one of the five colours, one of the five
+/// highlights, and the line its place across the page — as the panel in
+/// the inspector does it, and as the note keeps it (a span in the line).
+private struct NoteFormatDemo: View {
+    let scale: DemoScale
+    @State private var bold = false
+    @State private var underline = false
+    @State private var ink: String? = "blue"
+    @State private var band: String? = "yellow"
+    @State private var alignment = TextAlignment.leading
+
+    private static let names = ["yellow", "green", "blue", "pink", "purple"]
+
+    private func inkColor(_ name: String) -> Color {
+        #if os(macOS)
+        Color(nsColor: NoteHighlight.ink(name))
+        #else
+        Color.accentColor
+        #endif
+    }
+
+    private func bandColor(_ name: String) -> Color {
+        let tone = HighlightTone.swatch(MarkupColor(rawValue: name) ?? .yellow)
+        return Color(red: tone.red, green: tone.green, blue: tone.blue)
+    }
+
+    var body: some View {
+        let full = scale.isFull
+        let size: CGFloat = full ? 15 : 10.5
+        var words = AttributedString(ReleaseNotes.string("고른 낱말", "the chosen words"))
+        words.font = .system(size: size, weight: bold ? .bold : .regular)
+        if underline { words.underlineStyle = .single }
+        if let ink { words.foregroundColor = inkColor(ink) }
+        if let band { words.backgroundColor = bandColor(band).opacity(0.28) }
+        var before = AttributedString(ReleaseNotes.string("노트의 한 줄에서 ", "In a line of a note, "))
+        before.font = .system(size: size)
+        var after = AttributedString(ReleaseNotes.string("만 달라져요.", " alone change."))
+        after.font = .system(size: size)
+        let dot: CGFloat = full ? 15 : 10
+        return VStack(alignment: .leading, spacing: scale.gap) {
+            Paper(scale: scale) {
+                Text(before + words + after)
+                    .multilineTextAlignment(alignment)
+                    .frame(maxWidth: .infinity, alignment: alignment == .leading ? .leading : alignment == .center ? .center : .trailing)
+                    .frame(height: full ? 44 : 30)
+            }
+            HStack(spacing: full ? 12 : 7) {
+                HStack(spacing: 1) {
+                    cell("bold", on: bold) { bold.toggle() }
+                    cell("underline", on: underline) { underline.toggle() }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: Corner.control, style: .continuous))
+                HStack(spacing: full ? 6 : 4) {
+                    ForEach(Self.names, id: \.self) { name in
+                        Button { withAnimation(Motion.tap) { ink = ink == name ? nil : name } } label: {
+                            Text("A")
+                                .font(.system(size: dot, weight: .bold, design: .rounded))
+                                .foregroundStyle(inkColor(name))
+                                .frame(width: dot, height: dot)
+                                .overlay(Circle().strokeBorder(Color.primary.opacity(ink == name ? 0.7 : 0), lineWidth: 1.2).padding(-2.5))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                HStack(spacing: full ? 6 : 4) {
+                    ForEach(Self.names, id: \.self) { name in
+                        Button { withAnimation(Motion.tap) { band = band == name ? nil : name } } label: {
+                            Circle().fill(bandColor(name))
+                                .frame(width: dot, height: dot)
+                                .overlay(Circle().strokeBorder(Color.primary.opacity(band == name ? 0.7 : 0), lineWidth: 1.2).padding(-2.5))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                Spacer(minLength: 0)
+                HStack(spacing: 1) {
+                    cell("text.alignleft", on: alignment == .leading) { alignment = .leading }
+                    cell("text.aligncenter", on: alignment == .center) { alignment = .center }
+                    cell("text.alignright", on: alignment == .trailing) { alignment = .trailing }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: Corner.control, style: .continuous))
+            }
+        }
+    }
+
+    private func cell(_ symbol: String, on: Bool, action: @escaping () -> Void) -> some View {
+        Button { withAnimation(Motion.tap) { action() } } label: {
+            Image(systemName: symbol)
+                .font(.system(size: scale.isFull ? 11 : 8, weight: .semibold))
+                .foregroundStyle(on ? Color.white : Color.primary)
+                .frame(width: scale.isFull ? 28 : 19, height: scale.isFull ? 22 : 15)
+                .background(on ? Color.accentColor : Color.primary.opacity(0.07))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 private struct NoteCodeBlockDemo: View {
     let scale: DemoScale
     @State private var shown = true
