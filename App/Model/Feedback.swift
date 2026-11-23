@@ -1055,9 +1055,15 @@ public enum WindowProbe {
         var times: [Double] = []
         let rowsBefore = Trace.ticks("row body")
         let initsBefore = Trace.ticks("row init")
+        // `--papertime-scroll-test-stride=<points>`: a hand's scroll rather
+        // than a jump — each step moves that far and no further, so a step
+        // brings in a row or two, as a frame of a real scroll does. Without
+        // it each step replaces every row on screen, which is the worst a
+        // step can cost and nothing like the common one.
+        let pace = Double(Boot.setting("PAPERTIME_SCROLL_TEST_STRIDE") ?? "")
         for step in 0..<steps {
             let fraction = Double(step % 40) / 39
-            let y = travel * fraction
+            let y = pace.map { min(travel, Double(step) * $0) } ?? travel * fraction
             let started = DispatchTime.now().uptimeNanoseconds
             // Who a step of scrolling sends through layout. A list that
             // scrolls should lay out its own rows and nothing above itself;

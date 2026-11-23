@@ -54,6 +54,21 @@ enum NoteTypography {
         font(size: size, weight: bold ? .bold : .regular, italic: italic)
     }
 
+    /// The face a list's bullet is set in, by depth.
+    ///
+    /// The system face's «•» is a fifth of an em across (measured: 0.20) —
+    /// a speck beside 16-point words, where a word processor's bullet is a
+    /// dot you can see from across the page. Helvetica Neue's is no larger
+    /// (0.22). Lucida Grande's is a third of an em (0.34) and sits at the
+    /// height the system's does, on a line of the same height, so nothing
+    /// around the mark moves; its square (0.29) serves the third level. Its
+    /// ring is oversized (0.43), so the second level's comes from Verdana
+    /// (0.25). The body's own face wherever one of them is missing.
+    static func bullet(depth: Int) -> NoteFont {
+        let name = depth % 3 == 1 ? "Verdana" : "LucidaGrande"
+        return NoteFont(name: name, size: baseSize) ?? body()
+    }
+
     /// The ladder a note is written on, and it is short on purpose: a title, a
     /// heading, a subheading, and then the body. Six distinct sizes are for a
     /// specification, not for a thought.

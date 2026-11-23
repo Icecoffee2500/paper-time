@@ -1159,6 +1159,10 @@ enum NoteMarkdown {
         var markerFont: NoteFont {
             switch kind {
             case .heading(let level): NoteTypography.heading(level: level)
+            // The bullet a word processor sets (Pages): a dot you can see,
+            // not the system face's speck (2026-11-23, «bullet이 좀 작은 것
+            // 같다») — see `NoteTypography.bullet(depth:)`.
+            case .bullet: NoteTypography.bullet(depth: indent)
             default: NoteTypography.body()
             }
         }
@@ -1166,6 +1170,9 @@ enum NoteMarkdown {
         var markerColor: NoteColor {
             switch kind {
             case .task(let done): done ? .secondaryLabelColor : .labelColor
+            // A list's mark is set in the ink of its words, as Pages sets
+            // it: a grey bullet beside black words is a bullet half there.
+            case .bullet, .ordered: .labelColor
             default: .secondaryLabelColor
             }
         }

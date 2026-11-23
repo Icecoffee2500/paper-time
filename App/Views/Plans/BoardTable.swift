@@ -110,6 +110,16 @@ struct BoardTable: NSViewRepresentable {
     final class Sliding: NSScrollView {
         weak var coordinator: Coordinator?
 
+        /// A scroll view that overrides `scrollWheel` is taken out of
+        /// responsive scrolling unless it says this: AppKit then scrolls it
+        /// on the main thread, event by event, with no rows prepared ahead —
+        /// every row that comes into view is built inside the frame that
+        /// shows it, which is what a scroll of this table still felt like
+        /// after the rest was fixed (2026-11-23). The override below only
+        /// takes the sideways swipes; everything else goes to `super`, where
+        /// the system's own tracking takes the gesture over.
+        override class var isCompatibleWithResponsiveScrolling: Bool { true }
+
         override func scrollWheel(with event: NSEvent) {
             guard let coordinator, let slide = coordinator.slide, coordinator.slideLimit > 0 else {
                 return super.scrollWheel(with: event)
