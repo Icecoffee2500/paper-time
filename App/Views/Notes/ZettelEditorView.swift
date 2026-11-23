@@ -19,15 +19,38 @@ struct ZettelEditorView: View {
     @State private var loadedID: String?
     /// Shows the Markdown as written, for changing a link or a formula by hand.
     @State private var showsRaw = false
+    /// Whether the format panel is out — kept, like a word processor's.
+    @AppStorage("noteShowsFormat") private var showsFormat = false
+    /// The room the note has: the panel stands beside a wide note and comes
+    /// up in a popover over a narrow one (the inspector's).
+    @State private var width: CGFloat = 0
+    private static let widthForPanel: CGFloat = 600
 
     var body: some View {
         let note = notes.note(noteID)
         let pending = link?.pendingNoteAnchor
 
-        VStack(spacing: 0) {
-            header(note)
-            editor(pending: pending)
-            connections(note)
+        HStack(spacing: 0) {
+            VStack(spacing: 0) {
+                header(note)
+                editor(pending: pending)
+                connections(note)
+            }
+            #if os(macOS)
+            if showsFormat, width >= Self.widthForPanel {
+                Rectangle().fill(Color.primary.opacity(0.08)).frame(width: 1)
+                NoteFormatPanel()
+                    .frame(width: 244)
+                    .background(Color.primary.opacity(0.03))
+            }
+            #endif
+        }
+        .background {
+            GeometryReader { proxy in
+                Color.clear
+                    .onAppear { width = proxy.size.width }
+                    .onChange(of: proxy.size.width) { _, new in width = new }
+            }
         }
         .task(id: noteID) { load() }
         .onChange(of: title) { _, _ in save() }
@@ -57,6 +80,23 @@ struct ZettelEditorView: View {
                 // corner of a writing surface, next to a second word and a
                 // twelve-digit number — three things asking to be read before
                 // the note itself.
+                #if os(macOS)
+                // The format panel, by the brush Pages opens its own with.
+                Toggle(isOn: $showsFormat) {
+                    Image(systemName: "paintbrush")
+                }
+                .toggleStyle(.button)
+                .buttonStyle(.borderless)
+                .controlSize(.small)
+                .help(L("서식 — 글꼴, 크기, 색, 정렬, 목록", "Format — font, size, color, alignment, lists"))
+                .popover(isPresented: Binding(
+                    get: { showsFormat && width < Self.widthForPanel },
+                    set: { if !$0 { showsFormat = false } }
+                ), arrowEdge: .bottom) {
+                    NoteFormatPanel().frame(width: 250, height: 430)
+                }
+                #endif
+
                 Toggle(isOn: $showsRaw) {
                     Image(systemName: "chevron.left.forwardslash.chevron.right")
                 }
@@ -148,6 +188,7 @@ struct ZettelEditorView: View {
                     set: { notes.revealPassage = $0 }
                 ),
                 showsRawText: showsRaw,
+                pictures: notes.picturesDirectory(for: noteID),
                 onFollow: { anchor in
                     link?.anchorRequest = ReaderLink.Anchor(
                         pageIndex: anchor.pageIndex, rect: anchor.rect, paperID: anchor.paperID

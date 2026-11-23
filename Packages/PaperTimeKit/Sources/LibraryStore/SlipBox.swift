@@ -144,6 +144,20 @@ public actor LooseNotes: SlipBox {
                 try? manager.removeItem(at: folder)
             }
         }
+        // The notes' pictures go with them: the hidden folder beside the
+        // notes, each file by its own name — names are never reused, so one
+        // already there is that picture.
+        let pictures = directory.appending(path: ".assets", directoryHint: .isDirectory)
+        if let files = try? manager.contentsOfDirectory(at: pictures, includingPropertiesForKeys: nil), !files.isEmpty {
+            let landing = other.directory.appending(path: ".assets", directoryHint: .isDirectory)
+            try? FileOperations.ensureDirectory(at: landing)
+            for file in files {
+                let there = landing.appending(path: file.lastPathComponent)
+                if manager.fileExists(atPath: there.path(percentEncoded: false)) || (try? manager.copyItem(at: file, to: there)) != nil {
+                    try? manager.removeItem(at: file)
+                }
+            }
+        }
         return (moved, kept)
     }
 

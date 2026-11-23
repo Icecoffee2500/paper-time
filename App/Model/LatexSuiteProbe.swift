@@ -119,7 +119,12 @@ enum LatexSuiteTypingProbe {
     struct NoteHost: View {
         @Bindable var note: Note
         var body: some View {
-            NoteEditor(markdown: $note.markdown, pendingAnchor: .constant(nil), pendingReveal: .constant(nil), pendingPassage: .constant(nil), onFollow: { _ in })
+            // `--papertime-note-pictures=<folder in the container>`: where
+            // this note keeps its pictures, and where they are looked for.
+            let pictures = Boot.setting("PAPERTIME_NOTE_PICTURES").map { URL(fileURLWithPath: $0, isDirectory: true) }
+            NoteEditor(markdown: $note.markdown, pendingAnchor: .constant(nil), pendingReveal: .constant(nil), pendingPassage: .constant(nil),
+                       pictures: pictures, onFollow: { _ in })
+                .onAppear { if let pictures { NoteImages.directories = [pictures] } }
         }
     }
 

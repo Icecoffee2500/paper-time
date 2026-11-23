@@ -49,6 +49,9 @@ struct NoteEditor: NSViewRepresentable {
     /// Shows the Markdown as written, for when a link or a formula needs
     /// changing by hand.
     var showsRawText = false
+    /// Where this note's pictures are kept (`NoteImages`); nil where a note
+    /// has no box — a probe's.
+    var pictures: URL? = nil
     var onFollow: (NoteAnchor) -> Void
     /// Opening another note in the box, from a `[[link]]`.
     var onOpenNote: (String) -> Void = { _ in }
@@ -115,6 +118,7 @@ struct NoteEditor: NSViewRepresentable {
 
         context.coordinator.textView = textView
         context.coordinator.showsRawText = showsRawText
+        context.coordinator.pictures = pictures
         textView.postsFrameChangedNotifications = true
         NotificationCenter.default.addObserver(
             context.coordinator, selector: #selector(Coordinator.textViewFrameChanged(_:)),
@@ -134,6 +138,7 @@ struct NoteEditor: NSViewRepresentable {
         context.coordinator.onFollow = onFollow
         context.coordinator.onOpenNote = onOpenNote
         context.coordinator.suggestions = suggestions
+        context.coordinator.pictures = pictures
         guard let textView = scrollView.documentView as? NoteTextView else { return }
 
         if context.coordinator.showsRawText != showsRawText {
@@ -289,6 +294,7 @@ struct NoteEditor: NSViewRepresentable {
         var suggestions: (String) -> [(id: String, title: String, subtitle: String)] = { _ in [] }
         var lastKnownMarkdown: String
         var showsRawText = false
+        var pictures: URL?
         weak var textView: NoteTextView?
 
         let completions = WikiLinkPopover()
@@ -463,6 +469,7 @@ struct NoteEditor: NSViewRepresentable {
             guard !textView.hasMarkedText(), !isRestyling else { return }
             updateMathPreview(in: textView)
             updateSelectionToolbar(in: textView)
+            NoteFormatCenter.shared.read(textView)
             // Never rebuild the text under a selection: that is what made a
             // drag let go of what it had just selected.
             guard textView.selectedRange().length == 0, !textView.isSelectingByHand else {
@@ -614,6 +621,29 @@ struct NoteEditor: NSViewRepresentable {
             textView.typingAttributes = showsRawText
                 ? NoteMarkdown.rawAttributes : (textView.codeTypingAttributes() ?? NoteMarkdown.bodyAttributes)
             lastCaretLine = (textView.string as NSString).lineRange(for: textView.selectedRange())
+        }
+
+        /// Sets the note again with every line rendered and a selection
+        /// over what was just changed (`NoteTextView.format`). The selection
+        /// is whole pieces, so its two ends are the pieces' on screen.
+        func restyle(_ textView: NoteTextView, source: String, selecting selection: NSRange) {
+            guard !isRestyling else { return }
+            setCaretLine = -1; setLineCount = -1; setCaretMarker = ""
+            isRestyling = true
+            let rendered = NoteMarkdown.render(
+                source, caret: nil, raw: showsRawText, width: room(in: textView),
+                appearance: textView.effectiveAppearance, collapsed: collapsedToggles
+            )
+            lastKnownWidth = room(in: textView)
+            setContents(rendered.text, in: textView)
+            let length = textView.string.utf16.count
+            let start = min(max(rendered.displayIndex(forSource: selection.location), 0), length)
+            let end = min(max(rendered.displayIndex(forSource: NSMaxRange(selection)), start), length)
+            textView.setSelectedRange(NSRange(location: start, length: end - start))
+            textView.typingAttributes = showsRawText ? NoteMarkdown.rawAttributes : NoteMarkdown.bodyAttributes
+            lastCaretLine = (textView.string as NSString).lineRange(for: textView.selectedRange())
+            isRestyling = false
+            updateSelectionToolbar(in: textView)
         }
 
         @objc func textViewFrameChanged(_ notification: Notification) {
@@ -1218,7 +1248,41 @@ final class NoteTextView: LatexSuiteTextView {
     /// tab-separated cells — a spreadsheet's — do the same. Anything else
     /// pastes as before.
     override func paste(_ sender: Any?) {
-        guard pasteTable(from: .general) else { return super.paste(sender) }
+        if pasteTable(from: .general) { return }
+        // A picture copied — a screenshot, a figure — goes into the note as
+        // a picture. Words are pasted as words: a pasteboard that has both
+        // (a browser's) is taken for its words.
+        if NSPasteboard.general.availableType(from: [.string]) == nil || NSPasteboard.general.availableType(from: [.fileURL]) != nil,
+           insertPicture(from: .general) { return }
+        super.paste(sender)
+    }
+
+    /// Keeps the picture on a pasteboard beside the note and sets it on a
+    /// line of its own where the caret is; false when there is none, or
+    /// nowhere to keep it.
+    @discardableResult
+    func insertPicture(from pasteboard: NSPasteboard) -> Bool {
+        guard coordinator?.showsRawText != true, let directory = coordinator?.pictures,
+              let picture = NoteImages.picture(on: pasteboard),
+              let path = try? NoteImages.keep(picture.data, as: picture.fileExtension, in: directory) else { return false }
+        format(named: L("그림 넣기", "Insert Picture")) { source, selection in
+            NoteFormat.insertPicture(path, in: source, selection: selection)
+        }
+        return true
+    }
+
+    override var acceptableDragTypes: [NSPasteboard.PasteboardType] {
+        super.acceptableDragTypes + [.fileURL, .png, .tiff]
+    }
+
+    override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
+        if NoteImages.picture(on: sender.draggingPasteboard) != nil {
+            // Where it was let go of, not where the caret was.
+            let point = convert(sender.draggingLocation, from: nil)
+            setSelectedRange(NSRange(location: characterIndexForInsertion(at: point), length: 0))
+            if insertPicture(from: sender.draggingPasteboard) { return true }
+        }
+        return super.performDragOperation(sender)
     }
 
     /// Pastes the table on this pasteboard; false when there is none. A probe
@@ -1925,6 +1989,47 @@ final class NoteTextView: LatexSuiteTextView {
         coordinator.markdown = updated
         coordinator.restyle(self, source: updated, caretSource: edit.caret,
                             selection: edit.length > 0 ? NSRange(location: edit.caret, length: edit.length) : nil)
+    }
+
+    /// A change from the format panel (`NoteFormat`), made in the Markdown
+    /// as one step of the note's undo. Words that were changed stay
+    /// selected and stay set — the note is put back with no line shown as
+    /// written, so a colour chosen is a colour seen, not a tag.
+    func format(named name: String, _ make: (String, NSRange) -> NoteFormat.Edit?) {
+        guard codeRowAtCaret() == nil, let coordinator, let (source, selection) = sourceAndSelection(),
+              let edit = make(source, selection) else { return }
+        let updated = (source as NSString).replacingCharacters(in: edit.range, with: edit.replacement)
+        coordinator.endTyping()
+        coordinator.registerStep(named: name, in: self)
+        coordinator.lastKnownMarkdown = updated
+        coordinator.markdown = updated
+        if edit.selection.length > 0 {
+            coordinator.restyle(self, source: updated, selecting: edit.selection)
+        } else {
+            coordinator.restyle(self, source: updated, caretSource: edit.selection.location)
+        }
+        // What is typed next is its own step, not more of this one.
+        coordinator.endTyping()
+        NoteFormatCenter.shared.read(self)
+    }
+
+    /// What the format panel shows for where the selection is.
+    func formatState() -> NoteFormat.State {
+        var state = NoteFormat.State()
+        guard let (source, selection) = sourceAndSelection() else { return state }
+        state = NoteFormat.state(in: source, selection: selection)
+        state.isEditing = true
+        state.isCode = codeRowAtCaret() != nil
+        return state
+    }
+
+    /// Tab's and ⇧Tab's move of a list's items, for the panel's two buttons.
+    func shiftForPanel(by step: Int) { _ = shiftListItems(by: step) }
+
+    override func becomeFirstResponder() -> Bool {
+        let became = super.becomeFirstResponder()
+        if became { NoteFormatCenter.shared.read(self) }
+        return became
     }
 
     /// ⌘B, ⌘I and ⌘E set the selection bold, italic and as code — as

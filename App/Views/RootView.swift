@@ -176,6 +176,33 @@ struct LibraryWindow: View {
                 // `--papertime-toolbar-shot=<png in the container>`: the bar
                 // over a selection in a note, drawn light and dark — its
                 // layout; the glass itself needs a window to be glass.
+                // `--papertime-format-shot=<png in the container>`: the
+                // note's format panel, drawn light and dark with no window.
+                if let path = Boot.setting("PAPERTIME_FORMAT_SHOT") {
+                    var state = NoteFormat.State()
+                    state.isEditing = true
+                    state.paragraph = .subheading
+                    state.style.bold = true
+                    state.style.color = "#d62e54"
+                    state.size = 18
+                    state.alignment = .left
+                    NoteFormatCenter.shared.preview(state)
+                    for scheme in [ColorScheme.light, .dark] {
+                        let renderer = ImageRenderer(content:
+                            NoteFormatPanel().controls
+                                .frame(width: 244, height: 430, alignment: .top)
+                                .background(scheme == .dark ? Color(white: 0.13) : Color(white: 0.96))
+                                .environment(\.colorScheme, scheme)
+                        )
+                        renderer.scale = 2
+                        if let image = renderer.nsImage, let tiff = image.tiffRepresentation,
+                           let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) {
+                            let file = path.replacingOccurrences(of: ".png", with: scheme == .dark ? "-dark.png" : ".png")
+                            try? png.write(to: URL(fileURLWithPath: file))
+                            FileHandle.standardError.write(Data("format shot: wrote \(file)\n".utf8))
+                        }
+                    }
+                }
                 if let path = Boot.setting("PAPERTIME_TOOLBAR_SHOT") {
                     FileHandle.standardError.write(Data("toolbar panel: \(SelectionToolbar.describePanel())\n".utf8))
                     // Both bars in a window of their own off every screen,

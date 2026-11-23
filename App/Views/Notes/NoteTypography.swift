@@ -182,6 +182,34 @@ enum NoteTypography {
         return made
     }
 
+    /// The face a span asks for (`NoteSpanStyle`): the note's own at that
+    /// size and weight, or a family by name — with the note's Hangul under
+    /// it either way, since most families hold none. A family that is not
+    /// on this machine is the note's own face: a note written elsewhere
+    /// still reads.
+    static func face(family: String?, size: CGFloat, weight: NoteFont.Weight, italic: Bool) -> NoteFont {
+        guard let family else { return font(size: size, weight: weight, italic: italic) }
+        let key = "family|\(family)|\(size)|\(weight.rawValue)|\(italic)"
+        if let cached = cache[key] { return cached }
+        let heavier = weight.rawValue > NoteFont.Weight.regular.rawValue
+        var made = font(size: size, weight: weight, italic: italic)
+        #if os(macOS)
+        var traits: NSFontTraitMask = []
+        if heavier { traits.insert(.boldFontMask) }
+        if italic { traits.insert(.italicFontMask) }
+        if let found = NSFontManager.shared.font(withFamily: family, traits: traits, weight: heavier ? 9 : 5, size: size)
+            ?? NoteFont(name: family, size: size) {
+            var descriptor = found.fontDescriptor
+            if let hangul = resolve(names: hangulNames(weight), size: size) {
+                descriptor = descriptor.addingAttributes([.cascadeList: [hangul.fontDescriptor]])
+            }
+            made = NoteFont(descriptor: descriptor, size: size) ?? found
+        }
+        #endif
+        cache[key] = made
+        return made
+    }
+
     private static func resolve(names: [String], size: CGFloat) -> NoteFont? {
         for name in names {
             if let font = NoteFont(name: name, size: size) { return font }

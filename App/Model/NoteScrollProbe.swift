@@ -101,6 +101,49 @@ enum NoteScrollProbe {
                 report(key)
                 continue
             }
+            // `Picture:<file>`: that picture on a pasteboard of the probe's
+            // own, put into the note as a drop or a paste puts one.
+            if let file = key.stripPrefix("Picture:") {
+                let board = NSPasteboard(name: NSPasteboard.Name("PaperTimeProbe-\(ProcessInfo.processInfo.processIdentifier)"))
+                board.clearContents()
+                board.writeObjects([URL(fileURLWithPath: file) as NSURL])
+                let took = text.insertPicture(from: board)
+                board.releaseGlobally()
+                try? await Task.sleep(for: .milliseconds(300))
+                say("note picture: \(took) → \(note.markdown.debugDescription) shown \(text.string.debugDescription) "
+                    + "attachments \(text.textStorage.map { storage in var n = 0; storage.enumerateAttribute(.attachment, in: NSRange(location: 0, length: storage.length)) { v, _, _ in if v != nil { n += 1 } }; return n } ?? 0)")
+                continue
+            }
+            // `Format:<what>`: what the format panel's buttons do, without
+            // the panel — `color=#d62e54`, `size=24`, `family=Georgia`,
+            // `bold`, `italic`, `underline`, `strike`, `para=title`,
+            // `list=bullet`, `align=center` — on the selection as it stands.
+            if let what = key.stripPrefix("Format:") {
+                let parts = what.split(separator: "=", maxSplits: 1).map(String.init)
+                let value = parts.count > 1 ? parts[1] : ""
+                let now = text.formatState()
+                text.format(named: "Format") { source, selection in
+                    switch parts[0] {
+                    case "color": NoteFormat.set(.color(value.isEmpty ? nil : value), in: source, selection: selection)
+                    case "size": NoteFormat.set(.size(Double(value)), in: source, selection: selection)
+                    case "family": NoteFormat.set(.family(value.isEmpty ? nil : value), in: source, selection: selection)
+                    case "bold": NoteFormat.set(.bold(!now.style.bold), in: source, selection: selection)
+                    case "italic": NoteFormat.set(.italic(!now.style.italic), in: source, selection: selection)
+                    case "underline": NoteFormat.set(.underline(!now.style.underline), in: source, selection: selection)
+                    case "strike": NoteFormat.set(.strike(!now.style.strike), in: source, selection: selection)
+                    case "para": NoteFormat.Paragraph(rawValue: value).flatMap { NoteFormat.set($0, in: source, selection: selection) }
+                    case "list": NoteFormat.List(rawValue: value).flatMap { NoteFormat.set($0, in: source, selection: selection) }
+                    case "align": NoteAlignment(rawValue: value).flatMap { NoteFormat.set($0, in: source, selection: selection) }
+                    default: nil
+                    }
+                }
+                try? await Task.sleep(for: .milliseconds(250))
+                let state = text.formatState()
+                say("note format: \(what) → \(note.markdown.debugDescription) selection \(text.selectedRange()) "
+                    + "shown \(text.string.debugDescription) state \(state.paragraph.rawValue)/\(state.list.rawValue)/"
+                    + "\(state.alignment.rawValue) size \(state.size) css \(state.style.css.debugDescription)")
+                continue
+            }
             // `Shot:<png>`: the note as it stands, caret and all, drawn by the
             // view itself (`cacheDisplay`) — no screen is looked at.
             if let file = key.stripPrefix("Shot:") {

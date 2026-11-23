@@ -126,6 +126,10 @@ enum NoteMarkdown {
                 ends(width, width)
             case .highlight(_, let color, _):
                 ends(highlightLead(color: color), 2)
+            case .styled(_, _, _, let lead):
+                ends(lead, (NoteSpanStyle.close as NSString).length)
+            case .hidden, .image:
+                ends(range.length, 0)
             case .arrow:
                 ends(0, 0)
             case .dollar:
@@ -174,6 +178,8 @@ enum NoteMarkdown {
         for run in written {
             text.addAttributes([.font: block.font, .foregroundColor: block.colour], range: run)
             text.removeAttribute(.kern, range: run)
+            text.removeAttribute(.underlineStyle, range: run)
+            if block.kind != .task(true) { text.removeAttribute(.strikethroughStyle, range: run) }
             #if os(macOS)
             text.removeAttribute(NoteCodeStyle.attribute, range: run)
             text.removeAttribute(NoteHighlight.attribute, range: run)
@@ -198,6 +204,14 @@ enum NoteMarkdown {
                     } else if whole.length > 2 * width {
                         text.addAttribute(.font, value: emphasisFont(in: block, bold: bold, italic: italic),
                                           range: NSRange(location: whole.location + width, length: whole.length - 2 * width))
+                    }
+                }
+                // A span's words as the span sets them, its tags shown.
+                if case .styled(_, let span, _, let lead) = token.kind, isWritten(whole) {
+                    let tail = (NoteSpanStyle.close as NSString).length
+                    if whole.length > lead + tail {
+                        text.addAttributes(styledAttributes(span, in: block),
+                                           range: NSRange(location: whole.location + lead, length: whole.length - lead - tail))
                     }
                 }
                 // A highlight too: its words in the ink, on the band, with
@@ -875,7 +889,8 @@ enum NoteMarkdown {
             // it, the numbers at the right-hand edge.
             let alone = !revealed && standsAlone(block)
             let number = listNumbers[lineRange.location]
-            let style = alone ? centered(block.paragraphStyle) : block.paragraphStyle(number: number)
+            let style = alone ? centered(block.paragraphStyle)
+                : aligned(block.paragraphStyle(number: number), for: block.content)
 
             if markerLength > 0 {
                 // Every marker is drawn on the line being edited as well
@@ -1579,7 +1594,7 @@ enum NoteMarkdown {
 
     // MARK: - Inline
 
-    private enum Kind {
+    enum Kind {
         case anchorLink(label: String, url: URL)
         /// `source` as written: `[[id]]` and `[[id|id]]` show the same and
         /// are not the same characters.
@@ -1592,6 +1607,15 @@ enum NoteMarkdown {
         /// highlights — the words in a deep shade of the colour over a pale
         /// band of it. `color` is the name as written, nil for the default.
         case highlight(text: String, color: String?, source: String)
+        /// `<span style="…">words</span>`: words in a colour, a size, a
+        /// face, underlined or struck through (`NoteSpanStyle`). `lead` is
+        /// how many characters the opening tag is.
+        case styled(text: String, style: NoteSpanStyle, source: String, lead: Int)
+        /// `![alt](file)`: a picture, on the line (`NoteImages`).
+        case image(path: String, source: String)
+        /// `<p align="…">` and `</p>` round a line's words: not shown, and
+        /// the line set that way (`NoteAlignment`).
+        case hidden(source: String)
         /// `->` and `<-`, shown as the arrows they stand for.
         case arrow(right: Bool)
         /// `\$`: a dollar, written so it does not open a formula — shown as
@@ -1599,7 +1623,7 @@ enum NoteMarkdown {
         case dollar
     }
 
-    private struct Token {
+    struct Token {
         var range: NSRange
         var kind: Kind
     }
@@ -1627,6 +1651,14 @@ enum NoteMarkdown {
     static let highlightPattern = try! NSRegularExpression(
         pattern: #"(?<![\p{L}\p{N}=])==(?:\{(yellow|green|blue|pink|purple)\})?(?![\s=])((?:[^=\n]|=(?!=))+?)(?<!\s)==(?!=)"#
     )
+    /// A span with a style, on one line, with no span inside it.
+    static let spanPattern = try! NSRegularExpression(
+        pattern: #"<span style="([^"\n]*)">((?:(?!</?span)[^\n])*?)</span>"#
+    )
+    /// A picture, as Markdown writes one.
+    static let imagePattern = try! NSRegularExpression(pattern: #"!\[[^\]\n]*\]\(([^)\s]+)\)"#)
+    /// The two tags that set a line's alignment.
+    static let alignPattern = try! NSRegularExpression(pattern: #"<p align="(?:left|center|right|justify)">|</p>"#)
     /// `->` and `<-`, not the middle of a longer dash or a `<->`.
     static let arrowPattern = try! NSRegularExpression(pattern: #"(?<![-<])->|<-(?![->])"#)
 
@@ -1660,7 +1692,7 @@ enum NoteMarkdown {
     /// differently — a link, a note link, a formula, or emphasis. All four
     /// begin with one of these characters: a formula with `$` or, written as
     /// LaTeX writes it, with a backslash.
-    private static func holdsMarkup(_ line: String) -> Bool {
+    static func holdsMarkup(_ line: String) -> Bool {
         // Over the bytes, not through `NSString.character(at:)` — that is a
         // message send per character, and there are thirty thousand of them
         // in a note worth worrying about. A highlight begins with `=`; an
@@ -1669,6 +1701,8 @@ enum NoteMarkdown {
         for byte in line.utf8 {
             switch byte {
             case 0x5B, 0x24, 0x2A, 0x60, 0x5C, 0x3D: return true
+            case 0x73 where previous == 0x3C, 0x70 where previous == 0x3C, 0x2F where previous == 0x3C:
+                return true   // <s(pan), <p, </
             case 0x3E where previous == 0x2D: return true   // ->
             case 0x2D where previous == 0x3C: return true   // <-
             default: break
@@ -1700,7 +1734,7 @@ enum NoteMarkdown {
         return copy
     }
 
-    private static func nextToken(in line: NSString, from index: Int) -> Token? {
+    static func nextToken(in line: NSString, from index: Int) -> Token? {
         let range = NSRange(location: index, length: line.length - index)
         var best: Token?
 
@@ -1752,6 +1786,20 @@ enum NoteMarkdown {
         }
         if let match = arrowPattern.firstMatch(in: line as String, range: range) {
             consider(Token(range: match.range, kind: .arrow(right: line.substring(with: match.range) == "->")))
+        }
+        if let match = spanPattern.firstMatch(in: line as String, range: range) {
+            let style = NoteSpanStyle(css: line.substring(with: match.range(at: 1)))
+            consider(Token(range: match.range, kind: .styled(
+                text: line.substring(with: match.range(at: 2)), style: style,
+                source: line.substring(with: match.range), lead: match.range(at: 2).location - match.range.location
+            )))
+        }
+        if let match = imagePattern.firstMatch(in: line as String, range: range) {
+            consider(Token(range: match.range, kind: .image(
+                path: line.substring(with: match.range(at: 1)), source: line.substring(with: match.range))))
+        }
+        if let match = alignPattern.firstMatch(in: line as String, range: range) {
+            consider(Token(range: match.range, kind: .hidden(source: line.substring(with: match.range))))
         }
         if let match = emphasisPattern.firstMatch(in: line as String, range: range) {
             // `***both***` is bold and italic — what ⌘B then ⌘I make of a
@@ -1840,6 +1888,26 @@ enum NoteMarkdown {
             if block.kind == .task(true) { attributes[.strikethroughStyle] = NSUnderlineStyle.single.rawValue }
             return atomic(text, source: source, attributes: attributes, style: style)
 
+        case .styled(let text, let spanStyle, let source, let lead):
+            var attributes = block.attributes(style: style)
+            for (key, value) in styledAttributes(spanStyle, in: block) { attributes[key] = value }
+            attributes[.paperTimeSourceLead] = lead
+            // Words with nothing in them still stand for their tags.
+            return atomic(text.isEmpty ? hiddenMarker : text, source: source, attributes: attributes, style: style)
+
+        case .hidden(let source):
+            return atomic(hiddenMarker, source: source, attributes: block.attributes(style: style), style: style)
+
+        case .image(let path, let source):
+            #if os(macOS)
+            if let picture = picturePiece(path: path, source: source, style: style) { return picture }
+            #endif
+            // A picture that is not here — not downloaded yet, or its box not
+            // open — is shown as what the note says, quietly.
+            var attributes = block.attributes(style: style)
+            attributes[.foregroundColor] = NoteColor.tertiaryLabelColor
+            return atomic(source, source: source, attributes: attributes, style: style)
+
         case .arrow(let right):
             return atomic(right ? "→" : "←", source: right ? "->" : "<-",
                           attributes: block.attributes(style: style), style: style)
@@ -1847,6 +1915,71 @@ enum NoteMarkdown {
         case .dollar:
             return atomic("$", source: "\\$", attributes: block.attributes(style: style), style: style)
         }
+    }
+
+    #if os(macOS)
+    nonisolated(unsafe) private static var pictures: [String: NSTextAttachment] = [:]
+
+    /// A picture as the note sets it: its own size, and no wider than the
+    /// line — nor taller than a page is worth scrolling past.
+    private static func picturePiece(path: String, source: String, style: NSParagraphStyle) -> NSAttributedString? {
+        guard let image = NoteImages.image(path) else { return nil }
+        let indent = max(style.headIndent, style.firstLineHeadIndent)
+        let room = max(80, (available ?? 560) - indent)
+        var size = image.size
+        let scale = min(1, room / size.width, 720 / size.height)
+        size = CGSize(width: (size.width * scale).rounded(), height: (size.height * scale).rounded())
+        // The same attachment for the same picture at the same size: a line
+        // is set again only when it changed, and a new object each time is
+        // a line that always has.
+        let key = "\(path)|\(Int(size.width))x\(Int(size.height))"
+        let attachment: NSTextAttachment
+        if let known = pictures[key] {
+            attachment = known
+        } else {
+            attachment = NSTextAttachment()
+            attachment.image = image
+            attachment.bounds = CGRect(origin: .zero, size: size)
+            if pictures.count > 300 { pictures.removeAll() }
+            pictures[key] = attachment
+        }
+        let piece = NSMutableAttributedString(attachment: attachment)
+        piece.addAttributes([
+            .paperTimeSource: source,
+            .font: NoteTypography.body(),
+            .foregroundColor: NoteColor.labelColor,
+            .paragraphStyle: style,
+        ], range: NSRange(location: 0, length: piece.length))
+        return piece
+    }
+    #endif
+
+    /// What a span's style adds to the line's own attributes.
+    static func styledAttributes(_ span: NoteSpanStyle, in block: Block) -> [NSAttributedString.Key: Any] {
+        var attributes: [NSAttributedString.Key: Any] = [:]
+        let size = span.size.map { CGFloat($0) } ?? block.font.pointSize
+        if span.size != nil || span.family != nil || span.bold || span.italic {
+            // A heading's words stay as heavy as the heading unless made heavier.
+            let own: NoteFont.Weight = block.headingLevel.map { $0 <= 1 ? .bold : .semibold } ?? .regular
+            attributes[.font] = NoteTypography.face(family: span.family, size: size, weight: span.bold ? .bold : own,
+                                                    italic: span.italic || block.kind == .quote)
+        }
+        if let color = span.color, let ink = NoteColor(noteHex: color) { attributes[.foregroundColor] = ink }
+        if span.underline { attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue }
+        if span.strike { attributes[.strikethroughStyle] = NSUnderlineStyle.single.rawValue }
+        return attributes
+    }
+
+    /// The line's paragraph style, set the way its words are wrapped.
+    static func aligned(_ style: NSParagraphStyle, for content: String) -> NSParagraphStyle {
+        #if os(macOS)
+        guard content.utf8.first == 0x3C, let found = NoteAlignment.read(content) else { return style }
+        let copy = (style.mutableCopy() as? NSMutableParagraphStyle) ?? NSMutableParagraphStyle()
+        copy.alignment = found.alignment.textAlignment
+        return copy
+        #else
+        return style
+        #endif
     }
 
     /// How many characters open a highlight: `==`, or `=={pink}`.
