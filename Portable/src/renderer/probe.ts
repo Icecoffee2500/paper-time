@@ -175,6 +175,24 @@ export function installProbeSurface() {
         view.dispatch({ selection: { anchor, head: head ?? anchor } })
         return true
       },
+      /** A change from the format panel made to the slip-box's note, and what the panel then shows. */
+      formatSlipBox: (command: Parameters<NonNullable<ReturnType<typeof slipBoxEditor>>['format']>[0]) => {
+        const editor = slipBoxEditor()
+        if (!editor) return null
+        editor.format(command)
+        return editor.formatState()
+      },
+      /** The format panel in the inspector, as its words and what is lit — empty when it is not shown. */
+      formatPanel: () => {
+        const panel = document.querySelector('.note-format-panel')
+        if (!panel) return null
+        return {
+          idle: panel.classList.contains('idle'),
+          paragraph: panel.querySelector('.nf-paragraph')?.textContent ?? '',
+          fields: [...panel.querySelectorAll('.nf-field')].map((one) => one.textContent ?? ''),
+          lit: [...panel.querySelectorAll('[aria-pressed="true"]')].map((one) => one.getAttribute('title') ?? one.textContent ?? ''),
+        }
+      },
       /** The caret put where a press put it: the transaction a click makes (`select.pointer`) — a press on a list's marker. */
       pressSlipBox: (at: number) => {
         const view = slipBoxEditor()?.view

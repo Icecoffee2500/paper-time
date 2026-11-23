@@ -3960,6 +3960,8 @@ body[data-solo='true'] .reader-header button {
   gap: 6px;
   margin-bottom: 12px;
 }
+/* A pane's own ⌄ and × stand over its top corner: the note's buttons stop short of them. */
+.slipbox-detail .note-editor-head { padding-right: 46px; }
 
 .note-back {
   display: inline-flex;
@@ -4046,6 +4048,8 @@ body[data-solo='true'] .reader-header button {
 .nm-marker.nm-marker-label { width: auto; min-width: 48px; margin-left: -33.12px; padding-right: 0.3em; box-sizing: border-box; text-align: right; }
 .cm-line.nm-indent-0 .nm-marker.nm-marker-label { min-width: 24px; margin-left: -9.12px; }
 .nm-marker-done { color: var(--text-secondary); }
+/* A bullet you can see, as Pages sets one: the words' own colour, a size up. */
+.nm-marker.nm-marker-bullet { color: var(--text); font-size: 1.3em; line-height: 1; vertical-align: -0.07em; }
 .nm-done { color: var(--text-secondary); text-decoration: line-through; }
 /* A toggle's marker turns with a press; what it folded away is one quiet ellipsis. */
 .nm-marker.nm-toggle { cursor: pointer; border-radius: 4px; }
@@ -4090,6 +4094,15 @@ body[data-solo='true'] .reader-header button {
 /* Highlighted words (`==words==`, `=={pink}words==`): the ink and the band
    of the colour named, the band rounded and hanging a little under the
    letters, each line's piece its own box (`NoteHighlight`). */
+/* What the format panel wrote: a span's words in their own colour, size and face; a line set across the page;
+   a picture on a line. A highlighted span keeps the band and takes its own ink when it has one. */
+.nm-hl.nm-own-ink { color: inherit; }
+.cm-line.nm-align-center { text-align: center; }
+.cm-line.nm-align-right { text-align: right; }
+.cm-line.nm-align-justify { text-align: justify; }
+.nm-picture { display: inline-block; max-width: 100%; vertical-align: bottom; }
+.nm-picture img { display: block; max-width: 100%; max-height: 720px; border-radius: 4px; }
+.nm-picture-missing { color: var(--text-tertiary); }
 .nm-hl { border-radius: 3.5px; padding: 0.03em 0.125em 0.12em; margin: 0 -0.125em; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 .nm-hl-yellow { color: var(--hl-yellow-ink); background: var(--hl-yellow-band); }
 .nm-hl-green { color: var(--hl-green-ink); background: var(--hl-green-band); }
@@ -4325,6 +4338,51 @@ body[data-solo='true'] .reader-header button {
 .selection-toolbar-button[data-color] { min-width: 22px; padding: 0 3px; }
 .selection-toolbar-dot { display: block; width: 14px; height: 14px; border-radius: 50%; background: var(--dot-ink); box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.12); transition: transform var(--motion-tap) var(--ease); }
 .selection-toolbar-button[data-color]:hover { background: transparent; }
+/* The five are the highlighter's dots, or the same five as letters for the words themselves: the switch before them says which. */
+.selection-toolbar-letter { display: none; font-size: 14px; font-weight: 700; line-height: 14px; transition: transform var(--motion-tap) var(--ease); }
+.selection-toolbar[data-words="1"] .selection-toolbar-dot { display: none; }
+.selection-toolbar[data-words="1"] .selection-toolbar-letter { display: block; }
+.selection-toolbar-button[data-color]:hover .selection-toolbar-letter { transform: scale(1.18); }
+.selection-toolbar-switch { color: var(--text-secondary); }
+
+/* The note's format, in the inspector's Tools (the Mac's NoteFormatPanel). */
+.note-format-panel { display: flex; flex-direction: column; gap: 12px; padding: 14px; font-size: 12.5px; }
+.note-format-panel.idle { opacity: 0.5; pointer-events: none; }
+.note-format-panel button { font: inherit; color: inherit; border: 0; cursor: default; }
+.nf-title { text-align: center; font-size: 12px; font-weight: 500; color: var(--text-secondary); }
+.nf-head { font-weight: 600; }
+.nf-rule { height: 1px; background: color-mix(in srgb, var(--text) 8%, transparent); }
+.nf-paragraph { display: flex; align-items: center; justify-content: space-between; height: 38px; padding: 0 12px; border-radius: 10px; font-size: 15px; background: var(--panel); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 6%, transparent); }
+.nf-paragraph.heavy { font-weight: 700; }
+.nf-chevron { display: inline-flex; color: var(--text-secondary); }
+.nf-chevron svg { width: 11px; height: 11px; }
+.nf-field { display: flex; align-items: center; justify-content: space-between; gap: 4px; height: 26px; padding: 0 10px; border-radius: var(--radius-control, 7px); background: color-mix(in srgb, var(--text) 7%, transparent); min-width: 0; }
+.nf-field-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nf-row { display: flex; align-items: center; gap: 8px; }
+.nf-row.nf-between { justify-content: space-between; }
+.nf-segments { display: flex; flex: 1 1 auto; gap: 1px; border-radius: var(--radius-control, 7px); overflow: hidden; }
+.nf-segments.off { opacity: 0.4; pointer-events: none; }
+.nf-segment { flex: 1 1 0; display: flex; align-items: center; justify-content: center; height: 26px; font-size: 13px; font-weight: 600; background: color-mix(in srgb, var(--text) 7%, transparent); }
+.nf-segment svg { width: 14px; height: 14px; }
+.nf-segment:hover { background: color-mix(in srgb, var(--text) 11%, transparent); }
+.nf-segment[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.nf-mark-bold { font-weight: 800; }
+.nf-mark-italic { font-style: italic; font-family: Georgia, 'Times New Roman', serif; }
+.nf-mark-underline { text-decoration: underline; }
+.nf-mark-strike { text-decoration: line-through; }
+.nf-size-box { display: flex; align-items: center; gap: 2px; flex: 0 0 84px; }
+.nf-size { flex: 1 1 auto; justify-content: center; font-variant-numeric: tabular-nums; padding: 0 4px; }
+.nf-steps { display: flex; flex-direction: column; color: var(--text-secondary); }
+.nf-step { display: flex; align-items: center; justify-content: center; width: 16px; height: 13px; background: none; border-radius: 3px; }
+.nf-step:hover { background: color-mix(in srgb, var(--text) 9%, transparent); }
+.nf-step svg { width: 9px; height: 9px; stroke-width: 2.2; }
+.nf-dots { display: flex; align-items: center; gap: 9px; }
+.nf-ink, .nf-dot { position: relative; width: 16px; height: 16px; border-radius: 50%; background: none; padding: 0; }
+.nf-ink { font-size: 14px; font-weight: 700; line-height: 16px; text-align: center; }
+.nf-dot { background: var(--dot-ink); box-shadow: inset 0 0 0 0.5px rgba(0, 0, 0, 0.12); }
+.nf-ink[aria-pressed="true"]::after, .nf-dot[aria-pressed="true"]::after { content: ''; position: absolute; inset: -3px; border-radius: 50%; box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--text) 75%, transparent); }
+.nf-list { width: 124px; flex: 0 0 auto; }
+.note-format-popover { position: fixed; z-index: 115; border-radius: var(--radius-popover, 14px); background: var(--panel); box-shadow: 0 10px 34px rgba(0, 0, 0, 0.22), 0 0 0 0.5px rgba(0, 0, 0, 0.12); max-height: calc(100vh - 16px); overflow: auto; }
 .selection-toolbar-button[data-color]:hover .selection-toolbar-dot { transform: scale(1.18); }
 
 /* A note beside the paper a passage in it was followed to. */

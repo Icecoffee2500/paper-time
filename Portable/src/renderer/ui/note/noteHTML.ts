@@ -10,6 +10,7 @@
  * stub and no window (`src/test/noteHTML.ts`).
  */
 import { blankingCode, emphasisClasses, emphasisPieces, highlightClasses, markerClass, planNote, type InlineToken, type PlannedLine } from '../../../shared/noteMarkdown.js'
+import { inlineCSS, readAlignment } from '../../../shared/noteSpan.js'
 import { highlightCSSVariables } from '../../../shared/marks.js'
 import { numberFormulas, type MathSetter, type Numbered } from '../../../shared/mathJax.js'
 import { parseTable, tableBlocks, type Table } from '../../../shared/noteTable.js'
@@ -21,6 +22,8 @@ export interface NoteHTMLOptions {
   set: MathSetter['set']
   /** The page's language, for `<html lang>`. */
   lang?: string
+  /** A picture the note names, as a data URL — null for one that is not there. */
+  picture?: (path: string) => string | null
   /** The room a numbered formula spreads over, in MathJax's pixels (an `ex`
    *  is eight). The default is an A4 page inside 0.6-inch margins. */
   room?: number
@@ -95,10 +98,13 @@ function lineHTML(line: PlannedLine, source: string, counted: Map<number, Number
   const { block } = line
   const inner = contentHTML(line, source, counted, options)
   const classes = ['nm-line']
+  const aligned = block.content.startsWith('<p align=') ? readAlignment(block.content) : null
+  const across = aligned && aligned.alignment !== 'left' ? ` nm-align-${aligned.alignment}` : ''
+  if (across && block.type.kind === 'plain') classes.push(across.trim())
   switch (block.type.kind) {
     case 'heading': {
       const level = Math.min(6, Math.max(1, block.type.level))
-      return `<h${level} class="nm-line nm-h nm-h${level}">${inner}</h${level}>`
+      return `<h${level} class="nm-line nm-h nm-h${level}${across}">${inner}</h${level}>`
     }
     case 'bullet':
     case 'ordered':
@@ -162,6 +168,18 @@ function tokenHTML(token: InlineToken, source: string, line: PlannedLine, counte
       return `<mark class="${highlightClasses(token.color)}">${escapeHTML(token.text)}</mark>`
     case 'arrow':
       return token.right ? '→' : '←'
+    case 'styled': {
+      const css = inlineCSS(token.style)
+      const classes = token.style.highlight ? highlightClasses(token.style.highlight) : 'nm-styled'
+      return `<span class="${classes}"${css ? ` style="${escapeHTML(css)}"` : ''}>${escapeHTML(token.text)}</span>`
+    }
+    // A line's alignment: the line is set that way (`lineHTML`).
+    case 'hidden':
+      return ''
+    case 'image': {
+      const url = options.picture?.(token.path) ?? null
+      return url ? `<span class="nm-picture"><img src="${escapeHTML(url)}" alt=""></span>` : ''
+    }
     case 'math': {
       const text = source.slice(token.from, token.to)
       const block = text.includes('\n')
@@ -275,6 +293,7 @@ h4.nm-h, h5.nm-h, h6.nm-h { font-size: 16px; }
 .nm-marker { display: inline-block; width: 14.88px; text-indent: 0; color: var(--text-secondary); white-space: nowrap; }
 .nm-marker-label { width: auto; min-width: 48px; margin-left: -33.12px; padding-right: 0.3em; box-sizing: border-box; text-align: right; }
 .nm-indent-0 .nm-marker-label { min-width: 24px; margin-left: -9.12px; }
+.nm-marker.nm-marker-bullet { color: var(--text); font-size: 1.3em; line-height: 1; vertical-align: -0.07em; }
 .nm-done { color: var(--text-secondary); text-decoration: line-through; }
 .nm-quote { position: relative; padding: 3px 0 3px 20.4px; }
 .nm-quote::before, .nm-quote::after { content: ''; position: absolute; top: 0; bottom: 0; left: 7.4px; }
@@ -293,6 +312,11 @@ h4.nm-h, h5.nm-h, h6.nm-h { font-size: 16px; }
 .nm-link, .nm-note-link { color: var(--accent); text-decoration: underline; }
 .nm-bold { font-weight: 700; }
 .nm-italic { font-style: italic; }
+.nm-align-center { text-align: center; }
+.nm-align-right { text-align: right; }
+.nm-align-justify { text-align: justify; }
+.nm-picture { display: inline-block; max-width: 100%; vertical-align: bottom; }
+.nm-picture img { display: block; max-width: 100%; max-height: 720px; }
 :root { ${highlightCSSVariables().light.replaceAll('\n', ' ')} }
 .nm-hl { border-radius: 3.5px; padding: 0.03em 0.125em 0.12em; margin: 0 -0.125em; -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 .nm-hl-yellow { color: var(--hl-yellow-ink); background: var(--hl-yellow-band); }

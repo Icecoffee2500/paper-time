@@ -26,7 +26,12 @@ struct LibrarySidebar: View {
 
     /// Where the shelf you are on sits, in the list's own space — one shape
     /// for the whole list, so it can travel between rows.
-    @State private var litShelf: CGRect?
+    ///
+    /// Held in an object the glass reads and this view does not. As a plain
+    /// `@State` here, each step of a scroll — which moves the lit row, which
+    /// changes the preference — drew the whole sidebar again, every row and
+    /// every count, to move one shape.
+    @State private var lit = LitPlace()
     /// Whether the pointer is over the search row, which is the only row
     /// that carries a control of its own.
     @State private var hoveringSearch = false
@@ -46,37 +51,12 @@ struct LibrarySidebar: View {
             // between them cannot live in one. It is drawn once, behind the
             // whole list, at whichever row is lit.
             .scrollContentBackground(.hidden)
-            .background(alignment: .topLeading) { litGlass }
-            .onPreferenceChange(LitShelf.self) { litShelf = $0 }
+            .background(alignment: .topLeading) { LitGlass(place: lit, model: model) }
+            .onPreferenceChange(LitShelf.self) { [lit] frame in lit.frame = frame }
             #if os(macOS)
             // Takes papers dropped on any row (`SidebarDrops`); clicks pass.
             .overlay { SidebarDropCatcher(model: model) }
             #endif
-    }
-
-    /// The shelf you are on, lit: one piece of glass carrying the row's own
-    /// colour. It slides from row to row rather than being repainted in each,
-    /// which is the move the buttons along the foot of Music make — and it
-    /// says the thing a wash cannot: you came from there, you are here now.
-    private var litGlass: some View {
-        // Rows and list both measured against the window, so the difference
-        // is where the glass goes; a named space put it half a panel away.
-        GeometryReader { proxy in
-            if let litShelf {
-                let origin = proxy.frame(in: .global).origin
-                let shape = RoundedRectangle(cornerRadius: Corner.row, style: .continuous)
-                shape
-                    .fill(ScopeRow.ground(for: model.scope))
-                    .liquidGlass(.control, in: shape)
-                    // The list's width, not the row's: every row is the same
-                    // width, and a width taken from whichever row answered
-                    // first was animated as it travelled, so the glass swelled
-                    // out over the page on its way down.
-                    .frame(width: max(proxy.size.width - 12, 0), height: litShelf.height)
-                    .offset(x: 6, y: litShelf.minY - origin.y)
-            }
-        }
-        .clipped()
     }
 
     /// The way out of a search: a small round button in the row's corner, on
@@ -184,7 +164,7 @@ struct LibrarySidebar: View {
                         Image(systemName: source.provider.symbolName)
                     }
                     // What the library's own shelf shows: the PDFs at its top.
-                    .count(model.papers.count { $0.meta.parentID == nil && model.isDirectlyIn($0, source.url) },
+                    .count(model.directCount(in: source.url),
                            current: model.scope == .folder(source.url))
                     .scopeRow(.folder(source.url), in: model, whenCurrent: {
                         withAnimation(Motion.surface) { model.scope = model.homeScope }
@@ -621,7 +601,7 @@ struct LibrarySidebar: View {
 
     private func folderRow(_ url: URL, depth: Int, isOpen: Bool, count: Int? = nil) -> some View {
         Label(url.lastPathComponent, systemImage: isOpen ? "folder.fill" : "folder")
-            .count(count ?? model.papers.count { $0.meta.parentID == nil && model.isDirectlyIn($0, url) },
+            .count(count ?? model.directCount(in: url),
                    current: model.scope == .folder(url))
             .padding(.leading, CGFloat(depth) * 11)
             .scopeRow(.folder(url), in: model, whenCurrent: {
@@ -1000,6 +980,42 @@ private struct ShelfDragSource: ViewModifier {
 
 }
 #endif
+
+/// The shelf you are on, lit: one piece of glass carrying the row's own
+/// colour. It slides from row to row rather than being repainted in each,
+/// which is the move the buttons along the foot of Music make — and it
+/// says the thing a wash cannot: you came from there, you are here now.
+private struct LitGlass: View {
+    let place: LitPlace
+    let model: LibraryModel
+
+    var body: some View {
+        // Rows and list both measured against the window, so the difference
+        // is where the glass goes; a named space put it half a panel away.
+        GeometryReader { proxy in
+            if let litShelf = place.frame {
+                let origin = proxy.frame(in: .global).origin
+                let shape = RoundedRectangle(cornerRadius: Corner.row, style: .continuous)
+                shape
+                    .fill(ScopeRow.ground(for: model.scope))
+                    .liquidGlass(.control, in: shape)
+                    // The list's width, not the row's: every row is the same
+                    // width, and a width taken from whichever row answered
+                    // first was animated as it travelled, so the glass swelled
+                    // out over the page on its way down.
+                    .frame(width: max(proxy.size.width - 12, 0), height: litShelf.height)
+                    .offset(x: 6, y: litShelf.minY - origin.y)
+            }
+        }
+        .clipped()
+    }
+}
+
+/// Where the lit row is, for the glass alone (see `LibrarySidebar.lit`).
+@Observable
+final class LitPlace {
+    var frame: CGRect?
+}
 
 /// Where the lit shelf is. Only the row that is lit answers; the first
 /// answer wins, and none at all means it has been scrolled out of sight.

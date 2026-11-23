@@ -165,6 +165,8 @@ enum ZettelFixtures {
             ("numbered lists", "", "1. first\n10. tenth\n\u{0661}. arabic-indic digit"),
             ("a formula between words", "", "The loss $\\mathcal{L}$ falls; then $$\\sum_i x_i$$ rises."),
             ("a heading that is only marks", "", "###\n>>>\nreal words"),
+            ("words the format panel set", "", "<p align=\"right\">plain <span style=\"color:#d62e54;font-size:20px\">red words</span> tail</p>\nsecond"),
+            ("highlights, named and not, in a word too", "", "con=={green}tin==uous and ==marked== but a==b stays"),
         ]
         var derived: [DerivedCase] = []
         for (name, title, body) in bodies {

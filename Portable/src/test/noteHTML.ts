@@ -36,9 +36,9 @@ export async function noteHTMLSuite(test: Test, suite: (name: string) => void) {
   await test('nested bullets and numbers carry the markers the editor shows, and their depth', () => {
     const body = noteBodyHTML('- one\n  - two\n    - three\n1. first\n  2. second\n    3. third\n- [x] done\n- [ ] open', { set: stub })
     const lines = body.split('\n')
-    assert.equal(lines[0], '<div class="nm-line nm-list nm-indent-0"><span class="nm-marker">•</span>one</div>')
-    assert.equal(lines[1], '<div class="nm-line nm-list nm-indent-1"><span class="nm-marker">◦</span>two</div>')
-    assert.equal(lines[2], '<div class="nm-line nm-list nm-indent-2"><span class="nm-marker">▪</span>three</div>')
+    assert.equal(lines[0], '<div class="nm-line nm-list nm-indent-0"><span class="nm-marker nm-marker-bullet">•</span>one</div>')
+    assert.equal(lines[1], '<div class="nm-line nm-list nm-indent-1"><span class="nm-marker nm-marker-bullet">◦</span>two</div>')
+    assert.equal(lines[2], '<div class="nm-line nm-list nm-indent-2"><span class="nm-marker nm-marker-bullet">▪</span>three</div>')
     assert.equal(lines[3], '<div class="nm-line nm-list nm-indent-0"><span class="nm-marker nm-marker-label">1.</span>first</div>')
     // Each list set in starts at its own first: «a.» and «i.», whatever the
     // «2.» and «3.» written in front of them.

@@ -160,6 +160,13 @@ public struct Zettel: Identifiable, Hashable, Sendable {
                                   options: .regularExpression)
             .replacingOccurrences(of: #"\[([^\]\n]*)\]\([^)\s]*\)"#, with: "$1",
                                   options: .regularExpression)
+            // What the format panel writes round words — a span's tags, a
+            // line's alignment, a highlight's marks — is not words: a note
+            // whose first line was coloured was called «<span style=…».
+            .replacingOccurrences(of: #"<span style="[^"\n]*">|</span>|<p align="[a-z]+">|</p>"#, with: "",
+                                  options: .regularExpression)
+            .replacingOccurrences(of: #"==(?:\{(?:yellow|green|blue|pink|purple)\})?((?:[^=\n]|=(?!=))+?)=="#, with: "$1",
+                                  options: .regularExpression)
 
         return text
             .split(separator: "\n")

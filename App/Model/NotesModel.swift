@@ -126,7 +126,17 @@ public final class NotesModel {
     private func rebuildBoxes() {
         let kept = leftBehind.filter { $0.boxID != loose.boxID }
         boxes = [loose] + folders + kept
+        #if os(macOS)
+        NoteImages.directories = boxes.map { NoteImages.directory(ofBox: $0) }
+        #endif
     }
+
+    #if os(macOS)
+    /// Where a note's pictures are kept: beside the notes of its box.
+    public func picturesDirectory(for noteID: String) -> URL {
+        NoteImages.directory(ofBox: byID[noteID].map { box(for: $0) } ?? loose)
+    }
+    #endif
 
     /// Where a note is written: the box it was read from, else the folder of
     /// the paper it is about, else the app's own box.

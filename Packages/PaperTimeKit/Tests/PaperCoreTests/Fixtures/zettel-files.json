@@ -272,6 +272,38 @@
 
       ],
       "title" : ""
+    },
+    {
+      "body" : "<p align=\"right\">plain <span style=\"color:#d62e54;font-size:20px\">red words</span> tail</p>\nsecond",
+      "displayTitle" : "plain red words tail second",
+      "isEmpty" : false,
+      "linkMarkdown" : "[[202609081530|plain red words tail second]]",
+      "links" : [
+
+      ],
+      "name" : "words the format panel set",
+      "preview" : "plain red words tail second",
+      "previewBody" : "",
+      "tags" : [
+
+      ],
+      "title" : ""
+    },
+    {
+      "body" : "con=={green}tin==uous and ==marked== but a==b stays",
+      "displayTitle" : "continuous and marked but a==b stays",
+      "isEmpty" : false,
+      "linkMarkdown" : "[[202609081530|continuous and marked but a==b stays]]",
+      "links" : [
+
+      ],
+      "name" : "highlights, named and not, in a word too",
+      "preview" : "continuous and marked but a==b stays",
+      "previewBody" : "",
+      "tags" : [
+
+      ],
+      "title" : ""
     }
   ],
   "read" : [

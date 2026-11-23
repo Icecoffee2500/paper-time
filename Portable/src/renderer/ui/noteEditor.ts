@@ -34,7 +34,12 @@ import { keyFor } from '../../shared/shortcuts.js'
 import { EditorSelection, EditorState, Prec, Transaction, type Extension } from '@codemirror/state'
 import { EditorView, ViewPlugin, drawSelection, keymap, placeholder, type ViewUpdate } from '@codemirror/view'
 import { defaultKeymap, history, historyKeymap, insertTab, isolateHistory } from '@codemirror/commands'
-import { flash, foldedField, foldedRanges, markdownView, rawField, setRaw, toggleKey } from './note/markdownView.js'
+import { afterTags, beforeTags, flash, foldedField, foldedRanges, knownPicture, markdownView, rawField, rememberPicture, setRaw, toggleKey } from './note/markdownView.js'
+import { formatState, insertPicture, setAlignment, setList, setParagraph, setStyle, type Change, type FormatEdit, type FormatState, type ListKind, type Paragraph } from '../../shared/noteFormat.js'
+import { inkNamed, type NoteAlignment } from '../../shared/noteSpan.js'
+import { DEFAULT_HIGHLIGHT } from '../../shared/noteMarkdown.js'
+import { formatCenter } from './noteFormatCenter.js'
+import { findClusterBreak } from '@codemirror/state'
 import { latexSuiteView } from './note/latexSuiteView.js'
 import { noteHTML } from './note/noteHTML.js'
 import { typesetter } from '../sketchMath.js'
@@ -49,6 +54,8 @@ export interface NoteEditorActions {
   openNote: (id: string) => void
   /** The way back to the list, when there is one behind this. */
   close?: () => void
+  /** Shows the format beside the button rather than in the inspector — for a note that is in the inspector itself. */
+  showFormat?: (anchor: HTMLElement) => void
 }
 
 export interface NoteEditor {
@@ -68,6 +75,10 @@ export interface NoteEditor {
   reveal(words: string): boolean
   /** Scrolls to the quotation whose page link is this address and makes it glow; the caret stays where it was. */
   revealQuotation(url: string): boolean
+  /** A change from the format panel, made in the Markdown as one step of the history. */
+  format(command: FormatCommand): void
+  /** What the format panel shows for where the selection is. */
+  formatState(): PanelState
   /** The formula card, the `[[` card, the selection bar and the folds, for a probe. */
   report(): { math: string; links: WikiLinkReport; raw: boolean; toolbar: ToolbarReport; folded: number[] }
 }
@@ -76,7 +87,25 @@ export interface ToolbarReport { showing: boolean; buttons: string[] }
 
 /** The marks the keys and the selection bar put on, in the bar's order. */
 /** What the bar puts on: a mark round the words, or a highlight in one of the five colours (null is the default). */
-type BarMark = { mark: EmphasisMark } | { highlight: string | null }
+type BarMark = { mark: EmphasisMark } | { highlight: string | null } | { color: string }
+
+/** What the format panel asks of the note that has the caret. */
+export type FormatCommand =
+  | { style: Change }
+  | { paragraph: Paragraph }
+  | { list: ListKind }
+  | { alignment: NoteAlignment }
+  | { indent: 1 | -1 }
+  | { picture: true }
+
+/** What the panel shows: the format where the selection is, and whether there is anything to format. */
+export type PanelState = FormatState & { editing: boolean; code: boolean }
+
+/** Whether the bar's five colours colour the words (true) or highlight them — kept across notes and launches, as the Mac keeps it (`noteBarColorsWords`). */
+const BAR_WORDS_KEY = 'noteBarColorsWords'
+function barColoursWords(): boolean {
+  try { return window.localStorage.getItem(BAR_WORDS_KEY) === '1' } catch { return false }
+}
 
 /** Bold, italic, code, math — and the five highlighter colours as dots, the way Apple Notes offers them (`SelectionToolbar.marks`). */
 const EMPHASIS_BUTTONS: ({ label: string; title: string } & BarMark)[] = [
@@ -130,13 +159,37 @@ function selectionToolbar(apply: (view: EditorView, mark: BarMark) => void): { e
           // Code and math as the symbols the Mac's bar uses; bold and italic as the letters.
           const glyph = button.mark === '`' ? icon('chevron.left.forwardslash.chevron.right') : button.mark === '$' ? icon('function') : null
           node = el('button', { class: 'selection-toolbar-button', type: 'button', title: button.title, 'data-mark': button.mark, ...(glyph ? { html: glyph } : { text: button.label }) })
-        } else {
-          // The dot is the colour the words will be.
-          const rgb = MARK_COLORS[button.highlight ?? 'yellow']
+        } else if ('highlight' in button) {
+          // The dot is the highlighter; the letter, the same colour for the
+          // words themselves. Which of the two the five are is the switch
+          // before them.
+          const name = button.highlight ?? 'yellow'
           const dot = el('span', { class: 'selection-toolbar-dot' })
-          dot.style.setProperty('--dot-ink', cssColor(highlightSwatch(button.highlight ?? 'yellow')))
-          if (button.highlight === null) bar.append(el('span', { class: 'selection-toolbar-divider' }))
-          node = el('button', { class: 'selection-toolbar-button', type: 'button', title: button.title, 'data-mark': highlightOpening(button.highlight), 'data-color': button.highlight ?? 'yellow' }, [dot])
+          dot.style.setProperty('--dot-ink', cssColor(highlightSwatch(name)))
+          const letter = el('span', { class: 'selection-toolbar-letter', text: 'A' })
+          letter.style.color = `var(--hl-${name}-ink)`
+          if (button.highlight === null) {
+            bar.append(el('span', { class: 'selection-toolbar-divider' }))
+            const flip = el('button', { class: 'selection-toolbar-button selection-toolbar-switch', type: 'button', 'data-mark': 'switch' })
+            const paint = () => {
+              const words = barColoursWords()
+              bar!.dataset.words = words ? '1' : '0'
+              flip.innerHTML = icon(words ? 'character' : 'highlighter')
+              flip.title = words ? L('글자 색 — 누르면 형광펜', 'Text Color — Press for Highlight') : L('형광펜 — 누르면 글자 색', 'Highlight — Press for Text Color')
+            }
+            on(flip, 'click', () => {
+              try { window.localStorage.setItem(BAR_WORDS_KEY, barColoursWords() ? '0' : '1') } catch { /* this bar only */ bar!.dataset.words = bar!.dataset.words === '1' ? '0' : '1' }
+              paint()
+            })
+            paint()
+            bar.append(flip)
+          }
+          node = el('button', { class: 'selection-toolbar-button', type: 'button', title: button.title, 'data-mark': highlightOpening(button.highlight), 'data-color': name }, [dot, letter])
+          on(node, 'click', () => { if (current) apply(current, bar?.dataset.words === '1' ? { color: name } : button) })
+          bar.append(node)
+          continue
+        } else {
+          continue
         }
         on(node, 'click', () => { if (current) apply(current, button) })
         bar.append(node)
@@ -249,11 +302,13 @@ export function findWords(text: string, snippet: string): { from: number; to: nu
 
 /** The note as one HTML document, set as the editor sets it — what «Export as PDF…» prints. */
 export function exportNoteHTML(note: Pick<Note, 'title' | 'body'>): string {
-  return noteHTML(zettelDisplayTitle(note), note.body, { set: typesetter().set, lang: document.documentElement.lang || 'en' })
+  return noteHTML(zettelDisplayTitle(note), note.body, { set: typesetter().set, lang: document.documentElement.lang || 'en', picture: knownPicture })
 }
 
 export function buildNoteEditor(id: string, actions: NoteEditorActions): NoteEditor {
   const node = el('div', { class: 'note-editor' })
+  // eslint-disable-next-line prefer-const
+  let api!: NoteEditor
 
   // ---- the header: the way back, and the menu
   const header = el('div', { class: 'note-editor-head' })
@@ -276,6 +331,16 @@ export function buildNoteEditor(id: string, actions: NoteEditorActions): NoteEdi
     view.dispatch({ effects: setRaw.of(raw) })
     rawToggle.setAttribute('aria-pressed', String(raw))
   })
+  // The format — a paragraph's style, the face, the size, a colour, how the
+  // line is set — in the inspector's Tools, where the drawing's is; from a
+  // note that is itself in the inspector, beside the button.
+  const brush = el('button', { class: 'icon-button note-format', title: L('서식', 'Format'), html: icon('paintbrush') })
+  on(brush, 'mousedown', (event: MouseEvent) => event.preventDefault())
+  on(brush, 'click', () => {
+    formatCenter.took(api)
+    actions.showFormat ? actions.showFormat(brush) : formatCenter.askForPanel(brush)
+  })
+  header.append(brush)
   header.append(rawToggle)
   const more = el('button', { class: 'icon-button', title: L('더 보기', 'More'), html: icon('ellipsis.circle') })
   on(more, 'click', () => {
@@ -283,6 +348,7 @@ export function buildNoteEditor(id: string, actions: NoteEditorActions): NoteEdi
       // The identifier is worth keeping and not worth staring at: it is what
       // another note links to, so it lives where you go when you want it.
       { label: L(`식별자 복사 — ${id}`, `Copy Identifier — ${id}`), icon: 'number', action: () => void copyText(id) },
+      { label: L('그림 넣기…', 'Add Picture…'), icon: 'photo', action: () => format({ picture: true }) },
       {
         label: L('PDF로 내보내기…', 'Export as PDF…'),
         icon: 'doc.text',
@@ -420,6 +486,57 @@ export function buildNoteEditor(id: string, actions: NoteEditorActions): NoteEdi
       userEvent: 'input.list', scrollIntoView: true,
     })
   }
+  /** A change of format (`shared/noteFormat.ts`), as one step of the history of its own, what was changed left selected. */
+  const applyFormat = (target: EditorView, edit: FormatEdit) => {
+    target.dispatch({
+      changes: { from: edit.from, to: edit.to, insert: edit.insert },
+      selection: EditorSelection.range(edit.selectFrom, edit.selectTo),
+      annotations: isolateHistory.of('full'),
+      userEvent: 'input.format', scrollIntoView: true,
+    })
+  }
+  /** Keeps a picture beside the note and puts it on a line of its own under the caret. */
+  const keepPicture = async (bytes: Uint8Array, extension: string, url?: string) => {
+    const kept = await call('notes:keepPicture', { noteID: id, bytes, extension })
+    if (!kept) return toast(L('그림을 넣지 못했어요.', 'Couldn’t add the picture.'))
+    if (url) rememberPicture(kept.path, url)
+    applyFormat(view, insertPicture(kept.path, view.state.doc.toString(), view.state.selection.main.to))
+  }
+  const pictureFrom = (data: DataTransfer | null): File | null => {
+    for (const file of data?.files ?? []) if (/^image\/(png|jpeg|gif|webp)$/.test(file.type)) return file
+    return null
+  }
+  const takePicture = (file: File) => {
+    const extension = file.type === 'image/jpeg' ? 'jpg' : file.type.slice(6)
+    void file.arrayBuffer().then((buffer) => keepPicture(new Uint8Array(buffer), extension))
+  }
+  function panelState(): PanelState {
+    const text = view.state.doc.toString()
+    const { from, to } = view.state.selection.main
+    return { ...formatState(text, from, to), editing: !view.state.field(rawField), code: codeRowAt(text, from) !== null }
+  }
+  function format(command: FormatCommand) {
+    const text = view.state.doc.toString()
+    const { from, to } = view.state.selection.main
+    if (view.state.field(rawField) || codeRowAt(text, from)) return
+    if ('indent' in command) {
+      const { anchor, head } = view.state.selection.main
+      const edit = indentEdit(text, anchor, head, command.indent)
+      if (edit) applyListEdit(view, edit)
+      return
+    }
+    if ('picture' in command) {
+      void call('notes:choosePicture', { noteID: id }).then((kept) => {
+        if (kept) applyFormat(view, insertPicture(kept.path, view.state.doc.toString(), view.state.selection.main.to))
+      })
+      return
+    }
+    const edit = 'style' in command ? setStyle(command.style, text, from, to)
+      : 'paragraph' in command ? setParagraph(command.paragraph, text, from, to)
+        : 'list' in command ? setList(command.list, text, from, to)
+          : setAlignment(command.alignment, text, from, to)
+    if (edit) applyFormat(view, edit)
+  }
   /** Whether the caret's line is a toggle with its children folded away. */
   const onFoldedToggle = (target: EditorView, head: number): boolean => {
     const line = target.state.doc.lineAt(head)
@@ -452,9 +569,20 @@ export function buildNoteEditor(id: string, actions: NoteEditorActions): NoteEdi
       run: (target) => {
         const range = target.state.selection.main
         if (!range.empty || target.state.selection.ranges.length > 1) return false
-        const edit = backspaceEdit(target.state.doc.toString(), range.head)
-        if (!edit) return false
-        applyListEdit(target, edit)
+        // A tag out of sight behind the caret is not what Backspace is for:
+        // the character before it is (`NoteTextView.deleteBackward`).
+        const head = target.state.field(rawField) ? range.head : beforeTags(target.state, range.head)
+        const edit = backspaceEdit(target.state.doc.toString(), head)
+        if (edit) {
+          applyListEdit(target, edit)
+          return true
+        }
+        if (head === range.head) return false
+        if (head > 0) {
+          const line = target.state.doc.lineAt(head)
+          const from = head > line.from ? line.from + findClusterBreak(line.text, head - line.from, false) : head - 1
+          target.dispatch({ changes: { from, to: head }, userEvent: 'delete.backward', scrollIntoView: true })
+        }
         return true
       },
     },
@@ -465,9 +593,18 @@ export function buildNoteEditor(id: string, actions: NoteEditorActions): NoteEdi
       run: (target) => {
         const range = target.state.selection.main
         if (!range.empty || target.state.selection.ranges.length > 1) return false
-        const edit = deleteForwardEdit(target.state.doc.toString(), range.head)
-        if (!edit) return false
-        applyListEdit(target, edit)
+        const head = target.state.field(rawField) ? range.head : afterTags(target.state, range.head)
+        const edit = deleteForwardEdit(target.state.doc.toString(), head)
+        if (edit) {
+          applyListEdit(target, edit)
+          return true
+        }
+        if (head === range.head) return false
+        if (head < target.state.doc.length) {
+          const line = target.state.doc.lineAt(head)
+          const to = head < line.to ? line.from + findClusterBreak(line.text, head - line.from, true) : head + 1
+          target.dispatch({ changes: { from: head, to }, userEvent: 'delete.forward', scrollIntoView: true })
+        }
         return true
       },
     },
@@ -503,11 +640,32 @@ export function buildNoteEditor(id: string, actions: NoteEditorActions): NoteEdi
     // Code is not made bold: the keys do nothing in a block of code.
     const text = target.state.doc.toString()
     if (codeRowAt(text, from)) return
+    // In the note as written, with whatever else the words are — a colour of
+    // their own, a size, bold (`shared/noteFormat.ts`): a highlight, a
+    // colour, and bold or italic over a selection. The same again takes it
+    // off. Round a span, Markdown's stars would have shown its tags.
+    if (!target.state.field(rawField)) {
+      const now = formatState(text, from, to).style
+      let made: FormatEdit | null | undefined
+      if ('color' in mark) {
+        const hex = inkNamed(mark.color)
+        if (!hex) return
+        made = setStyle({ color: now.color === hex ? null : hex }, text, from, to)
+        if (!made) return
+      } else if ('highlight' in mark) {
+        const name = mark.highlight ?? DEFAULT_HIGHLIGHT
+        made = setStyle({ highlight: now.highlight === name ? null : name }, text, from, to)
+      } else if ((mark.mark === '**' || mark.mark === '*') && from !== to) {
+        made = setStyle(mark.mark === '**' ? { bold: !now.bold } : { italic: !now.italic }, text, from, to)
+      }
+      if (made) return applyFormat(target, made)
+    }
+    if ('color' in mark) return
     const edit = 'mark' in mark ? toggleEmphasisEdit(text, from, to, mark.mark) : toggleHighlightEdit(text, from, to, mark.highlight)
     target.dispatch({
       changes: { from: edit.from, to: edit.to, insert: edit.insert },
       selection: EditorSelection.range(edit.selectFrom, edit.selectTo),
-      userEvent: 'input', scrollIntoView: true,
+      userEvent: 'input.format', scrollIntoView: true,
     })
   }
   const emphasis = (mark: BarMark) => (target: EditorView) => {
@@ -619,6 +777,7 @@ export function buildNoteEditor(id: string, actions: NoteEditorActions): NoteEdi
         keymap.of([...historyKeymap, ...defaultKeymap]),
         EditorView.updateListener.of((update) => {
           if (update.docChanged) save()
+          if (update.docChanged || update.selectionSet || update.transactions.some((tr) => tr.effects.some((effect) => effect.is(setRaw)))) formatCenter.read(api)
         }),
         EditorView.domEventHandlers({
           // The window's own keys — a letter picks a drawing tool — must not
@@ -648,8 +807,27 @@ export function buildNoteEditor(id: string, actions: NoteEditorActions): NoteEdi
           // A table from ChatGPT or Obsidian arrives as HTML — pasted as it
           // was, a line a cell — or as tab-separated rows; either becomes the
           // Markdown table it is, on lines of its own (`shared/noteTable.ts`).
+          focus: () => {
+            formatCenter.took(api)
+            return false
+          },
+          drop: (event) => {
+            const file = pictureFrom(event.dataTransfer)
+            if (!file) return false
+            event.preventDefault()
+            takePicture(file)
+            return true
+          },
           paste: (event, target) => {
             const data = event.clipboardData
+            // A picture copied — a screenshot, a figure — is kept beside the
+            // note and set on a line of its own.
+            const file = pictureFrom(data)
+            if (file && !(data?.getData('text/plain') ?? '')) {
+              event.preventDefault()
+              takePicture(file)
+              return true
+            }
             const table = fromHTML(data?.getData('text/html') ?? '') ?? fromTabSeparated(data?.getData('text/plain') ?? '')
             if (!table) return false
             event.preventDefault()
@@ -703,6 +881,7 @@ export function buildNoteEditor(id: string, actions: NoteEditorActions): NoteEdi
   function detach() {
     save()
     void flushNote(id)
+    formatCenter.left(api)
     view.destroy()
   }
 
@@ -757,13 +936,14 @@ export function buildNoteEditor(id: string, actions: NoteEditorActions): NoteEdi
   drawTags()
   drawConnections()
 
-  return {
-    id, node, view, refresh, detach, focus, insert, reveal, revealQuotation,
+  api = {
+    id, node, view, refresh, detach, focus, insert, reveal, revealQuotation, format, formatState: panelState,
     report: () => ({
       math: math.report(), links: links.report(), raw: view.state.field(rawField),
       toolbar: toolbar.report(), folded: foldedRanges(view.state).map((fold) => fold.from),
     }),
   }
+  return api
 }
 
 /**
