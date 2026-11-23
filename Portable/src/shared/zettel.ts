@@ -263,6 +263,8 @@ const NOTATION = [
 const LABELLED_LINK = /\[\[([^\]|]+)\|([^\]]*)\]\]/g
 const BARE_LINK = /\[\[([^\]|]+)\]\]/g
 const MARKDOWN_LINK = new RegExp(`\\[([^\\]\\n]*)\\]\\([^)${RS}]*\\)`, 'g')
+const FORMAT_TAGS = /<span style="[^"\n]*">|<\/span>|<p align="[a-z]+">|<\/p>/g
+const HIGHLIGHT_MARKS = /==(?:\{(?:yellow|green|blue|pink|purple)\})?((?:[^=\n]|=(?!=))+?)==/g
 const LIST_MARKER = new RegExp(`^[${RS}]*([-*+]|\\p{Nd}+\\.)[${RS}]+`, 'u')
 const RUNS = new RegExp(`[${RS}]{2,}`, 'g')
 const DOUBLED_PUNCTUATION = new RegExp(`([,;:])([${RS}]*[,;:])+`, 'g')
@@ -280,6 +282,9 @@ export function zettelPreview(body: string): string {
     .replace(LABELLED_LINK, '$2')
     .replace(BARE_LINK, '$1')
     .replace(MARKDOWN_LINK, '$1')
+    // What the format panel writes round words is not words (`Zettel.preview`).
+    .replace(FORMAT_TAGS, '')
+    .replace(HIGHLIGHT_MARKS, '$1')
   const joined = swiftLines(text, true)
     .map((line) => {
       let piece = line

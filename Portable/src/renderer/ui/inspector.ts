@@ -16,6 +16,8 @@ import { L, prefersKorean } from '../../shared/lang.js'
 import { buildAuthorEditor } from './authorEditor.js'
 import { type ShelfKind } from '../../shared/documentKind.js'
 import { buildSketchInspector } from './sketchInspector.js'
+import { buildFormatPanel, showFormatPopover } from './noteFormatPanel.js'
+import { formatCenter } from './noteFormatCenter.js'
 import { openEditor as openNoteEditor, renderNotesTab } from './notesTab.js'
 import { quotationInsertion } from '../../shared/noteQuote.js'
 import { cssColor, type Mark } from '../../shared/marks.js'
@@ -94,6 +96,12 @@ export function buildInspector(actions: InspectorActions): InspectorPanel {
   let stale = false
   /** How many times it has been drawn — what a probe reads to see it was not drawn for nobody. */
   let drawn = 0
+  const format = buildFormatPanel()
+  // The note's selection moved, or the panel changed hands. Not while a menu
+  // of the panel's is open: redrawn, its button would be gone from under it.
+  formatCenter.subscribe(() => {
+    if (store.settings.inspectorTab === 'tools' && node.isConnected && !document.querySelector('.menu')) update()
+  })
 
   function update() {
     // A memo half typed is written before the form it is in goes.
@@ -107,6 +115,16 @@ export function buildInspector(actions: InspectorActions): InspectorPanel {
     }
     stale = false
     drawn += 1
+    // A note has the caret: the Tools tab is its format (`NoteFormatPanel`),
+    // whether or not a paper is chosen — a note about no paper has one too.
+    if (store.settings.inspectorTab === 'tools' && formatCenter.isFront()) {
+      if (format.node.parentElement !== body) {
+        clear(body)
+        body.append(format.node)
+      }
+      format.update()
+      return
+    }
     // Nothing chosen is said on every tab, the Tools tab too (`RootView`).
     if (!store.papers.some((entry) => entry.id === store.selectedID)) {
       shownPaperID = store.selectedID
@@ -148,7 +166,7 @@ export function buildInspector(actions: InspectorActions): InspectorPanel {
     switch (store.settings.inspectorTab) {
       case 'details': details(body, paper, actions, update); break
       case 'marks': marks(body, paper, actions, update); break
-      case 'note': renderNotesTab(body, paper, { openAnchor: actions.openAnchor, openNote: actions.openNote }); break
+      case 'note': renderNotesTab(body, paper, { openAnchor: actions.openAnchor, openNote: actions.openNote, showFormat: showFormatPopover }); break
     }
   }
 

@@ -48,6 +48,7 @@ import { openAnchorFromSlipBox, openNote, openNoteFromSearch } from './actions/n
 import { openPassage, openSearch } from './actions/search.js'
 import { clearSearchResults, installListSearch, scanListText } from './listSearch.js'
 import { installTheme, openSettings, saveSettings, setInspectorTab } from './settingsController.js'
+import { formatCenter } from './ui/noteFormatCenter.js'
 import {
   ensureListPane, fitListColumn, inspectorChoices, installPanes, layoutPanes, lendListColumn, openBeside, returnListColumn, revealPane, setPaneNote, syncBoard,
   syncListSlot, togglePane,
@@ -131,6 +132,14 @@ shell.slipBox = buildSlipBox({
   openAnchor: (place) => void openAnchorFromSlipBox(place),
   openNote: (id) => void openNote(id),
   saveListSettings: (patch) => saveSettings(patch),
+})
+
+// The note's format is in the inspector's Tools, where the drawing's is: the
+// brush in a note's header brings that tab forward.
+formatCenter.setDoor(() => {
+  setInspectorTab('tools')
+  revealPane('inspector')
+  shell.inspector.update()
 })
 
 shell.inspector = buildInspector({
@@ -290,6 +299,8 @@ let tabBeforeDrawing: InspectorTab | null = null
 function followThePen() {
   const drawing = readerState().drawing
   if (drawing && !wasDrawing) {
+    // The Tools tab is the drawing's again.
+    formatCenter.yielded()
     if (store.settings.inspectorTab !== 'tools') {
       tabBeforeDrawing = store.settings.inspectorTab
       store.settings.inspectorTab = 'tools'

@@ -16,10 +16,14 @@
  * page — its wash. A toggle («+ ») folds the lines indented under it away
  * with a press on its marker, and the fold remembers the header's words.
  */
-import { EditorSelection, EditorState, Prec, RangeSetBuilder, StateEffect, StateField, type Extension, type Range } from '@codemirror/state'
+import { EditorSelection, EditorState, Prec, RangeSetBuilder, StateEffect, StateField, findClusterBreak, type ChangeSpec, type Extension, type Range } from '@codemirror/state'
 import { Decoration, EditorView, WidgetType, keymap, type DecorationSet } from '@codemirror/view'
 import { blankingCode, emphasisClasses, emphasisPieces, emphasisWidth, highlightClasses, highlightLead, markerClass, planNote, type InlineToken, type PlannedLine } from '../../../shared/noteMarkdown.js'
 import { toggleChildrenEnd } from '../../../shared/noteBlocks.js'
+import { SPAN_CLOSE, inlineCSS, readAlignment } from '../../../shared/noteSpan.js'
+import { tidyEdits } from '../../../shared/noteFormat.js'
+import { codeRowAt } from '../../../shared/noteCode.js'
+import { call } from '../../bridge.js'
 import { L } from '../../../shared/lang.js'
 import { parseTable, tableBlocks, type Table } from '../../../shared/noteTable.js'
 import { typesetNumbered, typesetter } from '../../sketchMath.js'
@@ -369,6 +373,10 @@ function lineClasses(line: PlannedLine): string {
     }
     default: break
   }
+  if (block.type.kind === 'plain' || block.type.kind === 'heading') {
+    const aligned = block.content.startsWith('<p align=') ? readAlignment(block.content) : null
+    if (aligned && aligned.alignment !== 'left') classes.push(`nm-align-${aligned.alignment}`)
+  }
   if (line.revealed) classes.push('nm-revealed')
   return classes.join(' ')
 }
@@ -393,9 +401,40 @@ function numbering(source: string, plan: readonly PlannedLine[]): Map<number, Nu
 }
 
 /** The pieces of a line other than its marker: what is hidden, what is marked, what is replaced. */
-function tokenRanges(token: InlineToken, source: string, line: PlannedLine, out: Range<Decoration>[], counted: Map<number, Numbered>) {
+function tokenRanges(token: InlineToken, source: string, line: PlannedLine, out: Range<Decoration>[], counted: Map<number, Numbered>, tags?: Tags) {
   const { from, to } = token
+  // A tag out of sight, on the caret's line too: stepped over, never typed into.
+  const tag = (a: number, b: number) => {
+    if (b <= a) return
+    const range = hidden.range(a, b)
+    out.push(range)
+    tags?.steps.push(range)
+  }
   switch (token.kind) {
+    case 'styled': {
+      // `<span style="…">words</span>`: the words as the span sets them.
+      const inner = to - SPAN_CLOSE.length
+      tag(from, from + token.lead)
+      if (inner > from + token.lead) {
+        const css = inlineCSS(token.style)
+        const classes = token.style.highlight ? highlightClasses(token.style.highlight) + (token.style.color ? ' nm-own-ink' : '') : 'nm-styled'
+        out.push(Decoration.mark({ class: classes, attributes: css ? { style: css } : {} }).range(from + token.lead, inner))
+      }
+      tag(inner, to)
+      return
+    }
+    case 'hidden': {
+      // `<p align="…">` and `</p>`: the line is set that way (`lineClasses`).
+      if (to <= from) return
+      const range = hidden.range(from, to)
+      out.push(range)
+      tags?.edges.push({ from, to, opens: source[from + 1] !== '/' })
+      return
+    }
+    case 'image':
+      out.push(Decoration.replace({ widget: new PictureWidget(token.path) }).range(from, to))
+      tags?.pictures.push(hidden.range(from, to))
+      return
     case 'anchor': {
       const labelEnd = source.indexOf('](', from)
       if (labelEnd < 0 || labelEnd >= to) return
@@ -442,15 +481,80 @@ function tokenRanges(token: InlineToken, source: string, line: PlannedLine, out:
     }
     case 'highlight': {
       const lead = highlightLead(token.color)
-      out.push(hidden.range(from, from + lead))
+      tag(from, from + lead)
       out.push(Decoration.mark({ class: highlightClasses(token.color) }).range(from + lead, to - 2))
-      out.push(hidden.range(to - 2, to))
+      tag(to - 2, to)
       return
     }
     case 'arrow':
       out.push(Decoration.replace({ widget: new ArrowWidget(token.right) }).range(from, to))
       return
   }
+}
+
+/** The tags of a note that are out of sight wherever the caret is. */
+interface Tags {
+  /** A span's two tags and a highlight's marks: an arrow key steps over one as over nothing. */
+  steps: Range<Decoration>[]
+  /** A line's alignment, opening and closing: a caret never rests outside it. */
+  edges: { from: number; to: number; opens: boolean }[]
+  /** Pictures: one thing, stepped over and deleted whole. */
+  pictures: Range<Decoration>[]
+}
+
+/** The pictures read so far, by what the note writes for them: a data URL, or null for one that is not there. */
+const pictures = new Map<string, string | null>()
+const asked = new Map<string, Promise<string | null>>()
+function pictureURL(path: string): Promise<string | null> {
+  const known = pictures.get(path)
+  if (known !== undefined) return Promise.resolve(known)
+  let waiting = asked.get(path)
+  if (!waiting) {
+    waiting = call('notes:picture', { path }).then((found) => found?.url ?? null, () => null).then((url) => {
+      if (pictures.size > 200) pictures.clear()
+      pictures.set(path, url)
+      asked.delete(path)
+      return url
+    })
+    asked.set(path, waiting)
+  }
+  return waiting
+}
+
+/** A picture just kept is known without asking for it back. */
+export function rememberPicture(path: string, url: string) {
+  pictures.set(path, url)
+}
+
+/** `![](file)`: the picture, its own size and no wider than the line (`NoteMarkdown.picturePiece`). */
+class PictureWidget extends WidgetType {
+  constructor(readonly path: string) { super() }
+  override eq(other: PictureWidget) { return other.path === this.path }
+  toDOM(view: EditorView) {
+    const frame = document.createElement('span')
+    frame.className = 'nm-picture'
+    const show = (url: string | null) => {
+      frame.textContent = ''
+      if (!url) {
+        // One that is not here — not downloaded yet, or its box not open —
+        // is shown as what the note says, quietly.
+        frame.classList.add('nm-picture-missing')
+        frame.textContent = `![](${this.path})`
+        return
+      }
+      const image = document.createElement('img')
+      image.src = url
+      image.alt = ''
+      image.draggable = false
+      image.addEventListener('load', () => view.requestMeasure())
+      frame.append(image)
+    }
+    const known = pictures.get(this.path)
+    if (known !== undefined) show(known)
+    else void pictureURL(this.path).then((url) => { show(url); view.requestMeasure() })
+    return frame
+  }
+  override ignoreEvent() { return false }
 }
 
 /** `->` shown as →, `<-` as ←: the two characters stand for one. */
@@ -539,9 +643,15 @@ export interface Drawn {
   listMarkers: DecorationSet
   /** The children of the toggles folded shut, in the source. */
   folded: { from: number; to: number; key: string }[]
+  /** A span's tags and a highlight's marks, hidden on every line (`Tags.steps`). */
+  tagSteps: DecorationSet
+  /** A line's alignment tags (`Tags.edges`). */
+  tagEdges: { from: number; to: number; opens: boolean }[]
+  /** The spans and highlights whole, with where their words are: what a deletion must not leave half of. */
+  wrapped: { from: number; to: number; innerFrom: number; innerTo: number }[]
 }
 
-const nothingDrawn: Drawn = { decorations: Decoration.none, markers: Decoration.none, listMarkers: Decoration.none, folded: [] }
+const nothingDrawn: Drawn = { decorations: Decoration.none, markers: Decoration.none, listMarkers: Decoration.none, folded: [], tagSteps: Decoration.none, tagEdges: [], wrapped: [] }
 
 /** The children of the toggles folded shut, for a probe: where each fold begins. */
 export function foldedRanges(state: EditorState): { from: number; to: number }[] {
@@ -559,6 +669,8 @@ export function noteDecorations(state: EditorState): Drawn {
   const markers: Range<Decoration>[] = []
   const listMarkers: Range<Decoration>[] = []
   const folded: Drawn['folded'] = []
+  const tags: Tags = { steps: [], edges: [], pictures: [] }
+  const wrapped: Drawn['wrapped'] = []
   const shut = state.field(foldedField, false) ?? new Set<string>()
   const counted = numbering(source, plan)
   // No table is looked for inside fenced code.
@@ -594,7 +706,6 @@ export function noteDecorations(state: EditorState): Drawn {
         return
       }
     }
-    const pieces = line.revealed ? [] : line.tokens
     // Every document line the block covers carries its look: a `$$` block is several.
     const first = state.doc.lineAt(line.from)
     const last = state.doc.lineAt(line.to)
@@ -636,10 +747,25 @@ export function noteDecorations(state: EditorState): Drawn {
       if (block.type.kind === 'quote' && !block.quoteHeading) ranges.push(Decoration.mark({ class: line.quoteEdge?.anchored ? 'nm-quote-words nm-anchored' : 'nm-quote-words' }).range(line.markerEnd, line.to))
       if (block.type.kind === 'task' && block.type.done) ranges.push(Decoration.mark({ class: 'nm-done' }).range(line.markerEnd, line.to))
     }
-    if (!line.revealed) for (const token of pieces) tokenRanges(token, source, line, ranges, counted)
-    else for (const token of line.tokens) syntaxRanges(token, source, ranges)
+    for (const token of line.tokens) {
+      if (token.kind === 'styled') wrapped.push({ from: token.from, to: token.to, innerFrom: token.from + token.lead, innerTo: token.to - SPAN_CLOSE.length })
+      else if (token.kind === 'highlight') wrapped.push({ from: token.from, to: token.to, innerFrom: token.from + highlightLead(token.color), innerTo: token.to - 2 })
+      // What the format panel wrote — a span's tags, a highlight's marks, a
+      // line's alignment — is not Markdown anybody types: out of sight on
+      // the caret's line too, the words between free to edit. A picture
+      // stays a picture.
+      const formatted = token.kind === 'styled' || token.kind === 'highlight' || token.kind === 'hidden' || token.kind === 'image'
+      if (!line.revealed || formatted) tokenRanges(token, source, line, ranges, counted, tags)
+      else syntaxRanges(token, source, ranges)
+    }
   })
-  return { decorations: Decoration.set(ranges, true), markers: Decoration.set(markers, true), listMarkers: Decoration.set(listMarkers, true), folded }
+  const edges = tags.edges.map((edge) => hidden.range(edge.from, edge.to))
+  return {
+    decorations: Decoration.set(ranges, true),
+    markers: Decoration.set([...markers, ...tags.steps, ...edges, ...tags.pictures], true),
+    listMarkers: Decoration.set(listMarkers, true), folded,
+    tagSteps: Decoration.set(tags.steps, true), tagEdges: tags.edges, wrapped,
+  }
 }
 
 const decorationField = StateField.define<Drawn>({
@@ -703,6 +829,51 @@ function besideListMarker(markers: DecorationSet, head: number, wasAt: number | 
   return moved
 }
 
+/**
+ * A step over a tag that is out of sight is a step that moved nothing: it
+ * goes on over the character beyond, so the arrow key moved the caret
+ * (`NoteTextView.caretPastTags`).
+ */
+function pastTags(steps: DecorationSet, edges: Drawn['tagEdges'], head: number, wasAt: number, state: EditorState): number {
+  if (head === wasAt) return head
+  const forward = head > wasAt
+  const isTag = (from: number, to: number) => {
+    let found = false
+    steps.between(from, to, (a, b) => { if (a === from && b === to) found = true })
+    return found || edges.some((edge) => edge.from === from && edge.to === to)
+  }
+  const tagFrom = (at: number): number | null => {
+    let end: number | null = null
+    steps.between(at, at, (a, b) => { if (a === at) end = b })
+    return end ?? edges.find((edge) => edge.from === at)?.to ?? null
+  }
+  const tagTo = (at: number): number | null => {
+    let start: number | null = null
+    steps.between(at, at, (a, b) => { if (b === at) start = a })
+    return start ?? edges.find((edge) => edge.to === at)?.from ?? null
+  }
+  if (!isTag(Math.min(wasAt, head), Math.max(wasAt, head))) return head
+  let caret = head
+  const line = state.doc.lineAt(caret)
+  if (forward) {
+    for (let next = tagFrom(caret); next !== null; next = tagFrom(caret)) caret = next
+    if (caret < state.doc.length) caret = caret < line.to ? line.from + findClusterBreak(line.text, caret - line.from, true) : caret + 1
+  } else {
+    for (let next = tagTo(caret); next !== null; next = tagTo(caret)) caret = next
+    if (caret > 0) caret = caret > line.from ? line.from + findClusterBreak(line.text, caret - line.from, false) : caret - 1
+  }
+  return caret
+}
+
+/** A caret standing before a line's opening alignment, or after its closing one, belongs inside: what is typed there would be outside the paragraph it is in. */
+function insideAlignment(edges: Drawn['tagEdges'], head: number): number {
+  for (const edge of edges) {
+    if (edge.opens && edge.from === head) return edge.to
+    if (!edge.opens && edge.to === head) return edge.from
+  }
+  return head
+}
+
 /** A caret never rests inside a marker: there is nothing there to type into. */
 const caretOutOfMarkers = EditorState.transactionFilter.of((tr) => {
   if (!tr.selection) return tr
@@ -711,9 +882,12 @@ const caretOutOfMarkers = EditorState.transactionFilter.of((tr) => {
   const wasAt = tr.startState.selection.main.head
   const stepped = !tr.docChanged && !tr.isUserEvent('select.pointer')
   let moved = false
+  const { tagSteps, tagEdges } = tr.state.field(decorationField)
   const ranges = tr.selection.ranges.map((range) => {
     let head = outsideMarkers(markers, range.head)
     if (range.empty) head = besideListMarker(listMarkers, head, stepped ? wasAt : null)
+    if (range.empty && stepped) head = pastTags(tagSteps, tagEdges, head, wasAt, tr.state)
+    if (range.empty) head = insideAlignment(tagEdges, head)
     if (range.empty && !tr.docChanged) head = pastFold(folded, head, wasAt, tr.state.doc.length)
     if (head === range.head) return range
     moved = true
@@ -721,6 +895,96 @@ const caretOutOfMarkers = EditorState.transactionFilter.of((tr) => {
   })
   if (!moved) return tr
   return [tr, { selection: EditorSelection.create(ranges, tr.selection.mainIndex), sequential: true }]
+})
+
+/** Where the tags that end at `head` begin: what Backspace there is really behind. */
+export function beforeTags(state: EditorState, head: number): number {
+  const { tagSteps, tagEdges } = state.field(decorationField)
+  let at = head
+  for (;;) {
+    let start: number | null = null
+    tagSteps.between(at, at, (a, b) => { if (b === at && a < b) start = a })
+    start ??= tagEdges.find((edge) => edge.to === at)?.from ?? null
+    if (start === null) return at
+    at = start
+  }
+}
+
+/** Where the tags that begin at `head` end: what Delete there is really before. */
+export function afterTags(state: EditorState, head: number): number {
+  const { tagSteps, tagEdges } = state.field(decorationField)
+  let at = head
+  for (;;) {
+    let end: number | null = null
+    tagSteps.between(at, at, (a, b) => { if (a === at && b > a) end = b })
+    end ??= tagEdges.find((edge) => edge.from === at)?.to ?? null
+    if (end === null) return at
+    at = end
+  }
+}
+
+/** A picture the editor has read, as a data URL — for the note's export. */
+export function knownPicture(path: string): string | null {
+  return pictures.get(path) ?? null
+}
+
+/**
+ * The tags are out of sight, and what is out of sight gets taken apart: a
+ * selection that ends inside a coloured word takes the opening tag and
+ * leaves the closing one, a line joined to the one above brings its
+ * alignment into the middle of a sentence. So an edit by hand that takes
+ * part of a span or a highlight takes the rest of its tags with it — and
+ * both of them when no words are left between — and a line's alignment is
+ * put back round the whole line or dropped (`NoteFormat.tidy`). In the same
+ * transaction: one step to undo.
+ */
+const wholeTags = EditorState.transactionFilter.of((tr) => {
+  if (!tr.docChanged) return tr
+  if (!(tr.isUserEvent('input') || tr.isUserEvent('delete') || tr.isUserEvent('move'))) return tr
+  if (tr.isUserEvent('input.format') || tr.isUserEvent('input.list')) return tr
+  if (tr.startState.field(rawField, false)) return tr
+  const { wrapped } = tr.startState.field(decorationField)
+  const extra: { from: number; to: number }[] = []
+  if (wrapped.length > 0) {
+    tr.changes.iterChangedRanges((fromA, toA) => {
+      if (toA <= fromA) return
+      for (const one of wrapped) {
+        if (one.to <= fromA || one.from >= toA) continue
+        if (fromA <= one.from && toA >= one.to) continue
+        const cutsOpen = fromA < one.innerFrom && toA > one.from
+        const cutsClose = toA > one.innerTo && fromA < one.to
+        const emptied = tr.changes.mapPos(one.innerFrom, -1) === tr.changes.mapPos(one.innerTo, 1)
+        if (!cutsOpen && !cutsClose && !emptied) continue
+        for (const [a, b] of [[one.from, one.innerFrom], [one.innerTo, one.to]]) {
+          const from = tr.changes.mapPos(a, 1)
+          const to = tr.changes.mapPos(b, -1)
+          if (to > from && !extra.some((had) => had.from === from && had.to === to)) extra.push({ from, to })
+        }
+      }
+    })
+  }
+  const first = tr.state.changes(extra)
+  const mid = first.apply(tr.newDoc)
+  // A line's alignment, wherever a join left it.
+  const tidy: ChangeSpec[] = []
+  const seen = new Set<number>()
+  let whole: string | null = null
+  tr.changes.iterChangedRanges((_fromA, _toA, fromB, toB) => {
+    const from = first.mapPos(fromB, -1)
+    const to = first.mapPos(toB, 1)
+    for (let number = mid.lineAt(from).number; number <= mid.lineAt(to).number; number += 1) {
+      if (seen.has(number)) continue
+      seen.add(number)
+      const line = mid.line(number)
+      if (!line.text.includes('<p align="') && !line.text.includes('</p>')) continue
+      whole ??= mid.toString()
+      // In fenced code a tag is code.
+      if (codeRowAt(whole, line.from)) continue
+      for (const edit of tidyEdits(line.text)) tidy.push({ from: line.from + edit.from, to: line.from + edit.to, insert: edit.insert })
+    }
+  })
+  if (extra.length === 0 && tidy.length === 0) return tr
+  return [tr, { changes: extra, sequential: true }, { changes: tidy, sequential: true }]
 })
 
 /** A passage found in the note glows for a moment where it is (`reveal`). */
@@ -765,7 +1029,7 @@ const foldGuard = Prec.high(keymap.of([
 
 export function markdownView(): Extension {
   return [
-    rawField, foldedField, decorationField, caretOutOfMarkers, foldGuard, flashField,
+    rawField, foldedField, decorationField, caretOutOfMarkers, wholeTags, foldGuard, flashField,
     EditorView.editorAttributes.compute([rawField], (state) => ({ class: state.field(rawField) ? 'nm-raw' : '' })),
   ]
 }

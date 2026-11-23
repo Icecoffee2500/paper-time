@@ -108,7 +108,7 @@ const CURATED_FAMILIES = [
 
 let families: string[] | null = null
 let familiesLoading = false
-const familyListeners = new Set<() => void>()
+export const familyListeners = new Set<() => void>()
 
 /** Whether a family is on this machine: its text measures differently from the fallback's. */
 function fontExists(family: string): boolean {
@@ -132,7 +132,7 @@ function fontExists(family: string): boolean {
  * the desktop's own list when it is allowed to give one. A `<select>` rather
  * than a font panel: the panel is a window, and this is a row.
  */
-function fontFamilies(): string[] {
+export function fontFamilies(): string[] {
   if (families) return families
   families = CURATED_FAMILIES.filter(fontExists).sort((a, b) => a.localeCompare(b))
   if (!familiesLoading) {

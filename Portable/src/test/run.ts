@@ -51,6 +51,7 @@ import { quotedPassagesSuite } from './quotedPassages.js'
 import { readingPlanSuite } from './readingPlan.js'
 import { planBoardSuite } from './planBoard.js'
 import { noteListSuite } from './noteList.js'
+import { noteFormatSuite } from './noteFormat.js'
 import { codeHighlightSuite } from './codeHighlight.js'
 import { feedbackNameSuite } from './feedbackName.js'
 import { slipBoxSuite } from './slipBox.js'
@@ -449,6 +450,7 @@ async function main() {
   await readingPlanSuite(test, suite)
   await planBoardSuite(test, suite)
   await noteListSuite(test, suite)
+  await noteFormatSuite(test, suite)
   await codeHighlightSuite(test, suite)
   await feedbackNameSuite(test, suite)
   await slipBoxSuite(test, suite)

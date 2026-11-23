@@ -17,6 +17,7 @@ import { firstFormula, lineRanges, mathBlocks, type TextSpan } from './noteMath.
 import { tableBlocks } from './noteTable.js'
 import { listNumbersOf } from './noteList.js'
 import { parseAnchorURL } from './noteQuote.js'
+import { SPAN_CLOSE, styleFromCSS, type NoteSpanStyle } from './noteSpan.js'
 
 /** What stands in for a heading's or a quotation's marker: nothing to see. */
 export const HIDDEN_MARKER = '\u200b'
@@ -29,6 +30,13 @@ export type InlineToken =
   /** `==words==` or `=={pink}words==`: highlighted as Apple Notes highlights — the words in a deep
    *  shade of the colour on a pale band of it. `color` is the name as written, null for the default. */
   | { kind: 'highlight'; from: number; to: number; text: string; color: string | null }
+  /** `<span style="…">words</span>`: words in a colour, a size, a face, underlined or struck through
+   *  (`NoteSpanStyle`). `lead` is how many characters the opening tag is. */
+  | { kind: 'styled'; from: number; to: number; text: string; style: NoteSpanStyle; lead: number }
+  /** `![alt](file)`: a picture, on the line. */
+  | { kind: 'image'; from: number; to: number; path: string }
+  /** `<p align="…">` and `</p>` round a line's words: not shown, and the line set that way. */
+  | { kind: 'hidden'; from: number; to: number }
   /** `->` and `<-`, shown as the arrows they stand for. */
   | { kind: 'arrow'; from: number; to: number; right: boolean }
   /** `\$`: a dollar written so it does not open a formula, shown as the dollar it is. */
@@ -160,7 +168,7 @@ export function shownMarker(block: Block, shown?: number): string {
  * «iii.», «10.» — sent its words past the line's last tab stop, out of sight.
  */
 export function markerClass(shown: string, done = false): string {
-  return `nm-marker${shown.endsWith('.') ? ' nm-marker-label' : ''}${done ? ' nm-marker-done' : ''}`
+  return `nm-marker${shown.endsWith('.') ? ' nm-marker-label' : ''}${/^[•◦▪]$/.test(shown) ? ' nm-marker-bullet' : ''}${done ? ' nm-marker-done' : ''}`
 }
 
 /** The whole note, planned; `caret` is where the typist is, in the source. */
@@ -233,7 +241,15 @@ const EMPHASIS = /(\*\*\*)([^*\n]+)(\*\*\*)|(\*\*)([^*\n]+)(\*\*)|(\*)([^*\n]+)(
 /** `==words==` and `=={pink}words==` — the Mac's `highlightPattern`: opened where no letter, digit or `=`
  *  stands before it and no space after it, closed where no space stands before it and no `=` after, so
  *  `a==b && c==d` in prose is not a highlight and `x = y` inside one is fine. One line. */
-const HIGHLIGHT = /(?<![\p{L}\p{N}=])==(?:\{(yellow|green|blue|pink|purple)\})?(?![\s=])((?:[^=\n]|=(?!=))+?)(?<!\s)==(?!=)/gu
+/**  With its colour named — `=={green}` — it opens anywhere, in the middle of a word too: nothing else is
+ *  written that way. A highlight begun inside a word is always written with its name. */
+const HIGHLIGHT = /(?<!=)==(?:\{(yellow|green|blue|pink|purple)\}|(?<![\p{L}\p{N}]==))(?![\s=])((?:[^=\n]|=(?!=))+?)(?<!\s)==(?!=)/gu
+/** A span with a style, on one line, with no span inside it (`spanPattern`). */
+const SPAN = /<span style="([^"\n]*)">((?:(?!<\/?span)[^\n])*?)<\/span>/g
+/** A picture, as Markdown writes one. */
+const IMAGE = /!\[[^\]\n]*\]\(([^)\s]+)\)/g
+/** The two tags that set a line's alignment. */
+const ALIGN = /<p align="(?:left|center|right|justify)">|<\/p>/g
 /** `->` and `<-`, not the middle of a longer dash or a `<->` (the Mac's `arrowPattern`). */
 const ARROW = /(?<![-<])->|<-(?![->])/g
 
@@ -291,7 +307,7 @@ export function emphasisPieces(cell: string): { text: string; bold: boolean; ita
 /** Whether a line could hold a link, a note link, a formula or emphasis — they all begin with one of five
  *  characters: a formula with `$` or, written as LaTeX writes it, with a backslash. */
 export function holdsMarkup(line: string): boolean {
-  return /[[$*`\\=]|->|<-/.test(line)
+  return /[[$*`\\=]|->|<[-sp/]/.test(line)
 }
 
 function firstFrom(pattern: RegExp, text: string, from: number): RegExpExecArray | null {
@@ -348,6 +364,12 @@ export function inlineTokens(content: string): InlineToken[] {
     if (highlight) consider({ kind: 'highlight', from: highlight.index, to: highlight.index + highlight[0].length, text: highlight[2], color: highlight[1] ?? null })
     const arrow = firstFrom(ARROW, content, index)
     if (arrow) consider({ kind: 'arrow', from: arrow.index, to: arrow.index + 2, right: arrow[0] === '->' })
+    const span = firstFrom(SPAN, content, index)
+    if (span) consider({ kind: 'styled', from: span.index, to: span.index + span[0].length, text: span[2], style: styleFromCSS(span[1]), lead: span[0].length - span[2].length - SPAN_CLOSE.length })
+    const image = firstFrom(IMAGE, content, index)
+    if (image) consider({ kind: 'image', from: image.index, to: image.index + image[0].length, path: image[1] })
+    const align = firstFrom(ALIGN, content, index)
+    if (align) consider({ kind: 'hidden', from: align.index, to: align.index + align[0].length })
     const emphasis = firstFrom(EMPHASIS, content, index)
     if (emphasis) {
       // `***both***` is bold and italic — what Ctrl+B then Ctrl+I make of a selection.
@@ -457,6 +479,15 @@ export function displayRuns(source: string): DisplayRun[] {
         }
         case 'arrow':
           plain(token.right ? '→' : '←')
+          break
+        case 'styled':
+          plain(token.text || HIDDEN_MARKER)
+          break
+        case 'hidden':
+          plain(HIDDEN_MARKER)
+          break
+        case 'image':
+          put('\ufffc', withIndent([]))
           break
       }
       at = token.to
