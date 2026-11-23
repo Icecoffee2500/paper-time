@@ -19,38 +19,19 @@ struct ZettelEditorView: View {
     @State private var loadedID: String?
     /// Shows the Markdown as written, for changing a link or a formula by hand.
     @State private var showsRaw = false
-    /// Whether the format panel is out — kept, like a word processor's.
-    @AppStorage("noteShowsFormat") private var showsFormat = false
-    /// The room the note has: the panel stands beside a wide note and comes
-    /// up in a popover over a narrow one (the inspector's).
-    @State private var width: CGFloat = 0
-    private static let widthForPanel: CGFloat = 600
+    /// The format panel as a popover: only where the note is inside the
+    /// inspector itself, which cannot show its Tools and the note at once.
+    @State private var showsFormat = false
+    @Environment(\.isInsideInspector) private var isInsideInspector
 
     var body: some View {
         let note = notes.note(noteID)
         let pending = link?.pendingNoteAnchor
 
-        HStack(spacing: 0) {
-            VStack(spacing: 0) {
-                header(note)
-                editor(pending: pending)
-                connections(note)
-            }
-            #if os(macOS)
-            if showsFormat, width >= Self.widthForPanel {
-                Rectangle().fill(Color.primary.opacity(0.08)).frame(width: 1)
-                NoteFormatPanel()
-                    .frame(width: 244)
-                    .background(Color.primary.opacity(0.03))
-            }
-            #endif
-        }
-        .background {
-            GeometryReader { proxy in
-                Color.clear
-                    .onAppear { width = proxy.size.width }
-                    .onChange(of: proxy.size.width) { _, new in width = new }
-            }
+        VStack(spacing: 0) {
+            header(note)
+            editor(pending: pending)
+            connections(note)
         }
         .task(id: noteID) { load() }
         .onChange(of: title) { _, _ in save() }
@@ -81,19 +62,19 @@ struct ZettelEditorView: View {
                 // twelve-digit number — three things asking to be read before
                 // the note itself.
                 #if os(macOS)
-                // The format panel, by the brush Pages opens its own with.
-                Toggle(isOn: $showsFormat) {
+                // The format panel, by the brush Pages opens its own with:
+                // the inspector comes out on its Tools, which are the note's
+                // while the note is what is being written.
+                Button {
+                    if isInsideInspector { showsFormat.toggle() } else { NoteFormatCenter.shared.askForPanel() }
+                } label: {
                     Image(systemName: "paintbrush")
                 }
-                .toggleStyle(.button)
                 .buttonStyle(.borderless)
                 .controlSize(.small)
-                .help(L("서식 — 글꼴, 크기, 색, 정렬, 목록", "Format — font, size, color, alignment, lists"))
-                .popover(isPresented: Binding(
-                    get: { showsFormat && width < Self.widthForPanel },
-                    set: { if !$0 { showsFormat = false } }
-                ), arrowEdge: .bottom) {
-                    NoteFormatPanel().frame(width: 250, height: 430)
+                .help(L("서식 — 글꼴, 크기, 색, 형광펜, 정렬, 목록", "Format — font, size, color, highlight, alignment, lists"))
+                .popover(isPresented: $showsFormat, arrowEdge: .bottom) {
+                    NoteFormatPanel().frame(width: 250, height: 470)
                 }
                 #endif
 
@@ -422,5 +403,17 @@ struct ZettelEditorView: View {
         note.body = body_
         notes.update(note)
         Task { await notes.flush(note) }
+    }
+}
+
+private struct InsideInspectorKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    /// Whether a view stands in the window's inspector.
+    var isInsideInspector: Bool {
+        get { self[InsideInspectorKey.self] }
+        set { self[InsideInspectorKey.self] = newValue }
     }
 }

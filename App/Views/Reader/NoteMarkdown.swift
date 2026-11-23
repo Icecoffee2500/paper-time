@@ -1648,8 +1648,14 @@ enum NoteMarkdown {
     /// stands before it and no `=` after — so `a==b && c==d` in a line of
     /// prose is not a highlight, and `x = y` inside one is fine. One line.
     /// Portable's `HIGHLIGHT` is the same expression.
+    ///
+    /// With its colour named — `=={green}` — it opens anywhere, in the
+    /// middle of a word too: nothing else is written that way, so there is
+    /// nothing to mistake it for. A highlight begun inside a word was
+    /// written and then not read («c=={green}ontinuous ac==tion», shown as
+    /// typed — 2026-11-23); such a one is always written with its name.
     static let highlightPattern = try! NSRegularExpression(
-        pattern: #"(?<![\p{L}\p{N}=])==(?:\{(yellow|green|blue|pink|purple)\})?(?![\s=])((?:[^=\n]|=(?!=))+?)(?<!\s)==(?!=)"#
+        pattern: #"(?<!=)==(?:\{(yellow|green|blue|pink|purple)\}|(?<![\p{L}\p{N}]==))(?![\s=])((?:[^=\n]|=(?!=))+?)(?<!\s)==(?!=)"#
     )
     /// A span with a style, on one line, with no span inside it.
     static let spanPattern = try! NSRegularExpression(
@@ -1963,6 +1969,11 @@ enum NoteMarkdown {
             let own: NoteFont.Weight = block.headingLevel.map { $0 <= 1 ? .bold : .semibold } ?? .regular
             attributes[.font] = NoteTypography.face(family: span.family, size: size, weight: span.bold ? .bold : own,
                                                     italic: span.italic || block.kind == .quote)
+        }
+        // Highlighted as well: the band behind, and the highlight's own ink
+        // unless the words were given a colour.
+        if let name = span.highlight {
+            for (key, value) in highlightAttributes(in: block, color: name) where key != .font { attributes[key] = value }
         }
         if let color = span.color, let ink = NoteColor(noteHex: color) { attributes[.foregroundColor] = ink }
         if span.underline { attributes[.underlineStyle] = NSUnderlineStyle.single.rawValue }

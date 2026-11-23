@@ -121,6 +121,8 @@ enum NoteFormat {
                     case .emphasis(_, let bold, let italic, false, _):
                         state.style.bold = bold
                         state.style.italic = italic
+                    case .highlight(_, let color, _):
+                        state.style.highlight = color ?? NoteHighlight.defaultName
                     default: break
                     }
                     break
@@ -137,6 +139,8 @@ enum NoteFormat {
     enum Change {
         case color(String?), size(Double?), family(String?)
         case bold(Bool), italic(Bool), underline(Bool), strike(Bool)
+        /// One of the five highlights by name, or none.
+        case highlight(String?)
 
         func apply(to style: inout NoteSpanStyle) {
             switch self {
@@ -147,6 +151,7 @@ enum NoteFormat {
             case .italic(let on): style.italic = on
             case .underline(let on): style.underline = on
             case .strike(let on): style.strike = on
+            case .highlight(let name): style.highlight = name
             }
         }
     }
@@ -155,7 +160,8 @@ enum NoteFormat {
     /// word the caret is in. Words already in a span keep what they had and
     /// take the change; words in Markdown's bold or italic become a span
     /// when the change is more than those can say, and stay Markdown when it
-    /// is not. Links, formulas, code and highlights are left as they are.
+    /// is not; a highlight is one more thing words can be, with the rest. Links,
+    /// formulas and code are left as they are.
     static func set(_ change: Change, in source: String, selection: NSRange) -> Edit? {
         let text = source as NSString
         var selection = NSRange(location: min(max(selection.location, 0), text.length),
@@ -263,6 +269,10 @@ enum NoteFormat {
                 style.bold = bold
                 style.italic = italic
                 piece(range.location + width, NSMaxRange(range) - width, style)
+            case .highlight(_, let color, _) where reached:
+                var style = NoteSpanStyle()
+                style.highlight = color ?? NoteHighlight.defaultName
+                piece(range.location + NoteMarkdown.highlightLead(color: color), NSMaxRange(range) - 2, style)
             default:
                 emit(content.substring(with: range))
             }
@@ -284,7 +294,7 @@ enum NoteFormat {
             while index < content.length, let token = NoteMarkdown.nextToken(in: content, from: index) {
                 if token.range.location <= offset, offset <= NSMaxRange(token.range) {
                     switch token.kind {
-                    case .styled, .emphasis(_, _, _, false, _):
+                    case .styled, .emphasis(_, _, _, false, _), .highlight:
                         return NSRange(location: start + token.range.location, length: token.range.length)
                     default: return nil
                     }

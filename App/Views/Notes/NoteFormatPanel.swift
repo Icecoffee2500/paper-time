@@ -1,5 +1,6 @@
 #if os(macOS)
 import AppKit
+import InkEngine
 import SwiftUI
 
 /// Which note the format panel is formatting, and what it should show.
@@ -19,6 +20,34 @@ final class NoteFormatCenter {
     /// the caret with no panel to show it in.
     @ObservationIgnored var watchers = 0
     private(set) var state = NoteFormat.State()
+    /// Whether a note is what is being worked on: it took the keyboard, and
+    /// neither the page nor the drawing on it has taken it since. The
+    /// inspector's Tools show this panel while it is, and the drawing's
+    /// otherwise.
+    private(set) var isFront = false
+    /// Bumped to ask the window for the inspector, on its Tools.
+    private(set) var panelRequests = 0
+
+    func took(_ textView: NoteTextView) {
+        if !isFront { isFront = true }
+        read(textView)
+    }
+
+    func yielded(_ textView: NoteTextView? = nil) {
+        if textView == nil || textView === self.textView, isFront { isFront = false }
+    }
+
+    func left(_ textView: NoteTextView) {
+        guard textView === self.textView else { return }
+        self.textView = nil
+        if isFront { isFront = false }
+        if state.isEditing { state = NoteFormat.State() }
+    }
+
+    func askForPanel() {
+        if !isFront, textView != nil { isFront = true }
+        panelRequests += 1
+    }
 
     func read(_ textView: NoteTextView) {
         self.textView = textView
@@ -104,6 +133,24 @@ struct NoteFormatPanel: View {
                     ), supportsOpacity: false)
                     .labelsHidden()
                 }
+                HStack(spacing: 7) {
+                    Text(L("형광펜", "Highlight")).font(.system(size: 12.5))
+                    Spacer()
+                    ForEach(["yellow", "green", "blue", "pink", "purple"], id: \.self) { name in
+                        let on = state.style.highlight == name
+                        Button {
+                            center.set(.highlight(on ? nil : name), named: L("하이라이트", "Highlight"))
+                        } label: {
+                            Circle()
+                                .fill(Self.swatch(name))
+                                .frame(width: 16, height: 16)
+                                .overlay(Circle().strokeBorder(Color.primary.opacity(on ? 0.75 : 0), lineWidth: 1.5).padding(-3))
+                                .contentShape(Circle().inset(by: -4))
+                        }
+                        .buttonStyle(.plain)
+                        .help(on ? L("하이라이트 지우기", "Remove Highlight") : L("하이라이트", "Highlight"))
+                    }
+                }
                 rule
 
                 alignmentButtons(state)
@@ -141,6 +188,13 @@ struct NoteFormatPanel: View {
         .padding(14)
         .disabled(!state.isEditing || state.isCode)
         .opacity(state.isEditing ? 1 : 0.5)
+    }
+
+    /// The dot a highlight is chosen by: the colour the bar over a selection
+    /// shows for it.
+    private static func swatch(_ name: String) -> Color {
+        let tone = HighlightTone.swatch(NoteHighlight.color(name))
+        return Color(red: tone.red, green: tone.green, blue: tone.blue)
     }
 
     private var rule: some View {

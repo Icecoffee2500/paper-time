@@ -1,6 +1,7 @@
 #if os(macOS)
 import AppKit
 import PaperCore
+import PDFKit
 import SwiftUI
 
 /// The place to write while reading.
@@ -1371,7 +1372,20 @@ final class NoteTextView: LatexSuiteTextView {
 
     override func resignFirstResponder() -> Bool {
         let resigned = super.resignFirstResponder()
-        if resigned { coordinator?.mathPreview.hide(); coordinator?.selectionToolbar.hide() }
+        if resigned {
+            coordinator?.mathPreview.hide(); coordinator?.selectionToolbar.hide()
+            // The keyboard gone to the page or to what is drawn on it: the
+            // inspector's Tools are theirs again. Gone to a button of the
+            // format panel, it is still this note being formatted.
+            DispatchQueue.main.async { [weak self] in
+                guard let self, let now = self.window?.firstResponder as? NSView, now !== self else { return }
+                var view: NSView? = now
+                while let here = view {
+                    if here is SketchInputView || here is PDFView { return NoteFormatCenter.shared.yielded(self) }
+                    view = here.superview
+                }
+            }
+        }
         return resigned
     }
 
@@ -1382,7 +1396,10 @@ final class NoteTextView: LatexSuiteTextView {
         // the window's stack they would be ⌘Zs that do nothing.
         if newWindow == nil, window != nil, let coordinator { stepUndoManager?.removeAllActions(withTarget: coordinator) }
         super.viewWillMove(toWindow: newWindow)
-        if newWindow == nil { coordinator?.mathPreview.hide(); coordinator?.selectionToolbar.hide() }
+        if newWindow == nil {
+            coordinator?.mathPreview.hide(); coordinator?.selectionToolbar.hide()
+            NoteFormatCenter.shared.left(self)
+        }
     }
 
     override func viewDidHide() {
@@ -2028,7 +2045,7 @@ final class NoteTextView: LatexSuiteTextView {
 
     override func becomeFirstResponder() -> Bool {
         let became = super.becomeFirstResponder()
-        if became { NoteFormatCenter.shared.read(self) }
+        if became { NoteFormatCenter.shared.took(self) }
         return became
     }
 
@@ -2070,6 +2087,17 @@ final class NoteTextView: LatexSuiteTextView {
     /// recoloured when it is there in another colour (`NoteHighlightEdit`,
     /// one replacement, one step). `color` nil is the default colour.
     func toggleHighlight(_ color: String?) {
+        // In the note as written, with whatever else the words are: a colour
+        // of their own, a size, bold. The same highlight again takes it off;
+        // another colour changes it (`NoteFormat`).
+        if coordinator?.showsRawText != true, codeRowAtCaret() == nil, sourceAndSelection() != nil {
+            let name = color ?? NoteHighlight.defaultName
+            let now = formatState().style.highlight
+            format(named: L("하이라이트", "Highlight")) {
+                NoteFormat.set(.highlight(now == name ? nil : name), in: $0, selection: $1)
+            }
+            return
+        }
         coordinator?.endTyping()
         coordinator?.nextStepName = L("하이라이트", "Highlight")
         stepUndoManager?.beginUndoGrouping()
@@ -2088,6 +2116,17 @@ final class NoteTextView: LatexSuiteTextView {
         if mark.hasPrefix("==") {
             let name = mark.dropFirst(2)
             toggleHighlight(name.hasPrefix("{") && name.hasSuffix("}") ? String(name.dropFirst().dropLast()) : nil)
+            return
+        }
+        // Bold and italic over a selection are set in the note as written,
+        // so they go with a colour or a highlight the words already have —
+        // round a span, Markdown's stars would have shown its tags.
+        if (mark == "**" || mark == "*"), selectedRange().length > 0, coordinator?.showsRawText != true,
+           codeRowAtCaret() == nil, sourceAndSelection() != nil {
+            let now = formatState().style
+            format(named: mark == "**" ? L("굵게", "Bold") : L("기울임", "Italic")) {
+                NoteFormat.set(mark == "**" ? .bold(!now.bold) : .italic(!now.italic), in: $0, selection: $1)
+            }
             return
         }
         let text = string as NSString

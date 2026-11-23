@@ -109,6 +109,7 @@ enum NoteScrollProbe {
                 board.writeObjects([URL(fileURLWithPath: file) as NSURL])
                 let took = text.insertPicture(from: board)
                 board.releaseGlobally()
+                await LatexSuiteTypingProbe.endOfEvent(window)
                 try? await Task.sleep(for: .milliseconds(300))
                 say("note picture: \(took) → \(note.markdown.debugDescription) shown \(text.string.debugDescription) "
                     + "attachments \(text.textStorage.map { storage in var n = 0; storage.enumerateAttribute(.attachment, in: NSRange(location: 0, length: storage.length)) { v, _, _ in if v != nil { n += 1 } }; return n } ?? 0)")
@@ -127,6 +128,7 @@ enum NoteScrollProbe {
                     case "color": NoteFormat.set(.color(value.isEmpty ? nil : value), in: source, selection: selection)
                     case "size": NoteFormat.set(.size(Double(value)), in: source, selection: selection)
                     case "family": NoteFormat.set(.family(value.isEmpty ? nil : value), in: source, selection: selection)
+                    case "highlight": NoteFormat.set(.highlight(value.isEmpty || now.style.highlight == value ? nil : value), in: source, selection: selection)
                     case "bold": NoteFormat.set(.bold(!now.style.bold), in: source, selection: selection)
                     case "italic": NoteFormat.set(.italic(!now.style.italic), in: source, selection: selection)
                     case "underline": NoteFormat.set(.underline(!now.style.underline), in: source, selection: selection)
@@ -137,6 +139,9 @@ enum NoteScrollProbe {
                     default: nil
                     }
                 }
+                // A press of a button is an event, and an event closes the
+                // undo group: without one, every step of a probe is one ⌘Z.
+                await LatexSuiteTypingProbe.endOfEvent(window)
                 try? await Task.sleep(for: .milliseconds(250))
                 let state = text.formatState()
                 say("note format: \(what) → \(note.markdown.debugDescription) selection \(text.selectedRange()) "

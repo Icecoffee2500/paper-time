@@ -28,14 +28,44 @@ struct NoteSpanStyle: Equatable {
     var italic = false
     var underline = false
     var strike = false
+    /// Highlighted, in one of the five colours by name — the same highlight
+    /// `==words==` is, said here when the words are set some other way too.
+    var highlight: String?
 
     init() {}
+
+    /// What a highlight is written as in a span: a pale ground. Read back
+    /// by the same table — and a ground somebody else wrote, by whichever of
+    /// these it is nearest.
+    static let grounds: [(name: String, hex: String)] = [
+        ("yellow", "#fff3b0"), ("green", "#cfeedd"), ("blue", "#cfe2fb"), ("pink", "#fbd3dc"), ("purple", "#e6d7f8"),
+    ]
+
+    static func highlight(forGround value: String) -> String? {
+        guard let hex = hex(value), let wanted = Int(hex.dropFirst(), radix: 16) else { return nil }
+        func distance(_ other: String) -> Int {
+            let v = Int(other.dropFirst(), radix: 16) ?? 0
+            return [16, 8, 0].reduce(0) { sum, shift in
+                let d = ((wanted >> shift) & 0xFF) - ((v >> shift) & 0xFF)
+                return sum + d * d
+            }
+        }
+        return grounds.min { distance($0.hex) < distance($1.hex) }?.name
+    }
+
+    /// Whether all of it is a highlight, which Markdown-as-we-write-it says
+    /// with `==`.
+    var isOnlyHighlight: Bool {
+        var rest = self
+        rest.highlight = nil
+        return highlight != nil && rest.isEmpty
+    }
 
     var isEmpty: Bool { self == NoteSpanStyle() }
 
     /// Whether Markdown's own marks can say all of it.
     var isOnlyEmphasis: Bool {
-        color == nil && size == nil && family == nil && !underline && !strike
+        color == nil && size == nil && family == nil && !underline && !strike && highlight == nil
     }
 
     init(css: String) {
@@ -48,6 +78,8 @@ struct NoteSpanStyle: Equatable {
             switch parts[0].lowercased() {
             case "color":
                 if let hex = Self.hex(value) { color = hex }
+            case "background-color", "background":
+                highlight = Self.highlight(forGround: value)
             case "font-size":
                 let number = value.lowercased().replacingOccurrences(of: "px", with: "").replacingOccurrences(of: "pt", with: "")
                 if let points = Double(number), points >= 4, points <= 400 { size = points }
@@ -82,6 +114,9 @@ struct NoteSpanStyle: Equatable {
     var css: String {
         var parts: [String] = []
         if let color { parts.append("color:\(color)") }
+        if let highlight, let ground = Self.grounds.first(where: { $0.name == highlight }) {
+            parts.append("background-color:\(ground.hex)")
+        }
         if let size {
             let text = size == size.rounded() ? String(Int(size)) : String(format: "%.1f", size)
             parts.append("font-size:\(text)px")
@@ -103,6 +138,12 @@ struct NoteSpanStyle: Equatable {
     /// own marks when those say all of it, or the words alone.
     func wrapping(_ words: String) -> String {
         if isEmpty || words.isEmpty { return words }
+        // A highlight and nothing else is `==`, with its colour named: that
+        // form reads wherever it stands, inside a word too.
+        if isOnlyHighlight, let highlight, !words.contains("=="), !words.hasPrefix("="), !words.hasSuffix("="),
+           words.first?.isWhitespace == false, words.last?.isWhitespace == false {
+            return "=={\(highlight)}" + words + "=="
+        }
         if isOnlyEmphasis {
             let mark = bold && italic ? "***" : bold ? "**" : "*"
             // Markdown's marks do not hold a star, or a space at either end.
