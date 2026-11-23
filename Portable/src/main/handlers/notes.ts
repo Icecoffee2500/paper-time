@@ -29,6 +29,29 @@ export function notesHandlers(ctx: Context): Partial<Handlers> {
       return saved
     },
 
+    'notes:picture': async ({ path: written }) => {
+      const url = typeof written === 'string' ? await notes().picture(written) : null
+      return url ? { url } : null
+    },
+
+    'notes:keepPicture': async ({ noteID, bytes, extension }) => {
+      if (typeof noteID !== 'string' || !(bytes instanceof Uint8Array) || typeof extension !== 'string') return null
+      const kept = await notes().keepPicture(noteID, bytes, extension)
+      return kept ? { path: kept } : null
+    },
+
+    'notes:choosePicture': async ({ noteID }, sender) => {
+      if (typeof noteID !== 'string' || ctx.isProbe) return null
+      const picked = await dialog.showOpenDialog(owner(sender), {
+        properties: ['openFile'],
+        filters: [{ name: say('그림', 'Pictures'), extensions: ['png', 'jpg', 'jpeg', 'gif', 'webp'] }],
+      })
+      const file = picked.canceled ? undefined : picked.filePaths[0]
+      if (!file) return null
+      const kept = await notes().keepPicture(noteID, await fsp.readFile(file), path.extname(file).slice(1))
+      return kept ? { path: kept } : null
+    },
+
     'notes:delete': async ({ id }, sender) => {
       await notes().delete(id)
       ctx.notesChanged(null, id)

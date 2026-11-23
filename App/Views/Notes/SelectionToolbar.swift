@@ -33,7 +33,8 @@ final class SelectionToolbar {
              help: L("하이라이트", "Highlight") + " · " + color.displayName, color: color)
     }
 
-    private static var barWidth: CGFloat { marks.reduce(10 + 9) { $0 + $1.width + 1 } }
+    /// And the switch before the dots (28 and its gap): what they colour.
+    private static var barWidth: CGFloat { marks.reduce(10 + 9 + 29) { $0 + $1.width + 1 } }
 
     private var panel: NSPanel?
     private var onMark: ((String) -> Void)?
@@ -118,14 +119,32 @@ final class SelectionToolbar {
 
     struct Bar: View {
         var choose: (String) -> Void
+        /// What the five colours colour: the highlight behind the words,
+        /// or the words. One row of colours for both — a second row would
+        /// be a bar twice as long for one more press — and the switch is
+        /// kept, since whoever colours words today colours them tomorrow.
+        @AppStorage("noteBarColorsWords") private var colorsWords = false
 
         var body: some View {
             HStack(spacing: 1) {
                 ForEach(SelectionToolbar.marks) { mark in
-                    if mark.mark == "==" { divider }
-                    Button { choose(mark.mark) } label: { face(of: mark) }
+                    if mark.mark == "==" {
+                        divider
+                        Button { colorsWords.toggle() } label: {
+                            Image(systemName: colorsWords ? "character" : "highlighter")
+                                .font(.system(size: 12, weight: .medium))
+                        }
+                        .buttonStyle(BarButtonStyle(width: 28))
+                        .help(colorsWords
+                              ? L("글자 색 — 누르면 형광펜", "Text color — press for the highlighter")
+                              : L("형광펜 — 누르면 글자 색", "Highlighter — press for text color"))
+                    }
+                    Button {
+                        if let color = mark.color, colorsWords { choose("color:" + color.rawValue) } else { choose(mark.mark) }
+                    } label: { face(of: mark) }
                         .buttonStyle(BarButtonStyle(width: mark.width))
-                        .help(mark.help)
+                        .help(mark.color != nil && colorsWords
+                              ? L("글자 색", "Text Color") + " · " + (mark.color?.displayName ?? "") : mark.help)
                 }
             }
             .padding(.horizontal, 5)
@@ -145,7 +164,12 @@ final class SelectionToolbar {
         /// math, and for a highlight the colour its words will be, as a dot.
         @ViewBuilder
         private func face(of mark: Mark) -> some View {
-            if let color = mark.color {
+            if let color = mark.color, colorsWords {
+                // The words' colour: a letter in the ink they will be.
+                Text("A")
+                    .font(.system(size: 14, weight: .bold, design: .rounded))
+                    .foregroundStyle(Color(nsColor: NoteHighlight.ink(color.rawValue)))
+            } else if let color = mark.color {
                 // The highlighter's own colour, bright — Apple's — not the
                 // deep ink its words become.
                 let ink = HighlightTone.swatch(color)

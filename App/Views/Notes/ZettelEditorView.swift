@@ -19,6 +19,10 @@ struct ZettelEditorView: View {
     @State private var loadedID: String?
     /// Shows the Markdown as written, for changing a link or a formula by hand.
     @State private var showsRaw = false
+    /// The format panel as a popover: only where the note is inside the
+    /// inspector itself, which cannot show its Tools and the note at once.
+    @State private var showsFormat = false
+    @Environment(\.isInsideInspector) private var isInsideInspector
 
     var body: some View {
         let note = notes.note(noteID)
@@ -57,6 +61,23 @@ struct ZettelEditorView: View {
                 // corner of a writing surface, next to a second word and a
                 // twelve-digit number — three things asking to be read before
                 // the note itself.
+                #if os(macOS)
+                // The format panel, by the brush Pages opens its own with:
+                // the inspector comes out on its Tools, which are the note's
+                // while the note is what is being written.
+                Button {
+                    if isInsideInspector { showsFormat.toggle() } else { NoteFormatCenter.shared.askForPanel() }
+                } label: {
+                    Image(systemName: "paintbrush")
+                }
+                .buttonStyle(.borderless)
+                .controlSize(.small)
+                .help(L("서식 — 글꼴, 크기, 색, 형광펜, 정렬, 목록", "Format — font, size, color, highlight, alignment, lists"))
+                .popover(isPresented: $showsFormat, arrowEdge: .bottom) {
+                    NoteFormatPanel().frame(width: 250, height: 470)
+                }
+                #endif
+
                 Toggle(isOn: $showsRaw) {
                     Image(systemName: "chevron.left.forwardslash.chevron.right")
                 }
@@ -148,6 +169,7 @@ struct ZettelEditorView: View {
                     set: { notes.revealPassage = $0 }
                 ),
                 showsRawText: showsRaw,
+                pictures: notes.picturesDirectory(for: noteID),
                 onFollow: { anchor in
                     link?.anchorRequest = ReaderLink.Anchor(
                         pageIndex: anchor.pageIndex, rect: anchor.rect, paperID: anchor.paperID
@@ -381,5 +403,17 @@ struct ZettelEditorView: View {
         note.body = body_
         notes.update(note)
         Task { await notes.flush(note) }
+    }
+}
+
+private struct InsideInspectorKey: EnvironmentKey {
+    static let defaultValue = false
+}
+
+extension EnvironmentValues {
+    /// Whether a view stands in the window's inspector.
+    var isInsideInspector: Bool {
+        get { self[InsideInspectorKey.self] }
+        set { self[InsideInspectorKey.self] = newValue }
     }
 }

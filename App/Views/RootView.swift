@@ -172,10 +172,44 @@ struct LibraryWindow: View {
             // first two papers side by side — both for checking without a
             // hand on the machine.
             .preferredColorScheme(Boot.isSet("PAPERTIME_DARK") ? .dark : nil)
+            #if os(macOS)
+            // The brush in a note's head: the inspector, on its Tools.
+            .onChange(of: NoteFormatCenter.shared.panelRequests) { _, _ in
+                if !app.showsInspector { app.setInspectorFloats(app.inspectorFloats) }
+                inspectorTab = .tool
+            }
+            #endif
             .task {
                 // `--papertime-toolbar-shot=<png in the container>`: the bar
                 // over a selection in a note, drawn light and dark — its
                 // layout; the glass itself needs a window to be glass.
+                // `--papertime-format-shot=<png in the container>`: the
+                // note's format panel, drawn light and dark with no window.
+                if let path = Boot.setting("PAPERTIME_FORMAT_SHOT") {
+                    var state = NoteFormat.State()
+                    state.isEditing = true
+                    state.paragraph = .subheading
+                    state.style.bold = true
+                    state.style.color = "#d62e54"
+                    state.size = 18
+                    state.alignment = .left
+                    NoteFormatCenter.shared.preview(state)
+                    for scheme in [ColorScheme.light, .dark] {
+                        let renderer = ImageRenderer(content:
+                            NoteFormatPanel().controls
+                                .frame(width: 244, height: 430, alignment: .top)
+                                .background(scheme == .dark ? Color(white: 0.13) : Color(white: 0.96))
+                                .environment(\.colorScheme, scheme)
+                        )
+                        renderer.scale = 2
+                        if let image = renderer.nsImage, let tiff = image.tiffRepresentation,
+                           let png = NSBitmapImageRep(data: tiff)?.representation(using: .png, properties: [:]) {
+                            let file = path.replacingOccurrences(of: ".png", with: scheme == .dark ? "-dark.png" : ".png")
+                            try? png.write(to: URL(fileURLWithPath: file))
+                            FileHandle.standardError.write(Data("format shot: wrote \(file)\n".utf8))
+                        }
+                    }
+                }
                 if let path = Boot.setting("PAPERTIME_TOOLBAR_SHOT") {
                     FileHandle.standardError.write(Data("toolbar panel: \(SelectionToolbar.describePanel())\n".utf8))
                     // Both bars in a window of their own off every screen,
@@ -2209,22 +2243,49 @@ struct InspectorView: View {
                     }
                 case .tool:
                     #if os(macOS)
-                    // What is drawn on the page, as numbers — Figma's design
-                    // panel, in the window's own inspector.
-                    SketchInspector(configuration: configuration, docked: true)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    // One place for the tools of whatever is being worked
+                    // on: a note's format while a note has the keyboard,
+                    // and what is drawn on the page, as numbers — Figma's
+                    // design panel — otherwise.
+                    if NoteFormatCenter.shared.isFront {
+                        NoteFormatPanel()
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    } else {
+                        SketchInspector(configuration: configuration, docked: true)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                    }
                     #else
                     ContentUnavailableView(L("맥에서 그릴 때 써요", "For drawing on the Mac"), systemImage: "pencil.tip")
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                     #endif
                 }
             } else {
+                #if os(macOS)
+                // No paper, and a note being written: its format.
+                if NoteFormatCenter.shared.isFront {
+                    NoteFormatPanel()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                } else {
+                    ContentUnavailableView(L("고른 것이 없어요", "Nothing Selected"), systemImage: "sidebar.right")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+                #else
                 ContentUnavailableView(L("고른 것이 없어요", "Nothing Selected"), systemImage: "sidebar.right")
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+                #endif
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .environment(\.isInsideInspector, true)
+        #if os(macOS)
+        // The pen picked up after the note took the keyboard: the Tools
+        // are the drawing's until the note is written in again.
+        .onChange(of: configuration.mode) { _, mode in
+            if mode == .draw { NoteFormatCenter.shared.yielded() }
+        }
+        #endif
     }
+
 }
 
 /// Shown when the chosen folder is missing — usually a cloud drive that has not

@@ -48,6 +48,14 @@ struct PaperTimeApp: App {
             }
             NoteMarkdown.dump(markdown)
         }
+        // Answers the format panel's edits for Portable's tests, and quits
+        // (`NoteFormatFixture`).
+        #if os(macOS)
+        if let cases = Boot.setting("PAPERTIME_FORMAT_FIXTURE"), let out = Boot.setting("PAPERTIME_FORMAT_FIXTURE_OUT") {
+            NoteFormatFixture.write(from: cases, to: out)
+            exit(0)
+        }
+        #endif
         // Types a few Latex Suite keystrokes in memory, prints them and quits.
         if Boot.isSet("PAPERTIME_LATEX_SUITE") {
             LatexSuiteProbe.run()

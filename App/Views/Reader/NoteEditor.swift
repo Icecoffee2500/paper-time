@@ -1,6 +1,7 @@
 #if os(macOS)
 import AppKit
 import PaperCore
+import PDFKit
 import SwiftUI
 
 /// The place to write while reading.
@@ -49,6 +50,9 @@ struct NoteEditor: NSViewRepresentable {
     /// Shows the Markdown as written, for when a link or a formula needs
     /// changing by hand.
     var showsRawText = false
+    /// Where this note's pictures are kept (`NoteImages`); nil where a note
+    /// has no box — a probe's.
+    var pictures: URL? = nil
     var onFollow: (NoteAnchor) -> Void
     /// Opening another note in the box, from a `[[link]]`.
     var onOpenNote: (String) -> Void = { _ in }
@@ -115,6 +119,7 @@ struct NoteEditor: NSViewRepresentable {
 
         context.coordinator.textView = textView
         context.coordinator.showsRawText = showsRawText
+        context.coordinator.pictures = pictures
         textView.postsFrameChangedNotifications = true
         NotificationCenter.default.addObserver(
             context.coordinator, selector: #selector(Coordinator.textViewFrameChanged(_:)),
@@ -134,6 +139,7 @@ struct NoteEditor: NSViewRepresentable {
         context.coordinator.onFollow = onFollow
         context.coordinator.onOpenNote = onOpenNote
         context.coordinator.suggestions = suggestions
+        context.coordinator.pictures = pictures
         guard let textView = scrollView.documentView as? NoteTextView else { return }
 
         if context.coordinator.showsRawText != showsRawText {
@@ -289,6 +295,7 @@ struct NoteEditor: NSViewRepresentable {
         var suggestions: (String) -> [(id: String, title: String, subtitle: String)] = { _ in [] }
         var lastKnownMarkdown: String
         var showsRawText = false
+        var pictures: URL?
         weak var textView: NoteTextView?
 
         let completions = WikiLinkPopover()
@@ -338,6 +345,48 @@ struct NoteEditor: NSViewRepresentable {
             updateMathPreview(in: textView)
             scheduleRestyle(in: textView)
             recolorCaretLine(in: textView)
+            tidyTags(in: textView)
+        }
+
+        /// After an edit to a line that holds tags, puts the tags in order
+        /// (`NoteFormat.tidy`) — on the next turn, as the note is never set
+        /// inside a text view's callback. Part of the step that made the
+        /// mess: ⌘Z takes both back.
+        func tidyTags(in textView: NoteTextView) {
+            guard !showsRawText, textView.caretLineHoldsTags() else { return }
+            DispatchQueue.main.async { [weak self, weak textView] in
+                guard let self, let textView, let storage = textView.textStorage, !self.isRestyling,
+                      !textView.hasMarkedText(), textView.selectedRange().length == 0,
+                      textView.caretLineHoldsTags() else { return }
+                let caret = textView.selectedRange().location
+                let display = (textView.string as NSString).lineRange(for: NSRange(location: caret, length: 0))
+                let shown = storage.attributedSubstring(from: display)
+                let whole = NoteMarkdown.markdown(from: shown)
+                let written = whole.trimmingCharacters(in: .newlines)
+                var line = written
+                var inLine = NoteMarkdown.sourceIndex(in: shown, displayIndex: caret - display.location)
+                // A highlight's mark left without the other, or two with
+                // nothing between: gone, last first.
+                for mark in textView.strayHighlightMarks(in: display).reversed() {
+                    let at = NoteMarkdown.sourceIndex(in: shown, displayIndex: mark.location - display.location)
+                    let length = (mark.source as NSString).length
+                    guard at + length <= (line as NSString).length else { continue }
+                    line = (line as NSString).replacingCharacters(in: NSRange(location: at, length: length), with: "")
+                    if at < inLine { inLine -= min(length, inLine - at) }
+                }
+                let tidied = NoteFormat.tidy(line: line)
+                guard tidied != written else { return }
+                let visible = NoteFormat.visibleOffset(in: line, at: inLine)
+                let source = NoteMarkdown.markdown(from: storage) as NSString
+                let start = NoteMarkdown.sourceIndex(in: storage, displayIndex: display.location)
+                guard start + (written as NSString).length <= source.length else { return }
+                let updated = source.replacingCharacters(in: NSRange(location: start, length: (written as NSString).length),
+                                                         with: tidied)
+                self.lastKnownMarkdown = updated
+                self.markdown = updated
+                self.restyle(textView, source: updated,
+                             caretSource: start + NoteFormat.offset(in: tidied, visible: visible))
+            }
         }
 
         /// The key of the folded toggle the caret was last on, if any — so
@@ -455,14 +504,20 @@ struct NoteEditor: NSViewRepresentable {
         /// The selection before the last change of it — which way a caret
         /// stepped (`NoteTextView.settledCaret`).
         private var lastSelection = NSRange(location: 0, length: 0)
+        /// How long the text was then: a caret that moved while the text
+        /// stayed as long was stepped, not typed along.
+        private var lastLength = 0
 
         func textViewDidChangeSelection(_ notification: Notification) {
             guard let textView = notification.object as? NoteTextView else { return }
             let previous = lastSelection
+            let lengthBefore = lastLength
             lastSelection = textView.selectedRange()
+            lastLength = textView.textStorage?.length ?? 0
             guard !textView.hasMarkedText(), !isRestyling else { return }
             updateMathPreview(in: textView)
             updateSelectionToolbar(in: textView)
+            NoteFormatCenter.shared.read(textView)
             // Never rebuild the text under a selection: that is what made a
             // drag let go of what it had just selected.
             guard textView.selectedRange().length == 0, !textView.isSelectingByHand else {
@@ -479,6 +534,25 @@ struct NoteEditor: NSViewRepresentable {
                 var run = NSRange()
                 if let settled = textView.settledCaret(caret, previous: previous.length == 0 ? previous.location : nil) {
                     textView.setSelectedRange(NSRange(location: settled, length: 0))
+                    return
+                }
+                // A step over a tag that is out of sight is a step that
+                // moved nothing: it goes on over the character beyond.
+                if !textView.isSteppingOverTags, !textView.isDeletingPastTags, previous.length == 0, lengthBefore == storage.length,
+                   let beyond = textView.caretPastTags(from: previous.location, to: caret) {
+                    textView.isSteppingOverTags = true
+                    textView.setSelectedRange(NSRange(location: beyond, length: 0))
+                    textView.isSteppingOverTags = false
+                    return
+                }
+                // And a caret never rests outside a line's alignment: what
+                // is typed there would be outside the paragraph it is in.
+                if !textView.isDeletingPastTags, let inside = textView.caretInsideAlignment(caret) {
+                    // (Put there, not stepped there: the rule above is
+                    // not asked about it.)
+                    textView.isSteppingOverTags = true
+                    textView.setSelectedRange(NSRange(location: inside, length: 0))
+                    textView.isSteppingOverTags = false
                     return
                 }
                 // A caret set down after the folded children of a toggle
@@ -614,6 +688,29 @@ struct NoteEditor: NSViewRepresentable {
             textView.typingAttributes = showsRawText
                 ? NoteMarkdown.rawAttributes : (textView.codeTypingAttributes() ?? NoteMarkdown.bodyAttributes)
             lastCaretLine = (textView.string as NSString).lineRange(for: textView.selectedRange())
+        }
+
+        /// Sets the note again with every line rendered and a selection
+        /// over what was just changed (`NoteTextView.format`). The selection
+        /// is whole pieces, so its two ends are the pieces' on screen.
+        func restyle(_ textView: NoteTextView, source: String, selecting selection: NSRange) {
+            guard !isRestyling else { return }
+            setCaretLine = -1; setLineCount = -1; setCaretMarker = ""
+            isRestyling = true
+            let rendered = NoteMarkdown.render(
+                source, caret: nil, raw: showsRawText, width: room(in: textView),
+                appearance: textView.effectiveAppearance, collapsed: collapsedToggles
+            )
+            lastKnownWidth = room(in: textView)
+            setContents(rendered.text, in: textView)
+            let length = textView.string.utf16.count
+            let start = min(max(rendered.displayIndex(forSource: selection.location), 0), length)
+            let end = min(max(rendered.displayIndex(forSource: NSMaxRange(selection)), start), length)
+            textView.setSelectedRange(NSRange(location: start, length: end - start))
+            textView.typingAttributes = showsRawText ? NoteMarkdown.rawAttributes : NoteMarkdown.bodyAttributes
+            lastCaretLine = (textView.string as NSString).lineRange(for: textView.selectedRange())
+            isRestyling = false
+            updateSelectionToolbar(in: textView)
         }
 
         @objc func textViewFrameChanged(_ notification: Notification) {
@@ -1218,7 +1315,41 @@ final class NoteTextView: LatexSuiteTextView {
     /// tab-separated cells — a spreadsheet's — do the same. Anything else
     /// pastes as before.
     override func paste(_ sender: Any?) {
-        guard pasteTable(from: .general) else { return super.paste(sender) }
+        if pasteTable(from: .general) { return }
+        // A picture copied — a screenshot, a figure — goes into the note as
+        // a picture. Words are pasted as words: a pasteboard that has both
+        // (a browser's) is taken for its words.
+        if NSPasteboard.general.availableType(from: [.string]) == nil || NSPasteboard.general.availableType(from: [.fileURL]) != nil,
+           insertPicture(from: .general) { return }
+        super.paste(sender)
+    }
+
+    /// Keeps the picture on a pasteboard beside the note and sets it on a
+    /// line of its own where the caret is; false when there is none, or
+    /// nowhere to keep it.
+    @discardableResult
+    func insertPicture(from pasteboard: NSPasteboard) -> Bool {
+        guard coordinator?.showsRawText != true, let directory = coordinator?.pictures,
+              let picture = NoteImages.picture(on: pasteboard),
+              let path = try? NoteImages.keep(picture.data, as: picture.fileExtension, in: directory) else { return false }
+        format(named: L("그림 넣기", "Insert Picture")) { source, selection in
+            NoteFormat.insertPicture(path, in: source, selection: selection)
+        }
+        return true
+    }
+
+    override var acceptableDragTypes: [NSPasteboard.PasteboardType] {
+        super.acceptableDragTypes + [.fileURL, .png, .tiff]
+    }
+
+    override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
+        if NoteImages.picture(on: sender.draggingPasteboard) != nil {
+            // Where it was let go of, not where the caret was.
+            let point = convert(sender.draggingLocation, from: nil)
+            setSelectedRange(NSRange(location: characterIndexForInsertion(at: point), length: 0))
+            if insertPicture(from: sender.draggingPasteboard) { return true }
+        }
+        return super.performDragOperation(sender)
     }
 
     /// Pastes the table on this pasteboard; false when there is none. A probe
@@ -1307,7 +1438,20 @@ final class NoteTextView: LatexSuiteTextView {
 
     override func resignFirstResponder() -> Bool {
         let resigned = super.resignFirstResponder()
-        if resigned { coordinator?.mathPreview.hide(); coordinator?.selectionToolbar.hide() }
+        if resigned {
+            coordinator?.mathPreview.hide(); coordinator?.selectionToolbar.hide()
+            // The keyboard gone to the page or to what is drawn on it: the
+            // inspector's Tools are theirs again. Gone to a button of the
+            // format panel, it is still this note being formatted.
+            DispatchQueue.main.async { [weak self] in
+                guard let self, let now = self.window?.firstResponder as? NSView, now !== self else { return }
+                var view: NSView? = now
+                while let here = view {
+                    if here is SketchInputView || here is PDFView { return NoteFormatCenter.shared.yielded(self) }
+                    view = here.superview
+                }
+            }
+        }
         return resigned
     }
 
@@ -1318,7 +1462,10 @@ final class NoteTextView: LatexSuiteTextView {
         // the window's stack they would be ⌘Zs that do nothing.
         if newWindow == nil, window != nil, let coordinator { stepUndoManager?.removeAllActions(withTarget: coordinator) }
         super.viewWillMove(toWindow: newWindow)
-        if newWindow == nil { coordinator?.mathPreview.hide(); coordinator?.selectionToolbar.hide() }
+        if newWindow == nil {
+            coordinator?.mathPreview.hide(); coordinator?.selectionToolbar.hide()
+            NoteFormatCenter.shared.left(self)
+        }
     }
 
     override func viewDidHide() {
@@ -1591,6 +1738,16 @@ final class NoteTextView: LatexSuiteTextView {
                 return
             }
         }
+        // A tag out of sight behind the caret is not what Backspace is
+        // for: the character before it is.
+        if caret > 0, tag(at: caret - 1) != nil {
+            var before = caret
+            while before > 0, tag(at: before - 1) != nil { before -= 1 }
+            isDeletingPastTags = true
+            setSelectedRange(NSRange(location: before, length: 0))
+            isDeletingPastTags = false
+            return deleteBackward(sender)
+        }
         // Between the two of an empty pair, both go.
         if caret > 0, caret < text.length {
             let before = text.substring(with: NSRange(location: caret - 1, length: 1))
@@ -1618,6 +1775,14 @@ final class NoteTextView: LatexSuiteTextView {
            let header = toggleHeader(before: selectedRange().location + 1), let coordinator {
             coordinator.setFolded(header, false, in: self)
             return
+        }
+        if coordinator?.showsRawText != true, selectedRange().length == 0, tag(at: selectedRange().location) != nil {
+            var after = selectedRange().location
+            while tag(at: after) != nil { after += 1 }
+            isDeletingPastTags = true
+            setSelectedRange(NSRange(location: after, length: 0))
+            isDeletingPastTags = false
+            return deleteForward(sender)
         }
         // Only at the end of a line.
         if selectedRange().length == 0, selectedRange().location < (string as NSString).length,
@@ -1697,6 +1862,90 @@ final class NoteTextView: LatexSuiteTextView {
         guard block.isListItem, block.marker == standing, caret < NSMaxRange(run) else { return nil }
         let words = NSMaxRange(run)
         return previous == words && lineStart > 0 ? lineStart - 1 : words
+    }
+
+    // MARK: Tags out of sight
+
+    /// Set while the caret is being put past a tag on purpose, so the
+    /// selection's own rules leave it there.
+    var isSteppingOverTags = false
+    /// Set while Backspace or Delete puts the caret the other side of a
+    /// tag to take the character beyond it: neither rule moves it back.
+    var isDeletingPastTags = false
+
+    /// The tag the character at `index` stands for, if it is one of the
+    /// hidden pieces a line being edited holds its tags as.
+    func tag(at index: Int) -> NoteMarkdown.Tag? {
+        guard coordinator?.showsRawText != true, let storage = textStorage, index >= 0, index < storage.length,
+              let source = storage.attribute(.paperTimeSource, at: index, effectiveRange: nil) as? String
+        else { return nil }
+        return NoteMarkdown.Tag(source)
+    }
+
+    /// Whether the caret's line holds any.
+    func caretLineHoldsTags() -> Bool {
+        guard let storage = textStorage, storage.length > 0 else { return false }
+        let line = (string as NSString).lineRange(for: NSRange(location: min(selectedRange().location, storage.length), length: 0))
+        var found = false
+        storage.enumerateAttribute(.paperTimeSource, in: line) { value, _, stop in
+            if let source = value as? String, NoteMarkdown.Tag(source) != nil { found = true; stop.pointee = true }
+        }
+        return found
+    }
+
+    /// The highlight marks on a line that have lost their pair, and pairs
+    /// with nothing between them, where they stand on screen.
+    func strayHighlightMarks(in line: NSRange) -> [(location: Int, source: String)] {
+        guard let storage = textStorage else { return [] }
+        var stray: [(location: Int, source: String)] = []
+        var open: (location: Int, source: String)?
+        storage.enumerateAttributes(in: line) { attributes, run, _ in
+            guard let source = attributes[.paperTimeSource] as? String,
+                  case .highlight? = NoteMarkdown.Tag(source) else { return }
+            let opens = attributes[.paperTimeOpens] != nil
+            for location in run.location..<NSMaxRange(run) {
+                if opens {
+                    if let opened = open { stray.append(opened) }
+                    open = (location, source)
+                } else if let opened = open {
+                    if opened.location + 1 == location { stray.append(opened); stray.append((location, source)) }
+                    open = nil
+                } else {
+                    stray.append((location, source))
+                }
+            }
+        }
+        if let open { stray.append(open) }
+        return stray.sorted { $0.location < $1.location }
+    }
+
+    /// Where a caret stepped one place — from `from` to `to` — ends up when
+    /// what it stepped over was a tag: past any more of them and over one
+    /// character that can be seen, so the arrow key moved it. Nil for every
+    /// other step.
+    func caretPastTags(from: Int, to: Int) -> Int? {
+        guard abs(to - from) == 1, tag(at: min(from, to)) != nil else { return nil }
+        let text = string as NSString
+        var caret = to
+        if to > from {
+            while tag(at: caret) != nil { caret += 1 }
+            if caret < text.length { caret = NSMaxRange(text.rangeOfComposedCharacterSequence(at: caret)) }
+        } else {
+            while caret > 0, tag(at: caret - 1) != nil { caret -= 1 }
+            if caret > 0 { caret = text.rangeOfComposedCharacterSequence(at: caret - 1).location }
+        }
+        return caret == to ? nil : caret
+    }
+
+    /// Where a caret standing before a line's opening alignment, or after
+    /// its closing one, belongs: inside.
+    func caretInsideAlignment(_ caret: Int) -> Int? {
+        var inside = caret
+        while case .alignOpen? = tag(at: inside) { inside += 1 }
+        if inside == caret {
+            while inside > 0, case .alignClose? = tag(at: inside - 1) { inside -= 1 }
+        }
+        return inside == caret ? nil : inside
     }
 
     /// Tab indents the item the caret is in rather than dropping a tab into
@@ -1927,6 +2176,47 @@ final class NoteTextView: LatexSuiteTextView {
                             selection: edit.length > 0 ? NSRange(location: edit.caret, length: edit.length) : nil)
     }
 
+    /// A change from the format panel (`NoteFormat`), made in the Markdown
+    /// as one step of the note's undo. Words that were changed stay
+    /// selected and stay set — the note is put back with no line shown as
+    /// written, so a colour chosen is a colour seen, not a tag.
+    func format(named name: String, _ make: (String, NSRange) -> NoteFormat.Edit?) {
+        guard codeRowAtCaret() == nil, let coordinator, let (source, selection) = sourceAndSelection(),
+              let edit = make(source, selection) else { return }
+        let updated = (source as NSString).replacingCharacters(in: edit.range, with: edit.replacement)
+        coordinator.endTyping()
+        coordinator.registerStep(named: name, in: self)
+        coordinator.lastKnownMarkdown = updated
+        coordinator.markdown = updated
+        if edit.selection.length > 0 {
+            coordinator.restyle(self, source: updated, selecting: edit.selection)
+        } else {
+            coordinator.restyle(self, source: updated, caretSource: edit.selection.location)
+        }
+        // What is typed next is its own step, not more of this one.
+        coordinator.endTyping()
+        NoteFormatCenter.shared.read(self)
+    }
+
+    /// What the format panel shows for where the selection is.
+    func formatState() -> NoteFormat.State {
+        var state = NoteFormat.State()
+        guard let (source, selection) = sourceAndSelection() else { return state }
+        state = NoteFormat.state(in: source, selection: selection)
+        state.isEditing = true
+        state.isCode = codeRowAtCaret() != nil
+        return state
+    }
+
+    /// Tab's and ⇧Tab's move of a list's items, for the panel's two buttons.
+    func shiftForPanel(by step: Int) { _ = shiftListItems(by: step) }
+
+    override func becomeFirstResponder() -> Bool {
+        let became = super.becomeFirstResponder()
+        if became { NoteFormatCenter.shared.took(self) }
+        return became
+    }
+
     /// ⌘B, ⌘I and ⌘E set the selection bold, italic and as code — as
     /// Markdown, round the words — and take it off again when it is.
     override func keyDown(with event: NSEvent) {
@@ -1965,6 +2255,17 @@ final class NoteTextView: LatexSuiteTextView {
     /// recoloured when it is there in another colour (`NoteHighlightEdit`,
     /// one replacement, one step). `color` nil is the default colour.
     func toggleHighlight(_ color: String?) {
+        // In the note as written, with whatever else the words are: a colour
+        // of their own, a size, bold. The same highlight again takes it off;
+        // another colour changes it (`NoteFormat`).
+        if coordinator?.showsRawText != true, codeRowAtCaret() == nil, sourceAndSelection() != nil {
+            let name = color ?? NoteHighlight.defaultName
+            let now = formatState().style.highlight
+            format(named: L("하이라이트", "Highlight")) {
+                NoteFormat.set(.highlight(now == name ? nil : name), in: $0, selection: $1)
+            }
+            return
+        }
         coordinator?.endTyping()
         coordinator?.nextStepName = L("하이라이트", "Highlight")
         stepUndoManager?.beginUndoGrouping()
@@ -1978,11 +2279,34 @@ final class NoteTextView: LatexSuiteTextView {
         setSelectedRange(edit.selection)
     }
 
+    /// The words in one of the five colours — the same again takes it off,
+    /// another changes it. From the bar over a selection and the panel.
+    func toggleTextColor(_ name: String) {
+        guard coordinator?.showsRawText != true, codeRowAtCaret() == nil, let hex = NoteSpanStyle.ink(named: name) else { return }
+        let now = formatState().style.color
+        format(named: L("글자 색", "Text Color")) {
+            NoteFormat.set(.color(now == hex ? nil : hex), in: $0, selection: $1)
+        }
+    }
+
     func toggleEmphasis(_ mark: String) {
+        // A colour for the words, from the bar.
+        if mark.hasPrefix("color:") { return toggleTextColor(String(mark.dropFirst(6))) }
         // A highlight's marks go through their own edit.
         if mark.hasPrefix("==") {
             let name = mark.dropFirst(2)
             toggleHighlight(name.hasPrefix("{") && name.hasSuffix("}") ? String(name.dropFirst().dropLast()) : nil)
+            return
+        }
+        // Bold and italic over a selection are set in the note as written,
+        // so they go with a colour or a highlight the words already have —
+        // round a span, Markdown's stars would have shown its tags.
+        if (mark == "**" || mark == "*"), selectedRange().length > 0, coordinator?.showsRawText != true,
+           codeRowAtCaret() == nil, sourceAndSelection() != nil {
+            let now = formatState().style
+            format(named: mark == "**" ? L("굵게", "Bold") : L("기울임", "Italic")) {
+                NoteFormat.set(mark == "**" ? .bold(!now.bold) : .italic(!now.italic), in: $0, selection: $1)
+            }
             return
         }
         let text = string as NSString

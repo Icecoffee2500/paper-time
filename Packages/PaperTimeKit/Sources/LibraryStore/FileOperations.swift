@@ -279,18 +279,7 @@ public enum FileOperations {
             return
         }
         func request() {
-            guard let items = manager.enumerator(at: directory, includingPropertiesForKeys: [.isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey], options: []) else { return }
-            for case let url as URL in items {
-                if url.lastPathComponent.hasSuffix(".icloud") {
-                    // The stub names the file: `.name.icloud` → `name`.
-                    let real = url.deletingLastPathComponent()
-                        .appending(path: String(url.lastPathComponent.dropFirst().dropLast(".icloud".count)))
-                    try? manager.startDownloadingUbiquitousItem(at: real)
-                } else if let values = try? url.resourceValues(forKeys: [.isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey]),
-                          values.isUbiquitousItem == true, values.ubiquitousItemDownloadingStatus == .notDownloaded {
-                    try? manager.startDownloadingUbiquitousItem(at: url)
-                }
-            }
+            requestPendingDownloads(in: directory)
             try? manager.startDownloadingUbiquitousItem(at: file)
         }
         request()
@@ -305,23 +294,56 @@ public enum FileOperations {
     /// Asks iCloud for whatever under a folder is not on this device yet, and
     /// returns at once. Cheap on a small folder; what an open paper's record
     /// needs every few seconds.
+    ///
+    /// Only what the library reads is asked about: the records under
+    /// `.papertime`, and PDFs. A library folder is somebody's folder — a
+    /// semester of coursework with a Python environment in it had tens of
+    /// thousands of files, and each one's download status is a round trip to
+    /// the cloud provider's daemon: the walk ran for more than five minutes
+    /// after every launch at a sixth of a core (2026-11-23, sampled in the
+    /// installed 1.1.0). So hidden folders other than ours are not entered —
+    /// the same folders the library's own walk leaves alone — and a file
+    /// that is neither a record nor a PDF is not asked about at all. Nothing
+    /// is prefetched by the enumerator either: that asks the same question
+    /// of every item before the loop can decline to.
     public static func requestPendingDownloads(in directory: URL) {
         let manager = FileManager.default
-        guard let items = manager.enumerator(
-            at: directory,
-            includingPropertiesForKeys: [.isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey],
-            options: []
-        ) else { return }
+        guard let items = manager.enumerator(at: directory, includingPropertiesForKeys: nil, options: []) else { return }
+        let support = LibraryLayout.supportDirectoryName
+        // Whether the walk started inside our own folder (a paper's record).
+        let startedInside = directory.pathComponents.contains(support)
         for case let url as URL in items {
-            if url.lastPathComponent.hasSuffix(".icloud") {
+            let name = url.lastPathComponent
+            if url.hasDirectoryPath {
+                // Only for a directory: on a file, `skipDescendants()` skips
+                // the directory listed before it (0.9.33).
+                if !startedInside, wouldNotHoldPapers(name, support: support) { items.skipDescendants() }
+                continue
+            }
+            if name.hasSuffix(".icloud") {
+                // The stub names the file: `.name.icloud` → `name`.
                 let real = url.deletingLastPathComponent()
-                    .appending(path: String(url.lastPathComponent.dropFirst().dropLast(".icloud".count)))
+                    .appending(path: String(name.dropFirst().dropLast(".icloud".count)))
+                guard startedInside || isOurs(real, support: support) else { continue }
                 try? manager.startDownloadingUbiquitousItem(at: real)
-            } else if let values = try? url.resourceValues(forKeys: [.isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey]),
+            } else if startedInside || isOurs(url, support: support),
+                      let values = try? url.resourceValues(forKeys: [.isUbiquitousItemKey, .ubiquitousItemDownloadingStatusKey]),
                       values.isUbiquitousItem == true, values.ubiquitousItemDownloadingStatus == .notDownloaded {
                 try? manager.startDownloadingUbiquitousItem(at: url)
             }
         }
+    }
+
+    /// A folder the library never reads papers from: hidden ones other than
+    /// its own, and the places tools keep their thousands of files.
+    static func wouldNotHoldPapers(_ name: String, support: String) -> Bool {
+        if name == support { return false }
+        return name.hasPrefix(".") || name == "node_modules" || name == "__pycache__" || name == "site-packages"
+    }
+
+    /// A record of ours, or a PDF.
+    private static func isOurs(_ url: URL, support: String) -> Bool {
+        url.pathExtension.lowercased() == "pdf" || url.pathComponents.contains(support)
     }
 
     /// Whether a directory holds iCloud stubs for files not yet on this device.

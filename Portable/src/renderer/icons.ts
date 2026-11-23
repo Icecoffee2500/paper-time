@@ -504,6 +504,21 @@ const SHAPES = {
   'text.alignleft': `<path d="M2.6 4h10.8M2.6 7h7M2.6 10h10.8M2.6 13h7"/>`,
   'text.aligncenter': `<path d="M2.6 4h10.8M4.5 7h7M2.6 10h10.8M4.5 13h7"/>`,
   'text.alignright': `<path d="M2.6 4h10.8M6.4 7h7M2.6 10h10.8M6.4 13h7"/>`,
+  'text.justify': `<path d="M2.6 4h10.8M2.6 7h10.8M2.6 10h10.8M2.6 13h10.8"/>`,
+  // A list's lines stepping in, and out: the arrow says which way.
+  'increase.indent': `<path d="M2.6 3.6h10.8M7.4 6.6h6M7.4 9.4h6M2.6 12.4h10.8M2.8 6.2 4.9 8 2.8 9.8"/>`,
+  'decrease.indent': `<path d="M2.6 3.6h10.8M7.4 6.6h6M7.4 9.4h6M2.6 12.4h10.8M4.9 6.2 2.8 8l2.1 1.8"/>`,
+  // The format: a brush, its handle up to the right.
+  paintbrush: `
+    <path d="M13.4 2.6 7.6 8.4"/>
+    <path d="M7.6 8.4c1.2.2 1.9.9 2 2.1-.3 2.2-2.6 3.1-6.2 2.7 1.3-.8 1.2-1.9 1.5-3 .4-1.3 1.4-1.9 2.7-1.8Z"/>`,
+  // A picture: a frame, a sun and a hill.
+  photo: `
+    <rect x="1.8" y="3" width="12.4" height="10" rx="2"/>
+    <circle cx="5.4" cy="6.4" r="1.1"/>
+    <path d="m2.4 11.6 3.4-3 2.6 2.2 2.4-2.6 3 3.2"/>`,
+  // A letter: the words themselves.
+  character: `<path d="M4 13 8 3l4 10M5.5 9.6h5"/>`,
   // As wide as its words, or as tall as they need.
   'arrow.left.and.right.text.vertical': `
     <path d="M2.4 8h11.2M4.6 5.8 2.4 8l2.2 2.2M11.4 5.8 13.6 8l-2.2 2.2"/>

@@ -54,7 +54,7 @@ struct BoardTable: NSViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
-    func makeNSView(context: Context) -> NSScrollView {
+    func makeNSView(context: Context) -> TableEnclosure {
         let table = Table()
         table.headerView = nil
         table.style = .plain
@@ -91,11 +91,11 @@ struct BoardTable: NSViewRepresentable {
         scroll.drawsBackground = false
         scroll.automaticallyAdjustsContentInsets = false
         scroll.contentInsets = NSEdgeInsets(top: 0, left: 0, bottom: 14, right: 0)
-        return scroll
+        return TableEnclosure(scroll)
     }
 
-    func updateNSView(_ scroll: NSScrollView, context: Context) {
-        if let table = scroll.documentView as? NSTableView {
+    func updateNSView(_ enclosure: TableEnclosure, context: Context) {
+        if let table = enclosure.scroll.documentView as? NSTableView {
             let type = NSPasteboard.PasteboardType(UTType.paperTimePaper.identifier)
             let takes = table.registeredDraggedTypes.contains(type)
             if reorders, !takes { table.registerForDraggedTypes([type]) }
@@ -109,6 +109,16 @@ struct BoardTable: NSViewRepresentable {
     /// down, and the columns slide in SwiftUI, under a pinned title.
     final class Sliding: NSScrollView {
         weak var coordinator: Coordinator?
+
+        /// A scroll view that overrides `scrollWheel` is taken out of
+        /// responsive scrolling unless it says this: AppKit then scrolls it
+        /// on the main thread, event by event, with no rows prepared ahead —
+        /// every row that comes into view is built inside the frame that
+        /// shows it, which is what a scroll of this table still felt like
+        /// after the rest was fixed (2026-11-23). The override below only
+        /// takes the sideways swipes; everything else goes to `super`, where
+        /// the system's own tracking takes the gesture over.
+        override class var isCompatibleWithResponsiveScrolling: Bool { true }
 
         override func scrollWheel(with event: NSEvent) {
             guard let coordinator, let slide = coordinator.slide, coordinator.slideLimit > 0 else {

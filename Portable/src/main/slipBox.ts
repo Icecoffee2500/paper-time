@@ -19,6 +19,8 @@ import { samePath } from '../shared/paths.js'
 import fs from 'node:fs'
 import fsp from 'node:fs/promises'
 import path from 'node:path'
+import { randomUUID } from 'node:crypto'
+import { fileURLToPath } from 'node:url'
 import * as L from './layout.js'
 import { trimWhitespaceAndNewlines, zettelFromText, zettelIsEmpty, zettelText, type Zettel } from '../shared/zettel.js'
 import { DEEPEST_AREA, areaAfterRename, areaParent, isAreaName, renamedArea, sortAreas } from '../shared/noteAreas.js'
@@ -321,8 +323,33 @@ export class SlipBoxFolder {
         if ((await visibleEntries(folder)).length === 0) await fsp.rm(folder, { recursive: true, force: true }).catch(() => undefined)
       }
     }
+    // The notes' pictures go with them: the hidden folder beside the notes,
+    // each file by its own name — names are never reused, so one already
+    // there is that picture (`LooseNotes.move`).
+    const pictures = path.join(this.directory, PICTURES)
+    const files = await fsp.readdir(pictures).catch(() => [] as string[])
+    if (files.length > 0) {
+      const landing = path.join(into.directory, PICTURES)
+      await fsp.mkdir(landing, { recursive: true }).catch(() => undefined)
+      for (const name of files) {
+        try {
+          if (!fs.existsSync(path.join(landing, name))) await fsp.copyFile(path.join(pictures, name), path.join(landing, name))
+          await fsp.rm(path.join(pictures, name), { force: true })
+        } catch {
+          // Left where it was: still read from there while that box is open.
+        }
+      }
+      if ((await fsp.readdir(pictures).catch(() => ['x'])).length === 0) await fsp.rmdir(pictures).catch(() => undefined)
+    }
     return { moved, kept }
   }
+}
+
+/** The folder of a box's pictures: hidden, so it is not taken for an area (`NoteImages.folderName`). */
+export const PICTURES = '.assets'
+const PICTURE_KINDS: Record<string, string> = {
+  png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp',
+  heic: 'image/heic', tiff: 'image/tiff', tif: 'image/tiff',
 }
 
 /** A note's identifier: its file's name without `.md`. */
@@ -659,6 +686,60 @@ export class NotesStore {
       const home = (known ? this.box(known) : undefined) ?? this.loose
       await home.deleteNote(id)
       this.boxByNote.delete(id)
+    })
+  }
+
+  /**
+   * The picture a note's `![](…)` names, as a data URL: one of ours by its
+   * name, in whichever box holds it — a note carried from one box to
+   * another still finds its picture while both are open — or a picture
+   * anywhere, by its whole path (`NoteImages.url`). Null when it is not
+   * there, or not a picture.
+   */
+  async picture(written: string): Promise<string | null> {
+    let decoded = written
+    try { decoded = decodeURIComponent(written) } catch { /* as written */ }
+    let file: string | null = null
+    if (decoded.startsWith(`${PICTURES}/`)) {
+      const name = decoded.slice(PICTURES.length + 1)
+      if (name.includes('/') || name.includes('\\') || name.startsWith('.')) return null
+      file = this.boxes().map((box) => path.join(box.directory, PICTURES, name)).find((one) => fs.existsSync(one)) ?? null
+    } else if (decoded.startsWith('file://')) {
+      try { file = fileURLToPath(written) } catch { file = null }
+    } else if (path.isAbsolute(decoded)) {
+      file = decoded
+    }
+    if (!file) return null
+    const kind = PICTURE_KINDS[path.extname(file).slice(1).toLowerCase()]
+    if (!kind) return null
+    try {
+      const bytes = await fsp.readFile(file)
+      // A picture, not a film: forty megabytes is past what a note shows.
+      if (bytes.length === 0 || bytes.length > 40 * 1024 * 1024) return null
+      return `data:${kind};base64,${bytes.toString('base64')}`
+    } catch {
+      return null
+    }
+  }
+
+  /**
+   * Keeps a picture in the folder of the box a note is in and gives back
+   * what the note writes for it. The name is new every time: two pictures
+   * are never one file, and nothing is written over (`NoteImages.keep`).
+   */
+  keepPicture(noteID: string, bytes: Uint8Array, extension: string): Promise<string | null> {
+    return this.run(async () => {
+      const kind = extension.toLowerCase().replace(/^\./, '')
+      if (!PICTURE_KINDS[kind] || bytes.length === 0) return null
+      const known = this.boxByNote.get(noteID)
+      const home = (known ? this.box(known) : undefined) ?? this.loose
+      const directory = path.join(home.directory, PICTURES)
+      await fsp.mkdir(directory, { recursive: true })
+      const name = `${randomUUID().toLowerCase()}.${kind}`
+      const file = path.join(directory, name)
+      noteOwnWrite(file)
+      await fsp.writeFile(file, bytes, { flag: 'wx' })
+      return `${PICTURES}/${name}`
     })
   }
 

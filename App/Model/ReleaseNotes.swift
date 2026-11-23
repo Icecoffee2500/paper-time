@@ -230,6 +230,75 @@ enum ReleaseNotes {
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
         Release(
+            version: "1.1.1",
+            date: Text2("2026년 11월", "November 2026"),
+            note: Text2(
+                "노트에 서식이 생겼어요. 글꼴과 크기, 글자 색, 정렬, 그림까지 인스펙터의 패널에서 고르고, 긴 목록은 가볍게 넘어가요.",
+                "Notes take formatting. Choose the font, the size, a color, the alignment and pictures in the inspector’s panel, and long lists scroll lightly."
+            ),
+            added: [
+                Entry(
+                    Text2("노트 서식", "Note format"),
+                    Text2(
+                        "노트 위의 붓 단추를 누르면 인스펙터의 Tools 탭이 서식 패널이 돼요. 문단 스타일, 글꼴, 크기, 굵게·기울임·밑줄·취소선, 정렬, 목록을 골라요. 노트는 여전히 Markdown 파일이에요.",
+                        "Press the brush over a note and the inspector’s Tools tab becomes its format panel: paragraph style, font, size, bold, italic, underline, strikethrough, alignment and lists. The note is still a Markdown file."
+                    ),
+                    demo: .noteFormat, featured: true, devices: [.mac]
+                ),
+                Entry(
+                    Text2("글자 색", "Text color"),
+                    Text2(
+                        "형광펜과 같은 다섯 색으로 글자를 칠해요. 고른 글 위에 뜨는 막대에서 형광펜 단추를 누르면 글자 색으로 바뀌어요. 형광펜과 글자 색은 함께 쓸 수 있어요.",
+                        "Color words in the highlighter’s five colors. On the bar over a selection, press the highlighter button to switch to text color. A highlight and a color go together."
+                    )
+                ),
+                Entry(
+                    Text2("노트의 그림", "Pictures in notes"),
+                    Text2(
+                        "그림을 붙여 넣거나 끌어다 놓으면 문단 사이에 놓여요. 그림 파일은 노트 옆 폴더에 함께 있어서 폴더를 옮겨도 따라가요.",
+                        "Paste or drop a picture and it sits between paragraphs. The file is kept in a folder beside the notes, so it moves with them."
+                    )
+                ),
+                Entry(
+                    Text2("눈에 띄는 글머리표", "Bullets you can see"),
+                    Text2(
+                        "글머리표가 글자와 같은 색으로, 한 단 크게 찍혀요.",
+                        "Bullets are set in the text’s own color, a size larger."
+                    )
+                ),
+            ],
+            fixed: [
+                Entry(
+                    Text2("느린 스크롤", "Slow scrolling"),
+                    Text2(
+                        "옆 목록과 논문 목록을 넘길 때 창 전체를 다시 배치하던 것을 고쳤어요. 옆 목록은 한 걸음이 스무 배쯤 빨라졌어요.",
+                        "Scrolling the sidebar or the paper list laid out the whole window again at every step. The sidebar now takes about a twentieth of the time."
+                    )
+                ),
+                Entry(
+                    Text2("클라우드 폴더 훑기", "Walking the cloud folder"),
+                    Text2(
+                        "3초마다 라이브러리 폴더 전체를 훑던 것을 기록과 PDF만 묻도록 줄였어요.",
+                        "The library folder was walked whole every three seconds. Only records and PDFs are asked about now."
+                    )
+                ),
+                Entry(
+                    Text2("낱말 속 형광펜", "A highlight inside a word"),
+                    Text2(
+                        "낱말 한가운데서 시작한 형광펜이 기호째 보이던 것을 고쳤어요.",
+                        "A highlight begun in the middle of a word showed its marks instead of the color."
+                    )
+                ),
+                Entry(
+                    Text2("제목에 보이던 태그", "Tags in a note’s title"),
+                    Text2(
+                        "색을 입힌 첫 줄이 노트 목록에서 태그째 보이던 것을 고쳤어요.",
+                        "A note whose first line was colored showed its tags in the list of notes."
+                    )
+                ),
+            ]
+        ),
+        Release(
             version: "1.1.0",
             date: Text2("2026년 11월", "November 2026"),
             note: Text2(
@@ -3079,6 +3148,10 @@ enum ReleaseNotes {
         /// language — and as the note sets it: a small code editor with the
         /// language's name, a copy button, numbered lines in Xcode's colours.
         case noteCodeBlock
+        /// A line of a note and the format panel's row for it: bold, an
+        /// underline, the five colours for the words and the five for the
+        /// highlighter, and where the line stands across the page.
+        case noteFormat
         /// A paragraph on the page with the sentence ⌘L quoted from it
         /// tinted, and the note it goes back to: pressing the tint makes the
         /// quotation in the note glow.
