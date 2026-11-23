@@ -54,7 +54,7 @@ struct BoardTable: NSViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
-    func makeNSView(context: Context) -> NSScrollView {
+    func makeNSView(context: Context) -> TableEnclosure {
         let table = Table()
         table.headerView = nil
         table.style = .plain
@@ -91,11 +91,11 @@ struct BoardTable: NSViewRepresentable {
         scroll.drawsBackground = false
         scroll.automaticallyAdjustsContentInsets = false
         scroll.contentInsets = NSEdgeInsets(top: 0, left: 0, bottom: 14, right: 0)
-        return scroll
+        return TableEnclosure(scroll)
     }
 
-    func updateNSView(_ scroll: NSScrollView, context: Context) {
-        if let table = scroll.documentView as? NSTableView {
+    func updateNSView(_ enclosure: TableEnclosure, context: Context) {
+        if let table = enclosure.scroll.documentView as? NSTableView {
             let type = NSPasteboard.PasteboardType(UTType.paperTimePaper.identifier)
             let takes = table.registeredDraggedTypes.contains(type)
             if reorders, !takes { table.registerForDraggedTypes([type]) }

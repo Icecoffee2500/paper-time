@@ -65,7 +65,7 @@ struct PaperTable: NSViewRepresentable {
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
-    func makeNSView(context: Context) -> NSScrollView {
+    func makeNSView(context: Context) -> TableEnclosure {
         let table = Table()
         table.headerView = nil
         table.style = .inset
@@ -93,14 +93,14 @@ struct PaperTable: NSViewRepresentable {
         scroll.automaticallyAdjustsContentInsets = false
         scroll.contentView.postsBoundsChangedNotifications = true
         context.coordinator.watchScrolling(scroll)
-        return scroll
+        return TableEnclosure(scroll)
     }
 
-    func updateNSView(_ scroll: NSScrollView, context: Context) {
+    func updateNSView(_ enclosure: TableEnclosure, context: Context) {
         context.coordinator.apply(self)
     }
 
-    static func dismantleNSView(_ scroll: NSScrollView, coordinator: Coordinator) {
+    static func dismantleNSView(_ enclosure: TableEnclosure, coordinator: Coordinator) {
         coordinator.stopWatching()
     }
 
@@ -428,16 +428,72 @@ struct PaperTable: NSViewRepresentable {
                 return
             }
             let made = RowDragHost(rootView: view)
-            made.translatesAutoresizingMaskIntoConstraints = false
+            // The row is the size the table gives it, and says nothing back.
+            // Left to its defaults a hosting view works out its smallest,
+            // largest and natural sizes each time its content changes and
+            // posts them as constraints — a second pass over the row's whole
+            // layout for every row that scrolls into view, and a change in
+            // constraints that sent the window's own SwiftUI (the board, its
+            // header, the sidebar) through layout again on every step of a
+            // scroll (2026-11-23: 95 ms a step on a shelf of 505).
+            made.sizingOptions = []
+            made.safeAreaRegions = []
+            made.frame = bounds
+            made.autoresizingMask = [.width, .height]
             addSubview(made)
-            NSLayoutConstraint.activate([
-                made.leadingAnchor.constraint(equalTo: leadingAnchor),
-                made.trailingAnchor.constraint(equalTo: trailingAnchor),
-                made.topAnchor.constraint(equalTo: topAnchor),
-                made.bottomAnchor.constraint(equalTo: bottomAnchor),
-            ])
             host = made
         }
+    }
+}
+
+/// What a table of ours stands in, between it and SwiftUI: the place where
+/// the table's housekeeping stops.
+///
+/// A table takes row views out and puts them back as it scrolls, and every
+/// one of those tells AppKit «constraints under here may need updating».
+/// AppKit passes that up the view tree, container by container, until it
+/// reaches the view SwiftUI keeps an AppKit view in — which reads it as «the
+/// view's size may have changed» and invalidates the layout it sits in: the
+/// window's whole SwiftUI, laid out again for every step of a scroll. On a
+/// shelf of 505 documents that was 50–95 ms a step where the table's own work
+/// is a fraction of it (2026-11-23; `--papertime-scroll-test` names who
+/// told the root it needs layout).
+///
+/// The table's size is whatever it is given (`sizeThatFits` says so), so
+/// nothing above has anything to learn from the message. It is stopped here
+/// and answered here: the enclosure asks for its own layout, and in it has
+/// the table's subtree update whatever constraints it holds.
+///
+/// The message is AppKit's own, not in its headers. Should it be renamed,
+/// this never runs and scrolling costs what it did before — nothing breaks.
+final class TableEnclosure: NSView {
+    let scroll: NSScrollView
+    private var owesConstraints = false
+
+    init(_ scroll: NSScrollView) {
+        self.scroll = scroll
+        super.init(frame: .zero)
+        scroll.frame = bounds
+        scroll.autoresizingMask = [.width, .height]
+        addSubview(scroll)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError() }
+
+    @objc(_informContainerThatSubviewsNeedUpdateConstraints)
+    func subviewsNeedUpdateConstraints() {
+        guard !owesConstraints else { return }
+        owesConstraints = true
+        needsLayout = true
+    }
+
+    override func layout() {
+        if owesConstraints {
+            owesConstraints = false
+            scroll.updateConstraintsForSubtreeIfNeeded()
+        }
+        super.layout()
     }
 }
 
@@ -454,6 +510,27 @@ struct PaperTable: NSViewRepresentable {
 final class RowDragHost: NSHostingView<AnyView> {
     private var pressedAt: NSPoint?
     private var source: RowDragSource?
+
+    /// A row asks for its own layout and nobody else's.
+    ///
+    /// A hosting view that moves — and every row moves on every step of a
+    /// scroll — re-examines its safe area, asks for an update, and marks
+    /// its constraints as needing one. AppKit carries that mark up the view
+    /// tree to the view SwiftUI keeps the table in, and SwiftUI takes it as
+    /// «the table's size may have changed»: the window's whole layout — the
+    /// board, its header, the sidebar, every pane — ran again for each step,
+    /// which was half of what a scroll cost and all of why it grew with the
+    /// window rather than with the list (2026-11-23, found by exchanging
+    /// `setNeedsLayout:` for two steps and printing who called it on the
+    /// root). The row has no constraints to update (`sizingOptions` is
+    /// empty, its frame is the cell's), so the mark is kept here and the
+    /// update it stood for is done by the row's own layout.
+    override var needsUpdateConstraints: Bool {
+        get { super.needsUpdateConstraints }
+        set {
+            if newValue { needsLayout = true } else { super.needsUpdateConstraints = false }
+        }
+    }
 
     override func mouseDown(with event: NSEvent) {
         pressedAt = event.locationInWindow

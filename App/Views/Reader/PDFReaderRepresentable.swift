@@ -2214,6 +2214,11 @@ final class ReaderCoordinator: NSObject {
         ) { [weak self, weak view] event in
             guard let self, let view, let window = view.window,
                   event.window === window,
+                  // The page's own rectangle first, which is arithmetic. The
+                  // hit test below walks the window's whole SwiftUI, and this
+                  // runs for every scroll event in the window — a scroll over
+                  // the sidebar or the list paid for it once per open reader.
+                  view.convert(view.bounds, to: nil).contains(event.locationInWindow),
                   // What is actually under the pointer, from the top of the
                   // window down — not whether the page is somewhere beneath
                   // it. A list floating over the page is over the page, and

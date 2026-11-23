@@ -1019,20 +1019,26 @@ public enum WindowProbe {
         return tallest
     }
 
+    /// Every list in the window that has somewhere to go, each timed on its
+    /// own: the sidebar and the paper list are different views with different
+    /// costs, and «the tallest one» was whichever happened to be longer.
     private static func scrollTest(in content: NSView, steps: Int, say: (String) -> Void) {
-        var tallest: NSScrollView?
+        var found: [NSScrollView] = []
         func walk(_ view: NSView) {
-            if let scroll = view as? NSScrollView,
-               let document = scroll.documentView,
-               document.frame.height > (tallest?.documentView?.frame.height ?? 0) {
-                tallest = scroll
+            if let scroll = view as? NSScrollView, let document = scroll.documentView,
+               document.frame.height > scroll.contentView.bounds.height + 1 {
+                found.append(scroll)
             }
             for child in view.subviews { walk(child) }
         }
         walk(content)
-        guard let scroll = tallest, let document = scroll.documentView else {
-            return say("scroll test: no scroll view")
-        }
+        guard !found.isEmpty else { return say("scroll test: no scroll view") }
+        for scroll in found { scrollTest(scroll, in: content, steps: steps, say: say) }
+    }
+
+    private static func scrollTest(_ scroll: NSScrollView, in content: NSView, steps: Int, say: (String) -> Void) {
+        guard let document = scroll.documentView else { return }
+        say("scroll test: — \(type(of: document)), \(Int(scroll.frame.width)) wide at x \(Int(scroll.convert(scroll.bounds, to: nil).minX))")
         let visible = scroll.contentView.bounds.height
         let travel = max(document.frame.height - visible, 0)
         guard travel > 0 else { return say("scroll test: nothing to scroll") }
@@ -1053,6 +1059,17 @@ public enum WindowProbe {
             let fraction = Double(step % 40) / 39
             let y = travel * fraction
             let started = DispatchTime.now().uptimeNanoseconds
+            // Who a step of scrolling sends through layout. A list that
+            // scrolls should lay out its own rows and nothing above itself;
+            // when the window's root is told it needs layout, the stack that
+            // told it is printed — that is how the rows' hosting views were
+            // found to be waking the whole window (`TableEnclosure`).
+            if step == 3 { LayoutCulprit.watch(content) }
+            if step == 5 {
+                let lines = LayoutCulprit.stop()
+                say("scroll test: the window's root was told to lay out \(LayoutCulprit.seen) time(s) in two steps")
+                for line in lines { say(line) }
+            }
             scroll.contentView.scroll(to: NSPoint(x: 0, y: y))
             scroll.reflectScrolledClipView(scroll.contentView)
             content.window?.displayIfNeeded()
@@ -1102,6 +1119,47 @@ public enum WindowProbe {
             if let found = firstTextField(in: child, marker: marker) { return found }
         }
         return nil
+    }
+}
+#endif
+
+
+#if os(macOS)
+/// Who tells a view it needs layout: for the scroll test, which found the
+/// window's root laid out again on every step and could not say by whom.
+/// `setNeedsLayout:` is exchanged for the length of two steps and the stack
+/// kept when the watched view is the one told.
+enum LayoutCulprit {
+    nonisolated(unsafe) static weak var watched: NSView?
+    nonisolated(unsafe) static var original: IMP?
+    nonisolated(unsafe) static var lines: [String] = []
+    nonisolated(unsafe) static var seen = 0
+
+    static func watch(_ view: NSView) {
+        guard original == nil, let method = class_getInstanceMethod(NSView.self, #selector(setter: NSView.needsLayout)) else { return }
+        watched = view
+        typealias Setter = @convention(c) (NSView, Selector, Bool) -> Void
+        let old = method_getImplementation(method)
+        original = old
+        let block: @convention(block) (NSView, Bool) -> Void = { view, flag in
+            if flag, view === LayoutCulprit.watched {
+                LayoutCulprit.seen += 1
+                guard LayoutCulprit.seen <= 1 else { return unsafeBitCast(old, to: Setter.self)(view, #selector(setter: NSView.needsLayout), flag) }
+                LayoutCulprit.lines.append("scroll test: the root was told it needs layout by —")
+                for line in Thread.callStackSymbols.dropFirst(1).prefix(40) {
+                    LayoutCulprit.lines.append("scroll test:    " + String(line.dropFirst(4).prefix(150)))
+                }
+            }
+            unsafeBitCast(old, to: Setter.self)(view, #selector(setter: NSView.needsLayout), flag)
+        }
+        method_setImplementation(method, imp_implementationWithBlock(block))
+    }
+
+    static func stop() -> [String] {
+        guard let old = original, let method = class_getInstanceMethod(NSView.self, #selector(setter: NSView.needsLayout)) else { return [] }
+        method_setImplementation(method, old)
+        original = nil
+        return lines
     }
 }
 #endif

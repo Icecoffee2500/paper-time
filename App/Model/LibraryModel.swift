@@ -144,6 +144,11 @@ public final class LibraryModel {
         LibraryStore.normalizedPath(paper.documentURL.deletingLastPathComponent()) == LibraryStore.normalizedPath(folder)
     }
 
+    /// How many papers sit directly in a folder, from the index.
+    func directCount(in folder: URL) -> Int {
+        counts.direct[LibraryStore.normalizedPath(folder)] ?? 0
+    }
+
     func isUnder(_ paper: LoadedPaper, _ folder: URL) -> Bool {
         let base = folder.path(percentEncoded: false)
         let path = paper.documentURL.path(percentEncoded: false)
@@ -170,14 +175,16 @@ public final class LibraryModel {
         let base = LibraryStore.normalizedPath(folder)
         let prefix = base + "/"
         var counts: [String: Int] = [:]
-        for paper in papers where paper.meta.parentID == nil {
-            let path = LibraryStore.normalizedPath(paper.documentURL.deletingLastPathComponent())
+        // From the index of where papers sit, not from the papers: one entry
+        // per folder rather than one normalised path per paper, each time
+        // the sidebar is drawn.
+        for (path, sitting) in self.counts.direct {
             guard path.hasPrefix(prefix) else { continue }
             let parts = path.dropFirst(prefix.count).split(separator: "/")
             guard let head = parts.first.map(String.init), !head.isEmpty else { continue }
             // Counted where it sits, which is what each folder's shelf shows;
             // a paper deeper down still puts its folders in the tree.
-            counts[head, default: 0] += parts.count == 1 ? 1 : 0
+            counts[head, default: 0] += parts.count == 1 ? sitting : 0
         }
         for path in diskFolders where path.hasPrefix(prefix) {
             let rest = path.dropFirst(prefix.count)
@@ -414,6 +421,13 @@ public final class LibraryModel {
         public var documents = 0
         /// How many papers each folder holds, by its root.
         public var folders: [URL: Int] = [:]
+        /// How many papers sit directly in each folder, by the folder's
+        /// normalised path — what a folder's row in the sidebar shows.
+        /// Counted once per change to the library: the rows used to count
+        /// for themselves, every paper's path normalised once per folder row
+        /// each time the sidebar was drawn, and the sidebar is drawn on every
+        /// step of a scroll (2026-11-23: 48–72 ms a step with 600 papers).
+        public var direct: [String: Int] = [:]
         public var unread = 0
         public var reading = 0
         public var read = 0
@@ -1180,6 +1194,7 @@ public final class LibraryModel {
             case .document: counts.documents += 1
             }
             counts.folders[rootURL(of: paper), default: 0] += 1
+            counts.direct[LibraryStore.normalizedPath(paper.documentURL.deletingLastPathComponent()), default: 0] += 1
             switch paper.state.readingStatus {
             case .unread: counts.unread += 1
             case .reading: counts.reading += 1
