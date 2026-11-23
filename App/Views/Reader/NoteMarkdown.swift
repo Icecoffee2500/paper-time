@@ -27,6 +27,9 @@ extension NSAttributedString.Key {
     /// across the note, so a line set again unchanged is the same line
     /// (`NoteEditor.changedLines` compares lines whole).
     static let paperTimePiece = NSAttributedString.Key("PaperTimePiece")
+    /// On the hidden piece that opens a highlight on the line being edited:
+    /// `==` opens and closes one, and which it is cannot be read off it.
+    static let paperTimeOpens = NSAttributedString.Key("PaperTimeOpens")
     /// Where the words a piece shows begin in its source, when they are
     /// written there as they are shown: the words of `**bold**` begin at 2.
     /// A caret put down among them goes to the same place among the words
@@ -190,6 +193,33 @@ enum NoteMarkdown {
         func isWritten(_ span: NSRange) -> Bool {
             written.contains { $0.location <= span.location && NSMaxRange(span) <= NSMaxRange($0) }
         }
+        // A span whose tags are out of sight on this line (`Tag`): the
+        // words between the two are set as the span sets them.
+        var spanned: [(NSRange, NoteSpanStyle)] = []
+        var marked: [(NSRange, String?)] = []
+        var open: NoteSpanStyle?
+        var highlight: String??
+        text.enumerateAttributes(in: range) { attributes, run, _ in
+            if let source = attributes[.paperTimeSource] as? String {
+                switch Tag(source) {
+                case .spanOpen(let style): open = style
+                case .spanClose: open = nil
+                case .highlight(let color):
+                    highlight = attributes[.paperTimeOpens] != nil ? .some(color) : nil
+                default: break
+                }
+            } else if let open {
+                spanned.append((run, open))
+            } else if let highlight {
+                marked.append((run, highlight))
+            }
+        }
+        for (run, style) in spanned { text.addAttributes(styledAttributes(style, in: block), range: run) }
+        for (run, color) in marked {
+            var attributes = highlightAttributes(in: block, color: color)
+            attributes.removeValue(forKey: .font)
+            text.addAttributes(attributes, range: run)
+        }
         let content = (text.string as NSString).substring(with: range) as NSString
         if holdsMarkup(content as String) {
             var index = 0
@@ -333,14 +363,18 @@ enum NoteMarkdown {
     static func markdown(from attributed: NSAttributedString) -> String {
         var result = ""
         var piece: Int?
+        var pieceSource: String?
         attributed.enumerateAttributes(
             in: NSRange(location: 0, length: attributed.length)
         ) { attributes, range, _ in
             if let source = attributes[.paperTimeSource] as? String {
                 // The rest of a piece already read.
+                // (Two lines joined put two pieces with one number side by
+                // side; what they stand for tells them apart.)
                 let number = attributes[.paperTimePiece] as? Int
-                if let number, number == piece { return }
+                if let number, number == piece, source == pieceSource { return }
                 piece = number
+                pieceSource = source
                 result += source
                 return
             }
@@ -938,10 +972,67 @@ enum NoteMarkdown {
             let mayHold = !revealed && Self.holdsMarkup(block.content)
             if revealed {
                 // As written, the syntax in the syntax colour and the
-                // emphasis already applied (`styleAsWritten`).
-                let words = NSMutableAttributedString(string: block.content, attributes: block.attributes(style: style))
-                styleAsWritten(words, range: NSRange(location: 0, length: words.length), block: block)
-                append(words, source: NSRange(location: contentStart, length: content.length))
+                // emphasis already applied (`styleAsWritten`) — but not the
+                // tags. A span's two tags and a paragraph's alignment are
+                // not Markdown anybody types: they are what the format
+                // panel wrote, and a line that showed them the moment the
+                // caret came to it showed a colour as «<span style=…>». They
+                // stay out of sight here too, each a piece of its own, with
+                // the words between them written and free to edit; a
+                // picture stays a picture.
+                let from = result.length
+                let attributes = block.attributes(style: style)
+                func written(_ range: NSRange) {
+                    guard range.length > 0 else { return }
+                    append(NSAttributedString(string: content.substring(with: range), attributes: attributes),
+                           source: NSRange(location: contentStart + range.location, length: range.length))
+                }
+                func tag(_ range: NSRange) {
+                    append(atomic(hiddenMarker, source: content.substring(with: range), attributes: attributes, style: style),
+                           source: NSRange(location: contentStart + range.location, length: range.length))
+                }
+                var at = 0
+                if Self.holdsTags(block.content) {
+                    while at < content.length, let token = nextToken(in: content, from: at) {
+                        let range = token.range
+                        switch token.kind {
+                        case .styled(_, _, _, let lead):
+                            let tail = (NoteSpanStyle.close as NSString).length
+                            written(NSRange(location: at, length: range.location - at))
+                            tag(NSRange(location: range.location, length: lead))
+                            written(NSRange(location: range.location + lead, length: range.length - lead - tail))
+                            tag(NSRange(location: NSMaxRange(range) - tail, length: tail))
+                        case .highlight(_, let color, _):
+                            // What the bar over a selection wrote: its
+                            // marks out of sight as a span's tags are.
+                            let lead = highlightLead(color: color)
+                            written(NSRange(location: at, length: range.location - at))
+                            tag(NSRange(location: range.location, length: lead))
+                            result.addAttribute(.paperTimeOpens, value: true,
+                                                range: NSRange(location: result.length - 1, length: 1))
+                            written(NSRange(location: range.location + lead, length: range.length - lead - 2))
+                            tag(NSRange(location: NSMaxRange(range) - 2, length: 2))
+                        case .hidden:
+                            written(NSRange(location: at, length: range.location - at))
+                            tag(range)
+                        case .image(_, let source):
+                            let picture = piece(for: token, block: block, style: style,
+                                                at: contentStart + range.location, alone: false)
+                            // One that is not here is its words, to be mended.
+                            if picture.string == source {
+                                written(NSRange(location: at, length: NSMaxRange(range) - at))
+                            } else {
+                                written(NSRange(location: at, length: range.location - at))
+                                append(picture, source: NSRange(location: contentStart + range.location, length: range.length))
+                            }
+                        default:
+                            written(NSRange(location: at, length: NSMaxRange(range) - at))
+                        }
+                        at = NSMaxRange(range)
+                    }
+                }
+                written(NSRange(location: at, length: content.length - at))
+                styleAsWritten(result, range: NSRange(location: from, length: result.length - from), block: block)
                 index = content.length
             }
             while index < content.length {
@@ -1657,6 +1748,38 @@ enum NoteMarkdown {
     static let highlightPattern = try! NSRegularExpression(
         pattern: #"(?<!=)==(?:\{(yellow|green|blue|pink|purple)\}|(?<![\p{L}\p{N}]==))(?![\s=])((?:[^=\n]|=(?!=))+?)(?<!\s)==(?!=)"#
     )
+    /// One of the four tags the format panel writes, as a piece's source:
+    /// what a hidden piece on the line being edited stands for.
+    enum Tag {
+        case spanOpen(NoteSpanStyle), spanClose, alignOpen, alignClose
+        /// `==` or `=={pink}`: either end of a highlight, by which comes
+        /// first.
+        case highlight(String?)
+
+        init?(_ source: String) {
+            if source == "==" { self = .highlight(nil); return }
+            if source.hasPrefix("=={"), source.hasSuffix("}") {
+                self = .highlight(String(source.dropFirst(3).dropLast()))
+                return
+            }
+            if source == NoteSpanStyle.close { self = .spanClose; return }
+            if source == NoteAlignment.close { self = .alignClose; return }
+            if source.hasPrefix("<p align=\""), source.hasSuffix("\">") { self = .alignOpen; return }
+            let head = "<span style=\""
+            if source.hasPrefix(head), source.hasSuffix("\">") {
+                self = .spanOpen(NoteSpanStyle(css: String(source.dropFirst(head.count).dropLast(2))))
+                return
+            }
+            return nil
+        }
+    }
+
+    /// Whether a line could hold a tag or a picture — one pass, before the
+    /// line is read for them.
+    static func holdsTags(_ content: String) -> Bool {
+        content.contains("<span ") || content.contains("<p align") || content.contains("![") || content.contains("==")
+    }
+
     /// A span with a style, on one line, with no span inside it.
     static let spanPattern = try! NSRegularExpression(
         pattern: #"<span style="([^"\n]*)">((?:(?!</?span)[^\n])*?)</span>"#

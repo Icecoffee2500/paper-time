@@ -456,5 +456,95 @@ enum NoteFormat {
         } while index < stop
         return ranges
     }
+    // MARK: - Tags left without their pair
+
+    /// The four tags, wherever they stand in a line.
+    static let tagPattern = try! NSRegularExpression(
+        pattern: #"<span style="[^"\n]*">|</span>|<p align="(?:left|center|right|justify)">|</p>"#)
+
+    /// A line with its tags in order again.
+    ///
+    /// The tags are out of sight in the editor, on the line being edited
+    /// too, and what is out of sight gets taken apart: a selection that
+    /// ends inside a coloured word takes the opening tag and leaves the
+    /// closing one, a line joined to the one above brings its alignment
+    /// into the middle of a sentence. A tag without its pair is read as the
+    /// characters it is, so the next time the note was set the reader saw
+    /// «</span>». So after an edit to a line that holds tags:
+    ///
+    /// - a closing span with no opening one before it goes, and an opening
+    ///   one never closed, and a span with nothing in it;
+    /// - alignment is the whole line's or nobody's: the line keeps the
+    ///   alignment it opens with, wrapped round all of its words — what a
+    ///   line joined on to its end brought is dropped — and a line that
+    ///   does not open with one has none.
+    ///
+    /// The words are never touched.
+    static func tidy(line: String) -> String {
+        guard line.contains("<") else { return line }
+        let block = NoteMarkdown.Block(line: line)
+        let content = block.content as NSString
+        let tags = tagPattern.matches(in: block.content, range: NSRange(location: 0, length: content.length))
+        guard !tags.isEmpty else { return line }
+        var kept = [Bool](repeating: false, count: tags.count)
+        var alignment: String?
+        var open: Int?
+        for (index, tag) in tags.enumerated() {
+            let written = content.substring(with: tag.range)
+            if written.hasPrefix("<p") {
+                if tag.range.location == 0 { alignment = written }
+            } else if written == NoteAlignment.close {
+                continue
+            } else if written == NoteSpanStyle.close {
+                // Closed, with words between.
+                if let opened = open, NSMaxRange(tags[opened].range) < tag.range.location {
+                    kept[opened] = true
+                    kept[index] = true
+                }
+                open = nil
+            } else {
+                open = index
+            }
+        }
+        var result = ""
+        var at = 0
+        for (index, tag) in tags.enumerated() {
+            result += content.substring(with: NSRange(location: at, length: tag.range.location - at))
+            if kept[index] { result += content.substring(with: tag.range) }
+            at = NSMaxRange(tag.range)
+        }
+        result += content.substring(from: at)
+        if let alignment { result = alignment + result + NoteAlignment.close }
+        return block.marker + result
+    }
+
+    /// How many characters that are not a tag's stand before `offset` in a
+    /// line — where a caret is among the words, whatever tags come and go.
+    static func visibleOffset(in line: String, at offset: Int) -> Int {
+        let text = line as NSString
+        var hidden = 0
+        for tag in tagPattern.matches(in: line, range: NSRange(location: 0, length: text.length)) {
+            guard tag.range.location < offset else { break }
+            hidden += min(NSMaxRange(tag.range), offset) - tag.range.location
+        }
+        return offset - hidden
+    }
+
+    /// The offset in a line after `visible` characters that are not a
+    /// tag's — past an opening tag that stands there, before a closing one:
+    /// inside what the tags are round.
+    static func offset(in line: String, visible: Int) -> Int {
+        let text = line as NSString
+        var seen = 0
+        var at = 0
+        for tag in tagPattern.matches(in: line, range: NSRange(location: 0, length: text.length)) {
+            let words = tag.range.location - at
+            if seen + words > visible { return at + (visible - seen) }
+            seen += words
+            if seen == visible, text.substring(with: tag.range).hasPrefix("</") { return tag.range.location }
+            at = NSMaxRange(tag.range)
+        }
+        return min(at + (visible - seen), text.length)
+    }
 }
 #endif
