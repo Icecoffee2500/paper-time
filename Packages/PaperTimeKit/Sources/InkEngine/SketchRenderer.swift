@@ -519,7 +519,7 @@ public enum SketchRenderer {
         // A card sized to its width is set as one line per paragraph; one
         // sized to its height wraps at its edge.
         let layout = SketchTypesetter.layout(
-            element.text, points: element.style.points, color: element.style.stroke.cgColor,
+            element.text, points: element.style.points, color: element.style.ink.cgColor,
             width: element.sizing == .autoWidth ? nil : inner.width, align: element.style.textAlign,
             fontName: element.style.fontName, scale: options.rasterScale
         )
@@ -541,7 +541,7 @@ public enum SketchRenderer {
         let inner = element.rect.insetBy(dx: SketchTypesetter.padding, dy: SketchTypesetter.padding)
         guard inner.width > 4 else { return }
         let layout = SketchTypesetter.layout(
-            element.text, points: element.style.points, color: element.style.stroke.cgColor,
+            element.text, points: element.style.points, color: element.style.ink.cgColor,
             width: inner.width, align: .center, fontName: element.style.fontName,
             scale: options.rasterScale
         )

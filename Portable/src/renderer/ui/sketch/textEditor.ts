@@ -36,8 +36,8 @@ export function beginTextEditing(reader: Reader, host: SketchInputHost, page: Pa
   area.style.whiteSpace = element.kind === 'text' && element.sizing === 'autoWidth' ? 'pre' : 'pre-wrap'
   area.style.font = fontSpec(element.style.points * size, element.style.fontName)
   area.style.lineHeight = `${textLineHeight(element.style.points, element.style.fontName) * size}px`
-  area.style.color = element.style.stroke.css
-  area.style.caretColor = element.style.stroke.css
+  area.style.color = element.style.ink.css
+  area.style.caretColor = element.style.ink.css
   area.style.textAlign = element.kind === 'text' ? element.style.textAlign : 'center'
   area.style.padding = element.kind === 'text' ? `${TEXT_PADDING * size}px` : '0'
   area.style.boxSizing = 'border-box'
@@ -85,8 +85,8 @@ export function placeEditor() {
   const size = page.viewport?.scale ?? 1
   area.style.font = fontSpec(element.style.points * size, element.style.fontName)
   area.style.lineHeight = `${textLineHeight(element.style.points, element.style.fontName) * size}px`
-  area.style.color = element.style.stroke.css
-  area.style.caretColor = element.style.stroke.css
+  area.style.color = element.style.ink.css
+  area.style.caretColor = element.style.ink.css
   area.style.textAlign = element.kind === 'text' ? element.style.textAlign : 'center'
   const box = element.kind !== 'text' ? rectInset(element.rect, TEXT_PADDING, TEXT_PADDING) : element.rect
   const topLeft = page.toView(box.x, rectMaxY(box))

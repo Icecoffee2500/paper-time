@@ -208,7 +208,7 @@ public enum SketchWriter {
         let annotation = PDFAnnotation(bounds: element.rect, forType: .freeText, withProperties: nil)
         annotation.contents = element.text
         annotation.font = font(for: element.style)
-        annotation.fontColor = color(element.style.stroke)
+        annotation.fontColor = color(element.style.ink)
         // The card behind the words, or nothing. PDFKit fills a free text's
         // box in its colour; clear is written as no colour at all.
         annotation.color = element.style.fill.map { color($0.flattenedOnWhite) } ?? PlatformColor.clear
@@ -227,7 +227,7 @@ public enum SketchWriter {
         let annotation = PDFAnnotation(bounds: inner, forType: .freeText, withProperties: nil)
         annotation.contents = element.text
         annotation.font = font(for: element.style)
-        annotation.fontColor = color(element.style.stroke)
+        annotation.fontColor = color(element.style.ink)
         annotation.color = PlatformColor.clear
         annotation.alignment = .center
         annotation.border = border(for: element.style, width: 0)

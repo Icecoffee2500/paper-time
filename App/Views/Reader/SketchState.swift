@@ -237,6 +237,31 @@ final class SketchState {
         if hasSelection { editor?.applyStyle(edit) }
     }
 
+    /// Whether a change of the edge's colour would carry words with it: a
+    /// card of text or a box with words in it is selected — or, with nothing
+    /// selected, the next thing drawn can hold words.
+    var holdsWords: Bool {
+        hasSelection ? selectedElements.contains { $0.kind == .text || !$0.text.isEmpty } : true
+    }
+
+    /// The words' colour, and theirs alone.
+    @MainActor
+    func setTextColor(_ color: SketchColor) {
+        change { $0.textColor = color }
+    }
+
+    /// The edge's colour. Words that had no colour of their own took the
+    /// edge's, so they are given the one they had first: recolouring a box
+    /// does not recolour what is written in it.
+    @MainActor
+    func setStrokeColor(_ color: SketchColor) {
+        let pins = holdsWords
+        change { style in
+            if pins, style.textColor == nil, !style.stroke.matches(color) { style.textColor = style.stroke }
+            style.stroke = color
+        }
+    }
+
     static let key = "sketchStyle"
 
     static func loadStyle() -> SketchStyle {
@@ -246,6 +271,10 @@ final class SketchState {
     }
 
     static func save(_ style: SketchStyle) {
+        // Not from a probe: it shares the installed copy's settings, and a
+        // probe that restyled its sample cards left the person's next shape
+        // blue with red words (2026-11-26).
+        guard Boot.setting("PAPERTIME_LIBRARY") == nil else { return }
         if let data = try? JSONEncoder().encode(style) { UserDefaults.standard.set(data, forKey: key) }
     }
 }

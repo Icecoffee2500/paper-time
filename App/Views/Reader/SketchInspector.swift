@@ -344,11 +344,11 @@ struct SketchInspector: View {
             }
         }) {
             if on {
-                colorRow(style.stroke, alpha: false) { color in state.change { $0.stroke = color } }
+                colorRow(style.stroke, alpha: false) { color in state.setStrokeColor(color) }
                 HStack(spacing: 5) {
                     ForEach(SketchColor.strokes.indices, id: \.self) { i in
                         let color = SketchColor.strokes[i]
-                        Button { state.change { $0.stroke = color } } label: {
+                        Button { state.setStrokeColor(color) } label: {
                             Circle()
                                 .fill(Color(cgColor: color.cgColor))
                                 .frame(width: 14, height: 14)
@@ -390,6 +390,26 @@ struct SketchInspector: View {
         let style = state.shownStyle
         let one = state.selectedOne
         return section(L("글", "Text")) {
+            // The words' own colour, apart from the edge's: it had been the
+            // edge's — one row under «Stroke» for both — so words could not
+            // be coloured without their box, and with the edge taken away
+            // the row went with it and there was no colour to choose.
+            colorRow(style.ink, alpha: false) { color in state.setTextColor(color) }
+            HStack(spacing: 5) {
+                ForEach(SketchColor.strokes.indices, id: \.self) { i in
+                    let color = SketchColor.strokes[i]
+                    Button { state.setTextColor(color) } label: {
+                        Circle()
+                            .fill(Color(cgColor: color.cgColor))
+                            .frame(width: 14, height: 14)
+                            .overlay(Circle().strokeBorder(.primary.opacity(0.15), lineWidth: 0.5))
+                            .padding(3)
+                            .overlay(Circle().strokeBorder(Color.accentColor, lineWidth: color.matches(style.ink) ? 2 : 0))
+                    }
+                    .buttonStyle(.plain)
+                    .help(L("글자 색", "Text Color"))
+                }
+            }
             fontMenu(style.fontName)
             HStack(spacing: 8) {
                 NumberField(label: L("크기", "Size"), value: style.points, wide: true) { value in

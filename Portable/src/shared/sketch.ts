@@ -175,6 +175,13 @@ export class SketchStyle {
   textAlign: TextAlign = 'left'
   /** A font family chosen by name; null is the bundled face. */
   fontName: string | null = null
+  /** The colour of the words, when it was chosen apart from the edge's; null is `stroke` (the Mac's `textColor`). */
+  textColor: SketchColor | null = null
+
+  /** The colour the words are drawn in. */
+  get ink(): SketchColor {
+    return this.textColor ?? this.stroke
+  }
 
   /** Every field defaults, so a file written by a version that knows more
    *  fields still reads, and one written by a version that knew fewer does
@@ -197,6 +204,7 @@ export class SketchStyle {
     if (typeof r.fontSize === 'number') style.fontSize = r.fontSize
     if (typeof r.textAlign === 'string') style.textAlign = r.textAlign as TextAlign
     if (typeof r.fontName === 'string') style.fontName = r.fontName
+    if (r.textColor) style.textColor = SketchColor.from(r.textColor)
     return style
   }
 
@@ -219,6 +227,7 @@ export class SketchStyle {
       fontSize: this.fontSize ?? undefined,
       textAlign: this.textAlign !== 'left' ? this.textAlign : undefined,
       fontName: this.fontName ?? undefined,
+      textColor: this.textColor ? this.textColor.encode() : undefined,
     }
   }
 
