@@ -230,6 +230,31 @@ enum ReleaseNotes {
     /// is what makes changelogs go unread.
     static let releases: [Release] = [
         Release(
+            version: "1.1.2",
+            date: Text2("2026년 11월", "November 2026"),
+            note: Text2(
+                "필기의 글자 색을 외곽선과 따로 골라요. 외곽선을 없애도 글자 색은 남아요.",
+                "Choose the color of a drawing’s words apart from its stroke. Take the stroke away and the words keep their color."
+            ),
+            added: [],
+            fixed: [
+                Entry(
+                    Text2("글 카드의 글자 색", "A card’s text color"),
+                    Text2(
+                        "글자 색이 외곽선 색 하나에 묶여 있어서 글자만 칠할 수 없었고, 외곽선을 없애면 색을 고를 칸도 사라졌어요. 이제 Tools의 «글»에 글자 색이 따로 있고, 외곽선 색을 바꿔도 글자는 그대로예요.",
+                        "The words took the stroke’s color, so they couldn’t be colored on their own — and with the stroke removed there was no color to choose. Text color now has its own row under Text in Tools, and changing the stroke leaves the words alone."
+                    )
+                ),
+                Entry(
+                    Text2("치는 중인 카드", "A card while you type"),
+                    Text2(
+                        "글을 치는 동안 고른 색이 다 친 뒤에야 보이던 것을 고쳤어요.",
+                        "A color chosen while typing in a card showed only after the typing ended."
+                    )
+                ),
+            ]
+        ),
+        Release(
             version: "1.1.1",
             date: Text2("2026년 11월", "November 2026"),
             note: Text2(

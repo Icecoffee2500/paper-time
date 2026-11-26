@@ -1,6 +1,47 @@
 {
  "releases": [
   {
+   "version": "1.1.2",
+   "date": {
+    "ko": "2026년 11월",
+    "en": "November 2026"
+   },
+   "note": {
+    "ko": "필기의 글자 색을 외곽선과 따로 골라요. 외곽선을 없애도 글자 색은 남아요.",
+    "en": "Choose the color of a drawing’s words apart from its stroke. Take the stroke away and the words keep their color."
+   },
+   "added": [],
+   "removed": [],
+   "fixed": [
+    {
+     "title": {
+      "ko": "글 카드의 글자 색",
+      "en": "A card’s text color"
+     },
+     "detail": {
+      "ko": "글자 색이 외곽선 색 하나에 묶여 있어서 글자만 칠할 수 없었고, 외곽선을 없애면 색을 고를 칸도 사라졌어요. 이제 Tools의 «글»에 글자 색이 따로 있고, 외곽선 색을 바꿔도 글자는 그대로예요.",
+      "en": "The words took the stroke’s color, so they couldn’t be colored on their own — and with the stroke removed there was no color to choose. Text color now has its own row under Text in Tools, and changing the stroke leaves the words alone."
+     },
+     "devices": [
+      "mac"
+     ]
+    },
+    {
+     "title": {
+      "ko": "치는 중인 카드",
+      "en": "A card while you type"
+     },
+     "detail": {
+      "ko": "글을 치는 동안 고른 색이 다 친 뒤에야 보이던 것을 고쳤어요.",
+      "en": "A color chosen while typing in a card showed only after the typing ended."
+     },
+     "devices": [
+      "mac"
+     ]
+    }
+   ]
+  },
+  {
    "version": "1.1.1",
    "date": {
     "ko": "2026년 11월",

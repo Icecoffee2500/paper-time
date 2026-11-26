@@ -139,4 +139,18 @@ export async function sketchGeometrySuite(test: Test, suite: (name: string) => v
     const again = await writeDrawings(written, [{ pageIndex: 0, elements: back.elements, strokes: [], managesMarks: false, managesInk: false }])
     assert.equal(again.length, written.length, 'nothing to write')
   })
+  await test("words take a colour of their own, and a style without one is written as it always was", () => {
+    const plain = new SketchStyle()
+    assert.equal('textColor' in JSON.parse(JSON.stringify(plain.encode())), false)
+    assert.ok(plain.ink.matches(plain.stroke))
+    const coloured = plain.copy()
+    coloured.textColor = SketchColor.red
+    coloured.border = false
+    // The edge gone, the words still have their colour.
+    assert.ok(coloured.ink.matches(SketchColor.red))
+    assert.ok(coloured.stroke.matches(plain.stroke))
+    const back = SketchStyle.from(JSON.parse(JSON.stringify(coloured.encode())))
+    assert.ok(back.textColor?.matches(SketchColor.red))
+    assert.equal(JSON.stringify(back.encode()), JSON.stringify(coloured.encode()))
+  })
 }
