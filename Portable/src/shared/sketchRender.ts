@@ -588,26 +588,26 @@ function drawTextCard(element: SketchElement, ctx: Ctx, options: RenderOptions) 
   // A card sized to its width is set one line per paragraph; one sized to
   // its height wraps at its edge.
   const wrapAt = element.sizing === 'autoWidth' ? null : inner.width
-  const layout = layoutTextAt(element.text, element.style.points, wrapAt, element.style.textAlign, element.style.fontName, element.style.stroke)
+  const layout = layoutTextAt(element.text, element.style.points, wrapAt, element.style.textAlign, element.style.fontName, element.style.ink)
   let x = inner.x
   if (wrapAt === null && layout.size.width < inner.width) {
     if (element.style.textAlign === 'center') x = rectMidX(inner) - layout.size.width / 2
     if (element.style.textAlign === 'right') x = inner.x + inner.width - layout.size.width
   }
-  drawLines(layout, { x, y: rectMaxY(inner) }, element.style.stroke, element.style.points, ctx, element.style.fontName)
+  drawLines(layout, { x, y: rectMaxY(inner) }, element.style.ink, element.style.points, ctx, element.style.fontName)
 }
 
 /** The words inside a box, centred on it. */
 function drawLabel(element: SketchElement, ctx: Ctx) {
   const inner = rectInset(element.rect, TEXT_PADDING, TEXT_PADDING)
   if (inner.width <= 4) return
-  const layout = layoutTextAt(element.text, element.style.points, inner.width, 'center', element.style.fontName, element.style.stroke)
+  const layout = layoutTextAt(element.text, element.style.points, inner.width, 'center', element.style.fontName, element.style.ink)
   const top = rectMidY(inner) + layout.size.height / 2
   ctx.save()
   ctx.beginPath()
   ctx.rect(inner.x, inner.y, inner.width, inner.height)
   ctx.clip()
-  drawLines(layout, { x: inner.x, y: top }, element.style.stroke, element.style.points, ctx, element.style.fontName)
+  drawLines(layout, { x: inner.x, y: top }, element.style.ink, element.style.points, ctx, element.style.fontName)
   ctx.restore()
 }
 

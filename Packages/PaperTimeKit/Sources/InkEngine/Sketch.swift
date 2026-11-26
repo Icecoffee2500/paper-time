@@ -158,12 +158,20 @@ public struct SketchStyle: Codable, Hashable, Sendable {
     public var textAlign: TextAlign
     /// A font family chosen for the words; nil is the system's own face.
     public var fontName: String?
+    /// The colour of the words, when it was chosen apart from the edge's.
+    /// Nil is `stroke` — what the words always were: one colour did for
+    /// both, so words could not be coloured without colouring their box,
+    /// and a card with its edge taken away had no colour to choose at all.
+    public var textColor: SketchColor?
+
+    /// The colour the words are drawn in.
+    public var ink: SketchColor { textColor ?? stroke }
 
     public static let widths: [CGFloat] = [1, 2, 3.5]
 
     enum CodingKeys: String, CodingKey {
         case stroke, fill, width, dash, corners, startHead, endHead, opacity, textSize, border
-        case strokeHidden, cornerRadius, fontSize, textAlign, fontName
+        case strokeHidden, cornerRadius, fontSize, textAlign, fontName, textColor
     }
 
     /// The size the words are set in.
@@ -194,7 +202,8 @@ public struct SketchStyle: Codable, Hashable, Sendable {
         cornerRadius: CGFloat? = nil,
         fontSize: CGFloat? = nil,
         textAlign: TextAlign = .left,
-        fontName: String? = nil
+        fontName: String? = nil,
+        textColor: SketchColor? = nil
     ) {
         self.stroke = stroke
         self.fill = fill
@@ -211,6 +220,7 @@ public struct SketchStyle: Codable, Hashable, Sendable {
         self.fontSize = fontSize
         self.textAlign = textAlign
         self.fontName = fontName
+        self.textColor = textColor
     }
 
     // Every field has a default, so a file written by a later version with a
@@ -234,6 +244,7 @@ public struct SketchStyle: Codable, Hashable, Sendable {
         fontSize = try c.decodeIfPresent(CGFloat.self, forKey: .fontSize)
         textAlign = try c.decodeIfPresent(TextAlign.self, forKey: .textAlign) ?? .left
         fontName = try c.decodeIfPresent(String.self, forKey: .fontName)
+        textColor = try c.decodeIfPresent(SketchColor.self, forKey: .textColor)
     }
 
     // Absent rather than false, so a file this version merely opened is
@@ -256,6 +267,7 @@ public struct SketchStyle: Codable, Hashable, Sendable {
         try c.encodeIfPresent(fontSize, forKey: .fontSize)
         if textAlign != .left { try c.encode(textAlign, forKey: .textAlign) }
         try c.encodeIfPresent(fontName, forKey: .fontName)
+        try c.encodeIfPresent(textColor, forKey: .textColor)
     }
 
     /// The dash pattern for a line of this width, in page points. Dashes

@@ -498,7 +498,7 @@ function buildFreeText(element: SketchElement): Built {
  * only name a font resource, and the file has none of ours.
  */
 function textLook(style: SketchElement['style'], align: 'left' | 'center' | 'right'): Record<string, unknown> {
-  const c = style.stroke
+  const c = style.ink
   const hex = (value: number) => Math.round(Math.min(Math.max(value, 0), 1) * 255).toString(16).padStart(2, '0')
   const look: Record<string, unknown> = {
     DA: text(`${n(c.red)} ${n(c.green)} ${n(c.blue)} rg /Helv ${n(style.points)} Tf`),

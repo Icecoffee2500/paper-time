@@ -633,9 +633,17 @@ export function buildSketchInspector(host: SketchInspectorHost): { node: HTMLEle
       : smallButton(on ? 'minus' : 'plus', on ? L('외곽선 빼기', 'Remove stroke') : L('외곽선 더하기', 'Add stroke'), () => setStroke(!on))
     const pieces: (Node | null)[] = []
     if (on) {
-      pieces.push(colorRow(style.stroke, false, (color) => change((s) => { s.stroke = color }), (color) => previewChange((s) => { s.stroke = color })))
+      // The edge's colour. Words that had no colour of their own took the
+      // edge's, so they are given the one they had first: recolouring a box
+      // does not recolour what is written in it (`SketchState.setStrokeColor`).
+      const pins = hasSelection() ? selected().some((element) => element.kind === 'text' || element.text !== '') : true
+      const setStroke = (color: SketchColor) => (s: SketchStyle) => {
+        if (pins && s.textColor === null && !s.stroke.matches(color)) s.textColor = s.stroke
+        s.stroke = color
+      }
+      pieces.push(colorRow(style.stroke, false, (color) => change(setStroke(color)), (color) => previewChange(setStroke(color))))
       pieces.push(row(SketchColor.strokes.map((color) =>
-        dot(color, color.matches(style.stroke), hexOf(color), () => change((s) => { s.stroke = color }))), 'sk-swatches'))
+        dot(color, color.matches(style.stroke), hexOf(color), () => change(setStroke(color)))), 'sk-swatches'))
       pieces.push(row([
         numberField({
           label: L('굵기', 'Width'), value: style.width, wide: true,
@@ -675,6 +683,13 @@ export function buildSketchInspector(host: SketchInspectorHost): { node: HTMLEle
     const sizes: TextSize[] = ['small', 'medium', 'large']
     const aligns: TextAlign[] = ['left', 'center', 'right']
     const pieces: (Node | null)[] = [
+      // The words' own colour, apart from the edge's: it had been the edge's
+      // — one row under «Stroke» for both — so words could not be coloured
+      // without their box, and with the edge taken away there was no colour
+      // to choose.
+      colorRow(style.ink, false, (color) => change((s) => { s.textColor = color }), (color) => previewChange((s) => { s.textColor = color })),
+      row(SketchColor.strokes.map((color) =>
+        dot(color, color.matches(style.ink), hexOf(color), () => change((s) => { s.textColor = color }))), 'sk-swatches'),
       fontMenu(style.fontName),
       row([
         numberField({

@@ -1307,6 +1307,14 @@ final class SketchInputView: NSView, SketchEditing {
             return changed
         }
         apply(after, on: index, before: before, name: L("스타일", "Restyle"))
+        // The card being typed into takes its words' colour now, not when
+        // the typing ends: the field over it was coloured once, as it opened.
+        if let editor = textEditor, let editing, let element = after.first(where: { $0.id == editing.id }) {
+            let ink = element.style.ink
+            editor.textColor = NSColor(red: ink.red, green: ink.green, blue: ink.blue, alpha: 1)
+            editor.insertionPointColor = editor.textColor ?? .textColor
+            needsDisplay = true
+        }
     }
 
     func editSelection(named name: String, _ change: @escaping (inout SketchElement) -> Void) {
@@ -1898,6 +1906,18 @@ final class SketchInputView: NSView, SketchEditing {
             guard let editor = textEditor else { return "probe: nothing is being edited" }
             editor.insertText(args.joined(separator: ","), replacementRange: editor.selectedRange())
             return "probe: typed into the editor; text now \"\(editor.string)\""
+        case "stroke":
+            // `stroke=off|on`: the panel's − and + beside «Stroke».
+            let on = args.first != "off"
+            state.change { $0.border = on; $0.strokeHidden = !on }
+            return "probe: stroke \(on ? "on" : "off")"
+        case "textcolor", "strokecolor":
+            // `textcolor=1,0,0` · `strokecolor=0,0,1`: the panel's two colours.
+            let n = numbers()
+            guard n.count >= 3 else { return "probe: \(name) needs r,g,b" }
+            let color = SketchColor(n[0], n[1], n[2])
+            if name == "textcolor" { state.setTextColor(color) } else { state.setStrokeColor(color) }
+            return "probe: \(name) \(n)"
         case "dash":
             guard let dash = SketchStyle.Dash(rawValue: args.first ?? "") else { return "probe: no dash \(args)" }
             state.change { $0.dash = dash }
@@ -1958,7 +1978,7 @@ final class SketchInputView: NSView, SketchEditing {
                 let layout = element.layout.map { " layout \($0.direction.rawValue) gap \($0.gap) pad \($0.padding) hugs \($0.hugs)" } ?? ""
                 let name = element.name.map { " \"\($0)\"" } ?? ""
                 let sizing = element.kind == .text ? " \(element.sizing.rawValue)" : ""
-                lines.append("  \(String(element.id.uuidString.prefix(4))) \(element.kind.rawValue)\(name) \(box)\(bend)\(parent)\(layout)\(sizing) width \(element.style.width) dash \(element.style.dash.rawValue) fill \(element.style.fill == nil ? "none" : "yes") text \"\(element.text)\"")
+                lines.append("  \(String(element.id.uuidString.prefix(4))) \(element.kind.rawValue)\(name) \(box)\(bend)\(parent)\(layout)\(sizing) width \(element.style.width) dash \(element.style.dash.rawValue) edge \(element.style.drawsOutline(for: element.kind) ? "drawn" : "none") stroke \(Self.hex(element.style.stroke)) words \(Self.hex(element.style.ink))\(element.style.textColor == nil ? "" : " (own)") fill \(element.style.fill == nil ? "none" : "yes") text \"\(element.text)\"")
             }
             // The handwriting too, in the canvas's own coordinates: a stroke
             // carried with shapes has to have gone as far as they did.
@@ -1970,6 +1990,10 @@ final class SketchInputView: NSView, SketchEditing {
         default:
             return "probe: unknown op \(op)"
         }
+    }
+
+    private static func hex(_ color: SketchColor) -> String {
+        String(format: "#%02x%02x%02x", Int((color.red * 255).rounded()), Int((color.green * 255).rounded()), Int((color.blue * 255).rounded()))
     }
 
     // MARK: - Cursor
@@ -2393,7 +2417,7 @@ final class SketchTextEditor: LatexSuiteTextView {
     func configure(for element: SketchElement, font: NSFont, scale: CGFloat) {
         self.font = font
         string = element.text
-        let stroke = element.style.stroke
+        let stroke = element.style.ink
         textColor = NSColor(red: stroke.red, green: stroke.green, blue: stroke.blue, alpha: 1)
         insertionPointColor = textColor ?? .textColor
         if element.kind == .text {
